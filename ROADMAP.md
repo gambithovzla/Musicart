@@ -47,7 +47,7 @@ La base: el ritual diario funciona en producción para todos los usuarios
 
 ---
 
-## 🔨 Fase 1 — El cerebro recomendador (EN CURSO)
+## ✅ Fase 1 — El cerebro recomendador (COMPLETADA · junio 2026)
 
 **Objetivo:** que al abrir la app, la recomendación sea *tuya*: la IA elige un
 disco del catálogo según tu perfil + tu diario + tu ánimo de hoy, y escribe el
@@ -107,7 +107,7 @@ opcional `LLM_MODEL` (default `gpt-4o-mini`).
 
 ---
 
-## 📦 Fase 2 — Catálogo que crece solo
+## 🔨 Fase 2 — Catálogo que crece solo (EN CURSO)
 
 **Objetivo:** que el catálogo pase de 3 discos demo a una biblioteca real sin
 intervención humana. La IA decide qué generar; el pipeline existente genera y

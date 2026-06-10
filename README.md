@@ -1,50 +1,32 @@
-# Musicart — un disco al día
+# Musicart — un disco al día 🎵
 
-Curaduría musical narrativa para melómanos curiosos. Cada día, un álbum completo:
-su historia, su contexto, sus canciones clave y por qué debería importarte.
-La escucha ocurre en Spotify / Apple Music / YouTube Music; Musicart es el guía.
+Curaduría musical narrativa **hecha por IA**, para melómanos curiosos. Cada día,
+un álbum completo: su historia, su contexto, sus canciones clave y **por qué
+debería importarte a ti**. La escucha ocurre en Spotify / Apple Music / YouTube
+Music; Musicart es el guía.
+
+La idea nace de esa madriguera deliciosa: ves una película de Michael Jackson,
+preguntas cómo se grabó *Thriller*, saltas a Prince, de ahí a The Beatles y
+descubres que duraron juntos menos de 10 años. Musicart empaqueta ese "click"
+de descubrimiento — verificado, narrado y personalizado.
 
 **PWA móvil-first** · Next.js 15 + Prisma (PostgreSQL) + Tailwind 4 + Framer Motion
 
-## Correr en local
+> 📍 **Plan del producto:** ver [`ROADMAP.md`](./ROADMAP.md) — fases, tareas y
+> estado actual. **Guía para sesiones de IA:** [`CLAUDE.md`](./CLAUDE.md).
 
-Necesitas una base de datos PostgreSQL. En `.env` define `DATABASE_URL`, p. ej.
-`DATABASE_URL="postgresql://user:pass@localhost:5432/musicart"`.
+## El loop diario
 
-```bash
-npm install
-npx prisma migrate dev   # aplica las migraciones a tu Postgres
-npm run db:seed          # carga 3 dossiers de demostración (Continuum, Rumours, El Mal Querer)
-npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
-```
+1. **Hoy** — el álbum del día se revela con la app teñida por la paleta de su portada.
+2. **Dossier** — la historia, el artista, las canciones con notas, por qué importa.
+3. **Narración por voz** — todo el dossier se puede escuchar.
+4. **Escuchar** — deep links a Spotify / Apple Music / YouTube Music.
+5. **Reflexión** — rating + preguntas → se guarda en el **Diario** (con racha 🔥).
+6. **Perfil** — quién eres como oyente; alimenta las recomendaciones personalizadas.
 
-## Desplegar en Vercel (con Postgres de Railway)
+## IA anti-alucinación por diseño
 
-> SQLite **no funciona** en Vercel (serverless = sistema de archivos efímero), por eso
-> usamos Postgres. Railway, Neon o Supabase sirven igual.
-
-1. En **Railway**: crea un servicio *PostgreSQL* y copia su `DATABASE_URL` (variable
-   `DATABASE_PUBLIC_URL` / connection string pública).
-2. En **Vercel** → tu proyecto → *Settings → Environment Variables*: añade
-   `DATABASE_URL` con ese valor (para Production, Preview y Development).
-3. Redespliega. El `build` corre `prisma migrate deploy` automáticamente, así que las
-   tablas se crean solas en el primer deploy.
-4. Carga los datos de demo una vez (desde tu máquina, apuntando a la BD de Railway):
-
-   ```bash
-   DATABASE_URL="<la-url-de-railway>" npm run db:seed
-   ```
-
-## Generar dossiers reales con IA
-
-1. Pon tu clave en `.env` (`OPENAI_API_KEY` o `ANTHROPIC_API_KEY` + `LLM_PROVIDER`).
-2. Corre el pipeline:
-
-```bash
-npm run dossier -- "The Dark Side of the Moon" "Pink Floyd" --publish
-```
-
-El pipeline es **anti-alucinación por diseño**:
+Toda la narrativa se genera **solo sobre hechos verificados**:
 
 ```
 MusicBrainz (fechas, tracklist, sello)
@@ -53,24 +35,36 @@ Last.fm (tags, popularidad — opcional)                        →  LLM verific
 iTunes + Odesli (portada, deep links)                         →  validadores duros (años, títulos de tracks)
 ```
 
-Si la verificación no queda limpia, el dossier se guarda como `draft` y no se publica.
-Cada álbum se genera **una sola vez** y queda cacheado en DB para todos los usuarios.
+Si la verificación no queda limpia, el dossier se guarda como `draft` y no se
+publica. Cada álbum se genera **una sola vez** y queda cacheado en DB para todos.
 
-Para inspeccionar los hechos sin llamar a la IA:
+Generar un dossier (CLI, requiere `OPENAI_API_KEY` o `ANTHROPIC_API_KEY` en `.env`):
 
 ```bash
-npx tsx scripts/facts-preview.ts "Brothers in Arms" "Dire Straits"
+npm run dossier -- "The Dark Side of the Moon" "Pink Floyd" --publish
 ```
 
-## El loop diario
+## Correr en local
 
-1. **Hoy** — el álbum del día se revela con la app teñida por la paleta de su portada.
-2. **Dossier** — la historia, el artista, las canciones con notas, por qué importa.
-3. **Narración por voz** — todo el dossier se puede escuchar (voz del navegador;
-   arquitectura lista para MP3s TTS pre-renderizados vía `Dossier.audioJson`).
-4. **Escuchar** — deep links a Spotify / Apple Music / YouTube Music.
-5. **Reflexión** — rating + preguntas → se guarda en el **Diario** (con racha 🔥).
-6. **Perfil** — onboarding ligero que alimentará las recomendaciones personalizadas.
+Necesitas PostgreSQL. En `.env` define `DATABASE_URL`, p. ej.
+`DATABASE_URL="postgresql://user:pass@localhost:5432/musicart"`.
+
+```bash
+npm install
+npx prisma migrate dev   # aplica las migraciones
+npm run db:seed          # carga 3 dossiers de demostración
+npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
+```
+
+## Producción (Vercel + Railway)
+
+- **Vercel** sirve la app; la rama de producción es **`master`**.
+- **Railway** aloja el PostgreSQL; Vercel se conecta con la **URL pública**
+  (`...proxy.rlwy.net`) en la variable `DATABASE_URL` (Production + Preview).
+- El `build` corre `prisma migrate deploy` + `prisma db seed` (idempotente):
+  tablas y datos de demo se crean solos en el primer deploy.
+
+> ⚠️ SQLite no funciona en Vercel (filesystem efímero) — por eso Postgres.
 
 ## Estructura
 
@@ -83,10 +77,12 @@ src/app/              pantallas: / (hoy) · /album/[id] · /diario · /perfil
 src/components/       DailyReveal, Narrator, ReflectionForm, ListenLinks…
 ```
 
-## Roadmap (ver plan completo)
+## Roadmap (resumen — detalle en [`ROADMAP.md`](./ROADMAP.md))
 
-- **Fase 2** — auth (Auth.js), recomendación personalizada por LLM ("este disco, para ti, hoy"),
-  cron nocturno que pre-genera picks, migrar SQLite → Postgres (cambiar `provider` en schema.prisma).
-- **Fase 3** — panel admin de revisión de drafts, analytics, validación con usuarios reales.
-- **Fase 4** — Stripe freemium, rutas temáticas, modo conductor (audio continuo + Media Session),
-  TTS de calidad podcast, tarjetas compartibles.
+- ✅ **Fase 0** — MVP en producción (Vercel + Railway, ritual diario, pipeline IA)
+- 🔨 **Fase 1** — El cerebro recomendador: pick personalizado por perfil + diario
+  + mood, con el "por qué este disco, para ti, hoy"
+- 📦 **Fase 2** — Catálogo que crece solo (curador IA + worker) e hilos de
+  descubrimiento (los saltos MJ → Prince → Beatles)
+- 👤 **Fase 3** — Cuentas reales (auth) y sincronización multi-dispositivo
+- 💎 **Fase 4** — TTS calidad podcast, modo conductor, compartibles, freemium

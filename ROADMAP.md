@@ -86,7 +86,7 @@ están pre-generados.
   - Sin `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`, timeout o error del LLM → cae a
     la rotación global sin romper la página (nunca un 500 por culpa de la IA).
   - `LLM_PROVIDER`/`LLM_MODEL` respetados; key leída en runtime de Vercel.
-- [ ] **1.5 Limpieza de build**
+- [x] **1.5 Limpieza de build**
   - Quitar `prisma db seed` del comando `build` (ya no hará falta sembrar en
     cada deploy una vez el catálogo sea real).
 

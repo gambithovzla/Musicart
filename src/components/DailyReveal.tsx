@@ -18,6 +18,9 @@ export type DailyAlbum = {
   impact: number;
   hook: string;
   dateLabel: string;
+  reason: string | null; // "por qué este disco, para ti, hoy" (pick personalizado)
+  personalized: boolean;
+  showProfileInvite: boolean; // sin perfil aún: invitar a contarnos quién escucha
 };
 
 export function DailyReveal({ album }: { album: DailyAlbum }) {
@@ -31,7 +34,7 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
       >
         <p className="text-xs uppercase tracking-[0.3em] text-dim">{album.dateLabel}</p>
         <h1 className="font-serif mt-2 text-lg italic text-album-light">
-          El álbum de hoy
+          {album.personalized ? "Tu álbum de hoy" : "El álbum de hoy"}
         </h1>
       </motion.header>
 
@@ -81,9 +84,20 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
           </span>
         </div>
 
-        <p className="font-serif mx-auto mt-6 max-w-sm text-base italic leading-relaxed text-foreground/90">
-          “{album.hook}”
-        </p>
+        {album.reason ? (
+          <div className="mx-auto mt-6 max-w-sm rounded-2xl border border-album/30 bg-album/10 px-5 py-4">
+            <p className="text-[0.65rem] uppercase tracking-[0.25em] text-album-light">
+              Para ti, hoy
+            </p>
+            <p className="font-serif mt-2 text-base italic leading-relaxed text-foreground/90">
+              {album.reason}
+            </p>
+          </div>
+        ) : (
+          <p className="font-serif mx-auto mt-6 max-w-sm text-base italic leading-relaxed text-foreground/90">
+            “{album.hook}”
+          </p>
+        )}
       </motion.div>
 
       <motion.div
@@ -98,6 +112,14 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
         >
           Descubrir este disco
         </Link>
+        {album.showProfileInvite && (
+          <Link
+            href="/perfil"
+            className="mt-4 block text-center text-sm text-dim underline underline-offset-4"
+          >
+            Dinos quién eres y mañana este disco será para ti →
+          </Link>
+        )}
       </motion.div>
     </div>
   );

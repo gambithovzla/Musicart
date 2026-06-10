@@ -77,12 +77,12 @@ están pre-generados.
   - El mood del día se guarda (campo en DailyPick o nuevo modelo MoodCheckin)
     y entra como señal al motor 1.1. Si el usuario cambia el mood, se puede
     regenerar el pick del día (máx. 1 regeneración para controlar costo).
-- [ ] **1.3 Home personalizada**
+- [x] **1.3 Home personalizada**
   - La home usa el pick personalizado del device (si hay perfil/historial) y
     muestra el `reason` destacado en el reveal.
   - Usuario nuevo sin señales → rotación global actual como fallback, con
     invitación a llenar el perfil ("dinos quién eres y mañana será para ti").
-- [ ] **1.4 Resiliencia y fallback**
+- [x] **1.4 Resiliencia y fallback**
   - Sin `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`, timeout o error del LLM → cae a
     la rotación global sin romper la página (nunca un 500 por culpa de la IA).
   - `LLM_PROVIDER`/`LLM_MODEL` respetados; key leída en runtime de Vercel.

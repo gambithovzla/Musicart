@@ -1,9 +1,16 @@
 // Home: el ritual diario. Un disco, una historia, un viaje.
+// Si el dispositivo tiene señales (perfil, diario, mood), el disco lo elige el
+// motor de recomendación; si no (o si la IA falla), va la rotación global.
 
+import { cookies } from "next/headers";
 import { getTodayPick, formatDateEs } from "@/lib/daily";
+import { getPersonalizedPick } from "@/lib/recommend";
+import { prisma } from "@/lib/db";
+import { DEVICE_COOKIE } from "@/lib/device";
 import { albumThemeStyle } from "@/lib/theme";
 import { parseJson, type Palette } from "@/lib/types";
 import { DailyReveal } from "@/components/DailyReveal";
+import { MoodCheckin } from "@/components/MoodCheckin";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +21,10 @@ function firstSentence(text: string, maxLen = 160): string {
 }
 
 export default async function Home() {
-  const pick = await getTodayPick();
+  const deviceId = (await cookies()).get(DEVICE_COOKIE)?.value ?? "";
+
+  const personal = deviceId ? await getPersonalizedPick(deviceId) : null;
+  const pick = personal?.dossier ?? (await getTodayPick());
 
   if (!pick) {
     return (
@@ -28,6 +38,15 @@ export default async function Home() {
       </main>
     );
   }
+
+  const tienePerfil = deviceId
+    ? Boolean(
+        await prisma.profile.findUnique({
+          where: { deviceId },
+          select: { id: true },
+        }),
+      )
+    : false;
 
   const palette = parseJson<Palette | null>(pick.album.paletteJson, null);
 
@@ -43,6 +62,10 @@ export default async function Home() {
         }}
       />
       <div className="relative">
+        <MoodCheckin
+          mood={personal?.mood ?? null}
+          canChange={!personal?.regenerated}
+        />
         <DailyReveal
           album={{
             albumId: pick.album.id,
@@ -55,6 +78,9 @@ export default async function Home() {
             impact: pick.album.impact,
             hook: firstSentence(pick.intro),
             dateLabel: formatDateEs(),
+            reason: personal?.reason ?? null,
+            personalized: Boolean(personal),
+            showProfileInvite: !tienePerfil,
           }}
         />
       </div>

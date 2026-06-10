@@ -1,12 +1,12 @@
 // Musicart — schema MVP
-// Dev: SQLite. Prod: cambiar provider a "postgresql" (los campos *Json son String para portabilidad total).
+// Postgres (Railway/Vercel). Los campos *Json son String para portabilidad total.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

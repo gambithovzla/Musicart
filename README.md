@@ -17,12 +17,16 @@ de descubrimiento — verificado, narrado y personalizado.
 
 ## El loop diario
 
-1. **Hoy** — el álbum del día se revela con la app teñida por la paleta de su portada.
-2. **Dossier** — la historia, el artista, las canciones con notas, por qué importa.
-3. **Narración por voz** — todo el dossier se puede escuchar.
-4. **Escuchar** — deep links a Spotify / Apple Music / YouTube Music.
-5. **Reflexión** — rating + preguntas → se guarda en el **Diario** (con racha 🔥).
-6. **Perfil** — quién eres como oyente; alimenta las recomendaciones personalizadas.
+1. **Hoy** — *tu* álbum del día: la IA lo elige según tu perfil, tu diario y tu
+   ánimo, y te dice **por qué este disco, para ti, hoy**. (Sin señales tuyas
+   aún, va la rotación global — la app nunca depende de que la IA responda.)
+2. **Mood** — "¿cómo te sientes hoy?": cambiar el ánimo puede re-elegir el disco.
+3. **Dossier** — la historia, el artista, las canciones con notas, por qué importa.
+4. **Narración por voz** — todo el dossier se puede escuchar.
+5. **Escuchar** — deep links a Spotify / Apple Music / YouTube Music.
+6. **Reflexión** — rating + preguntas → se guarda en el **Diario** (con racha 🔥).
+7. **La madriguera** — cada dossier sugiere saltos verificados a otros discos
+   (rivalidades, colaboraciones, influencias).
 
 ## IA anti-alucinación por diseño
 
@@ -44,6 +48,25 @@ Generar un dossier (CLI, requiere `OPENAI_API_KEY` o `ANTHROPIC_API_KEY` en `.en
 npm run dossier -- "The Dark Side of the Moon" "Pink Floyd" --publish
 ```
 
+## El catálogo crece solo
+
+Un **curador IA** decide qué álbumes faltan (clásicos imprescindibles, huecos de
+género/época/idioma, afinidades con lo que los usuarios puntúan alto) y los
+encola en `GenerationQueue`. Un **worker** (`npm run worker`) toma la cola,
+genera con el pipeline anti-alucinación y publica solo lo verificado; lo que no
+pasa queda en `draft`. Los **saltos** de cada dossier publicado también
+alimentan la cola: la madriguera se excava sola.
+
+- **Revisión humana:** `/revision?clave=ADMIN_SECRET` lista los drafts (publicar
+  / descartar) y el estado de la cola con sus errores.
+- **Dónde corre el worker:** servicio cron en **Railway** (mismo proyecto que el
+  Postgres). Alta una sola vez, desde el dashboard:
+  1. *New service* → *GitHub repo* → este repositorio.
+  2. Variables: `DATABASE_URL` (la URL **interna** `postgres.railway.internal`)
+     y `OPENAI_API_KEY`.
+  3. *Settings* → *Cron Schedule*: `0 6 * * *` (cada madrugada) · *Custom Start
+     Command*: `npm run worker`.
+
 ## Correr en local
 
 Necesitas PostgreSQL. En `.env` define `DATABASE_URL`, p. ej.
@@ -61,8 +84,11 @@ npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
 - **Vercel** sirve la app; la rama de producción es **`master`**.
 - **Railway** aloja el PostgreSQL; Vercel se conecta con la **URL pública**
   (`...proxy.rlwy.net`) en la variable `DATABASE_URL` (Production + Preview).
-- El `build` corre `prisma migrate deploy` + `prisma db seed` (idempotente):
-  tablas y datos de demo se crean solos en el primer deploy.
+- El `build` corre `prisma migrate deploy`: las migraciones se aplican solas en
+  cada deploy. (El seed ya no corre en el build; para un entorno nuevo:
+  `npm run db:seed`.)
+- Variables en Vercel: `DATABASE_URL`, `OPENAI_API_KEY` (recomendaciones en
+  runtime) y `ADMIN_SECRET` (panel `/revision`).
 
 > ⚠️ SQLite no funciona en Vercel (filesystem efímero) — por eso Postgres.
 
@@ -70,19 +96,22 @@ npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
 
 ```
 prisma/               schema + seed + fixtures de demo
-scripts/              dossier.ts (pipeline CLI) · facts-preview.ts (debug)
+scripts/              dossier.ts (pipeline CLI) · worker.ts (cron del catálogo)
 src/lib/sources/      clientes: musicbrainz, wikipedia, lastfm, itunes, odesli, coverart
 src/lib/dossier/      pipeline IA: facts → generate → verify → save
-src/app/              pantallas: / (hoy) · /album/[id] · /diario · /perfil
-src/components/       DailyReveal, Narrator, ReflectionForm, ListenLinks…
+src/lib/recommend.ts  motor de recomendación (pick personalizado del día)
+src/lib/curator.ts    curador IA (qué álbumes generar) → GenerationQueue
+src/app/              pantallas: / (hoy) · /album/[id] · /diario · /perfil · /revision
+src/components/       DailyReveal, MoodCheckin, Narrator, ReflectionForm, ListenLinks…
 ```
 
 ## Roadmap (resumen — detalle en [`ROADMAP.md`](./ROADMAP.md))
 
 - ✅ **Fase 0** — MVP en producción (Vercel + Railway, ritual diario, pipeline IA)
-- 🔨 **Fase 1** — El cerebro recomendador: pick personalizado por perfil + diario
+- ✅ **Fase 1** — El cerebro recomendador: pick personalizado por perfil + diario
   + mood, con el "por qué este disco, para ti, hoy"
-- 📦 **Fase 2** — Catálogo que crece solo (curador IA + worker) e hilos de
-  descubrimiento (los saltos MJ → Prince → Beatles)
+- 🔨 **Fase 2** — Catálogo que crece solo (curador IA + worker) e hilos de
+  descubrimiento: código listo; falta dar de alta el cron en Railway y la
+  variable `ADMIN_SECRET` en Vercel
 - 👤 **Fase 3** — Cuentas reales (auth) y sincronización multi-dispositivo
 - 💎 **Fase 4** — TTS calidad podcast, modo conductor, compartibles, freemium

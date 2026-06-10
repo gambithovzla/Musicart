@@ -140,6 +140,12 @@ verifica; solo lo verificado se publica.
   - UI: al final del dossier, tarjetas de salto que llevan a otros álbumes del
     catálogo (o alimentan la cola de generación si aún no existen).
 
+### Pendiente del dueño (infra, una sola vez)
+
+- [ ] Crear el servicio cron del worker en Railway (pasos exactos en el README,
+  sección "El catálogo crece solo").
+- [ ] Definir `ADMIN_SECRET` en Vercel (protege el panel `/revision`).
+
 ### Criterios de aceptación
 
 - El catálogo crece solo (≥ N discos/semana sin tocar nada).

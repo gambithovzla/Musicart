@@ -38,17 +38,22 @@ LLM por fetch directo (OpenAI o Anthropic, sin SDKs).
 ## Mapa del código
 
 ```
-prisma/schema.prisma     Modelos: Artist, Album, Dossier, TrackNote, Profile,
-                         DailyPick (tiene campo `reason`!), Review.
-                         Campos *Json son String (portabilidad).
-prisma/seed.ts           Seed idempotente con 3 discos demo (corre en el build).
-src/app/page.tsx         Home: el ritual diario (force-dynamic).
-src/app/album/[id]/      Dossier completo del disco.
+prisma/schema.prisma     Modelos: Artist, Album, Dossier (jumpsJson), TrackNote,
+                         Profile, DailyPick (reason, mood, regenerated), Review,
+                         GenerationQueue. Campos *Json son String (portabilidad).
+prisma/seed.ts           Seed idempotente con 3 discos demo (manual: npm run db:seed).
+src/app/page.tsx         Home: el ritual diario, personalizado por device (cookie).
+src/app/album/[id]/      Dossier completo del disco + saltos de descubrimiento.
 src/app/diario/          Historial de escuchas con racha (client + server actions).
 src/app/perfil/          Onboarding ligero (client + server actions).
-src/app/actions.ts       Server actions: saveReview, getReview, saveProfile, getJournal.
-src/lib/daily.ts         Pick global del día (rotación determinista). La Fase 1
-                         lo reemplaza por pick personalizado con fallback a esto.
+src/app/revision/        Panel del dueño: drafts + cola (/revision?clave=ADMIN_SECRET).
+src/app/actions.ts       Server actions: saveReview, getReview, saveProfile,
+                         getJournal, checkInMood.
+src/lib/daily.ts         Rotación global determinista: el fallback eterno del
+                         pick personalizado (usuarios sin señales o IA caída).
+src/lib/recommend.ts     Motor de recomendación (Fase 1): pick por perfil+diario+
+                         mood, cache diario en DailyPick, regeneración máx. 1.
+src/lib/curator.ts       Curador IA (Fase 2): propone álbumes → GenerationQueue.
 src/lib/db.ts            Singleton de PrismaClient.
 src/lib/dossier/         Pipeline anti-alucinación:
   facts.ts                 reúne hechos (MusicBrainz, Wikipedia, Last.fm, iTunes, Odesli)
@@ -58,20 +63,24 @@ src/lib/dossier/         Pipeline anti-alucinación:
   llm.ts                   adapter OpenAI/Anthropic (env: LLM_PROVIDER, LLM_MODEL)
 src/lib/sources/         Clientes de las APIs externas.
 src/lib/types.ts         Tipos de dominio (FactsPayload, DossierContent, Palette…).
-src/lib/device.ts        Identidad anónima por dispositivo (deviceId en localStorage).
+src/lib/device.ts        Identidad anónima por dispositivo (localStorage + cookie
+                         musicart_device para personalizar en el servidor).
 src/lib/theme.ts|palette.ts  Theming de la UI con la paleta de la portada.
-src/components/          DailyReveal, Narrator (voz), ReflectionForm, ListenLinks…
+src/components/          DailyReveal, MoodCheckin, DeviceSync, Narrator (voz),
+                         ReflectionForm, ListenLinks…
 scripts/dossier.ts       CLI: npm run dossier -- "Álbum" "Artista" --publish
+scripts/worker.ts        Worker del catálogo (cron Railway): npm run worker
 ```
 
 ## Comandos
 
 ```bash
 npm run dev          # desarrollo (requiere DATABASE_URL en .env)
-npm run build        # prisma migrate deploy && prisma db seed && next build
+npm run build        # prisma migrate deploy && next build
 npm run db:migrate   # prisma migrate dev
-npm run db:seed      # seed idempotente
+npm run db:seed      # seed idempotente (manual; el build ya no siembra)
 npm run dossier -- "Álbum" "Artista" --publish   # generar un dossier (CLI, requiere API key)
+npm run worker -- --batch 2                      # corrida del worker de catálogo (curador + pipeline)
 ```
 
 ## Entornos y despliegue
@@ -81,11 +90,14 @@ npm run dossier -- "Álbum" "Artista" --publish   # generar un dossier (CLI, req
 - **Base de datos:** PostgreSQL en **Railway**. Vercel se conecta con la URL
   **pública** (`...proxy.rlwy.net:PUERTO/railway`) en `DATABASE_URL`
   (Production + Preview). La URL interna `railway.internal` solo sirve para
-  servicios dentro de Railway (útil para el futuro worker de la Fase 2).
-- **El build siembra la base** (`prisma db seed`, idempotente). La tarea 1.5
-  del roadmap es quitarlo cuando el catálogo sea real.
-- **Variables en Vercel:** `DATABASE_URL`, `OPENAI_API_KEY` (la usará el motor
-  de recomendación de la Fase 1 en runtime; hoy solo la usa el CLI local).
+  servicios dentro de Railway (la usa el worker del catálogo).
+- **El build ya NO siembra la base** (tarea 1.5 hecha): para un entorno nuevo
+  corre `npm run db:seed` a mano (sigue siendo idempotente).
+- **Variables en Vercel:** `DATABASE_URL`, `OPENAI_API_KEY` (la usa el motor de
+  recomendación en runtime), `ADMIN_SECRET` (protege el panel `/revision`).
+- **Worker del catálogo (Fase 2):** servicio cron en Railway que corre
+  `npm run worker`. Sus variables: `DATABASE_URL` (ahí sí la URL **interna**
+  `railway.internal`) y `OPENAI_API_KEY`. Pasos de alta en el README.
 - Flujo de trabajo: rama → PR → el dueño hace merge a `master` desde GitHub
   (normalmente desde el teléfono). No mergear sin su OK.
 
@@ -98,4 +110,6 @@ npm run dossier -- "Álbum" "Artista" --publish   # generar un dossier (CLI, req
   (en Vercel funciona; no es un bug del código).
 - El seed tolera fallos de red de iTunes/paleta (portada nula es aceptable).
 - `Dossier.status`: solo `published` entra en la rotación; `draft` queda
-  esperando revisión.
+  esperando revisión en `/revision?clave=ADMIN_SECRET`.
+- El worker corre con `tsx` (devDependency): en Railway instala con
+  devDependencies incluidas (no definas `NODE_ENV=production` en el build).

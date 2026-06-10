@@ -115,7 +115,7 @@ verifica; solo lo verificado se publica.
 
 ### Tareas
 
-- [ ] **2.1 Curador IA** (`src/lib/curator.ts` o en el worker)
+- [x] **2.1 Curador IA** (`src/lib/curator.ts` o en el worker)
   - LLM propone los próximos álbumes a generar: clásicos imprescindibles +
     huecos del catálogo + afinidades con lo que los usuarios puntúan alto.
   - Lista priorizada persistida (nuevo modelo `GenerationQueue` o similar).

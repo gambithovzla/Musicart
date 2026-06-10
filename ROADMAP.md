@@ -129,7 +129,7 @@ verifica; solo lo verificado se publica.
     simple de desplegar, pero limitado en tiempo de ejecución.
   - El worker toma N items de la cola por corrida nocturna, ejecuta
     `runDossierPipeline(..., { publish: true })`, registra resultados.
-- [ ] **2.3 Control de calidad**
+- [x] **2.3 Control de calidad**
   - Los dossiers que no pasan verificación quedan `draft` (ya implementado);
     endpoint/listado simple para revisarlos y publicarlos a mano.
   - Alertas básicas: si una corrida falla todo, que quede registrado (log o

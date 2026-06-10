@@ -4,16 +4,36 @@ Curaduría musical narrativa para melómanos curiosos. Cada día, un álbum comp
 su historia, su contexto, sus canciones clave y por qué debería importarte.
 La escucha ocurre en Spotify / Apple Music / YouTube Music; Musicart es el guía.
 
-**PWA móvil-first** · Next.js 15 + Prisma (SQLite dev) + Tailwind 4 + Framer Motion
+**PWA móvil-first** · Next.js 15 + Prisma (PostgreSQL) + Tailwind 4 + Framer Motion
 
 ## Correr en local
 
+Necesitas una base de datos PostgreSQL. En `.env` define `DATABASE_URL`, p. ej.
+`DATABASE_URL="postgresql://user:pass@localhost:5432/musicart"`.
+
 ```bash
 npm install
-npx prisma migrate dev   # crea la base de datos
+npx prisma migrate dev   # aplica las migraciones a tu Postgres
 npm run db:seed          # carga 3 dossiers de demostración (Continuum, Rumours, El Mal Querer)
 npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
 ```
+
+## Desplegar en Vercel (con Postgres de Railway)
+
+> SQLite **no funciona** en Vercel (serverless = sistema de archivos efímero), por eso
+> usamos Postgres. Railway, Neon o Supabase sirven igual.
+
+1. En **Railway**: crea un servicio *PostgreSQL* y copia su `DATABASE_URL` (variable
+   `DATABASE_PUBLIC_URL` / connection string pública).
+2. En **Vercel** → tu proyecto → *Settings → Environment Variables*: añade
+   `DATABASE_URL` con ese valor (para Production, Preview y Development).
+3. Redespliega. El `build` corre `prisma migrate deploy` automáticamente, así que las
+   tablas se crean solas en el primer deploy.
+4. Carga los datos de demo una vez (desde tu máquina, apuntando a la BD de Railway):
+
+   ```bash
+   DATABASE_URL="<la-url-de-railway>" npm run db:seed
+   ```
 
 ## Generar dossiers reales con IA
 

@@ -1,26 +1,76 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Base editorial oscura, cálida */
+  --background: #0d0b09;
+  --surface: #161310;
+  --foreground: #f3eee6;
+  --foreground-dim: #b3aa9c;
+
+  /* Paleta del álbum del día — se sobreescribe por página con la portada */
+  --album-vibrant: #c8a24a;
+  --album-dark: #3a2f16;
+  --album-light: #e8cf8e;
+  --album-muted: #8a7a55;
+  --album-dark-muted: #221c12;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-dim: var(--foreground-dim);
+  --color-album: var(--album-vibrant);
+  --color-album-dark: var(--album-dark);
+  --color-album-light: var(--album-light);
+  --color-album-muted: var(--album-muted);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-fraunces);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--background);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+/* Grano sutil de papel sobre toda la app */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.font-serif {
+  font-family: var(--font-fraunces), Georgia, serif;
+}
+
+/* Prosa narrativa del dossier */
+.prose-dossier {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-size: 1.075rem;
+  line-height: 1.75;
+  color: var(--foreground);
+}
+.prose-dossier p + p {
+  margin-top: 1em;
+}
+
+/* Scrollbar discreto */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--album-muted);
+  border-radius: 3px;
 }

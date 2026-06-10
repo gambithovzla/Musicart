@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Musicart — un disco al día
 
-## Getting Started
+Curaduría musical narrativa para melómanos curiosos. Cada día, un álbum completo:
+su historia, su contexto, sus canciones clave y por qué debería importarte.
+La escucha ocurre en Spotify / Apple Music / YouTube Music; Musicart es el guía.
 
-First, run the development server:
+**PWA móvil-first** · Next.js 15 + Prisma (SQLite dev) + Tailwind 4 + Framer Motion
+
+## Correr en local
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npx prisma migrate dev   # crea la base de datos
+npm run db:seed          # carga 3 dossiers de demostración (Continuum, Rumours, El Mal Querer)
+npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Generar dossiers reales con IA
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Pon tu clave en `.env` (`OPENAI_API_KEY` o `ANTHROPIC_API_KEY` + `LLM_PROVIDER`).
+2. Corre el pipeline:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run dossier -- "The Dark Side of the Moon" "Pink Floyd" --publish
+```
 
-## Learn More
+El pipeline es **anti-alucinación por diseño**:
 
-To learn more about Next.js, take a look at the following resources:
+```
+MusicBrainz (fechas, tracklist, sello)
+Wikipedia es/en (contexto histórico)      →  FACTS PAYLOAD  →  LLM narra SOLO sobre esos hechos
+Last.fm (tags, popularidad — opcional)                        →  LLM verificador caza afirmaciones sin respaldo
+iTunes + Odesli (portada, deep links)                         →  validadores duros (años, títulos de tracks)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Si la verificación no queda limpia, el dossier se guarda como `draft` y no se publica.
+Cada álbum se genera **una sola vez** y queda cacheado en DB para todos los usuarios.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Para inspeccionar los hechos sin llamar a la IA:
 
-## Deploy on Vercel
+```bash
+npx tsx scripts/facts-preview.ts "Brothers in Arms" "Dire Straits"
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## El loop diario
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Hoy** — el álbum del día se revela con la app teñida por la paleta de su portada.
+2. **Dossier** — la historia, el artista, las canciones con notas, por qué importa.
+3. **Narración por voz** — todo el dossier se puede escuchar (voz del navegador;
+   arquitectura lista para MP3s TTS pre-renderizados vía `Dossier.audioJson`).
+4. **Escuchar** — deep links a Spotify / Apple Music / YouTube Music.
+5. **Reflexión** — rating + preguntas → se guarda en el **Diario** (con racha 🔥).
+6. **Perfil** — onboarding ligero que alimentará las recomendaciones personalizadas.
+
+## Estructura
+
+```
+prisma/               schema + seed + fixtures de demo
+scripts/              dossier.ts (pipeline CLI) · facts-preview.ts (debug)
+src/lib/sources/      clientes: musicbrainz, wikipedia, lastfm, itunes, odesli, coverart
+src/lib/dossier/      pipeline IA: facts → generate → verify → save
+src/app/              pantallas: / (hoy) · /album/[id] · /diario · /perfil
+src/components/       DailyReveal, Narrator, ReflectionForm, ListenLinks…
+```
+
+## Roadmap (ver plan completo)
+
+- **Fase 2** — auth (Auth.js), recomendación personalizada por LLM ("este disco, para ti, hoy"),
+  cron nocturno que pre-genera picks, migrar SQLite → Postgres (cambiar `provider` en schema.prisma).
+- **Fase 3** — panel admin de revisión de drafts, analytics, validación con usuarios reales.
+- **Fase 4** — Stripe freemium, rutas temáticas, modo conductor (audio continuo + Media Session),
+  TTS de calidad podcast, tarjetas compartibles.

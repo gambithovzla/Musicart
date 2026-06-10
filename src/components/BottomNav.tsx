@@ -1,0 +1,64 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const ITEMS = [
+  {
+    href: "/",
+    label: "Hoy",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+        <circle cx="12" cy="12" r="9" />
+        <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+  },
+  {
+    href: "/diario",
+    label: "Diario",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+        <path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4z" />
+        <path d="M5 4v13a3 3 0 0 0 3 3" />
+        <path d="M9 9h6M9 13h4" />
+      </svg>
+    ),
+  },
+  {
+    href: "/perfil",
+    label: "Perfil",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+        <circle cx="12" cy="8.5" r="3.5" />
+        <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+      </svg>
+    ),
+  },
+];
+
+export function BottomNav() {
+  const pathname = usePathname();
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#0d0b09]/90 backdrop-blur-md">
+      <div className="mx-auto flex max-w-lg items-stretch justify-around pb-[env(safe-area-inset-bottom)]">
+        {ITEMS.map((item) => {
+          const active =
+            item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex flex-1 flex-col items-center gap-1 py-3 text-[11px] tracking-wide transition-colors ${
+                active ? "text-album" : "text-dim hover:text-foreground"
+              }`}
+            >
+              {item.icon}
+              {item.label}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}

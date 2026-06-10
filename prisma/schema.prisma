@@ -1,0 +1,102 @@
+// Musicart — schema MVP
+// Dev: SQLite. Prod: cambiar provider a "postgresql" (los campos *Json son String para portabilidad total).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Artist {
+  id     String  @id @default(cuid())
+  mbid   String? @unique
+  name   String
+  bio    String?
+  albums Album[]
+}
+
+model Album {
+  id          String  @id @default(cuid())
+  mbid        String? @unique
+  title       String
+  year        Int
+  coverUrl    String?
+  durationMin Int?
+  difficulty  Int     @default(2) // 1-5 estrellas
+  impact      Int     @default(3) // 1-5 estrellas
+  linksJson   String  @default("{}") // { spotify, appleMusic, youtubeMusic }
+  paletteJson String? // swatches extraídos de la portada
+  factsJson   String  @default("{}") // facts payload con fuentes (grounding IA)
+
+  artistId   String
+  artist     Artist      @relation(fields: [artistId], references: [id])
+  dossiers   Dossier[]
+  reviews    Review[]
+  dailyPicks DailyPick[]
+}
+
+model Dossier {
+  id            String  @id @default(cuid())
+  albumId       String
+  locale        String  @default("es")
+  status        String  @default("draft") // draft | published
+  intro         String // resumen narrativo de 2 minutos
+  artistStory   String // historia del artista
+  whyItMatters  String // por qué fue importante
+  questionsJson String  @default("[]") // preguntas de reflexión
+  audioJson     String? // { intro: url, artistStory: url, ... } MP3s TTS pre-renderizados
+
+  album      Album       @relation(fields: [albumId], references: [id])
+  trackNotes TrackNote[]
+
+  @@unique([albumId, locale])
+}
+
+model TrackNote {
+  id          String  @id @default(cuid())
+  dossierId   String
+  position    Int
+  title       String
+  note        String? // null = track sin nota editorial
+  durationSec Int?
+
+  dossier Dossier @relation(fields: [dossierId], references: [id])
+
+  @@unique([dossierId, position])
+}
+
+// Perfil anónimo por dispositivo (fase 2: se convierte en User con auth)
+model Profile {
+  id          String   @id @default(cuid())
+  deviceId    String   @unique
+  answersJson String   @default("{}") // respuestas de onboarding
+  createdAt   DateTime @default(now())
+}
+
+model DailyPick {
+  id       String  @id @default(cuid())
+  deviceId String
+  date     String // YYYY-MM-DD
+  albumId  String
+  reason   String? // "por qué este disco, para ti, hoy"
+
+  album Album @relation(fields: [albumId], references: [id])
+
+  @@unique([deviceId, date])
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  deviceId    String
+  albumId     String
+  rating      Int // 1-5
+  answersJson String   @default("{}") // respuestas a las preguntas de reflexión
+  createdAt   DateTime @default(now())
+
+  album Album @relation(fields: [albumId], references: [id])
+
+  @@unique([deviceId, albumId])
+}

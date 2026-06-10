@@ -10,7 +10,8 @@
     "lint": "eslint",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
-    "dossier": "tsx scripts/dossier.ts"
+    "dossier": "tsx scripts/dossier.ts",
+    "worker": "tsx scripts/worker.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

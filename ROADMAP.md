@@ -119,7 +119,8 @@ verifica; solo lo verificado se publica.
   - LLM propone los próximos álbumes a generar: clásicos imprescindibles +
     huecos del catálogo + afinidades con lo que los usuarios puntúan alto.
   - Lista priorizada persistida (nuevo modelo `GenerationQueue` o similar).
-- [ ] **2.2 Worker de generación** — decisión de arquitectura:
+- [x] **2.2 Worker de generación** — decisión tomada: **Opción A (Railway)**.
+  `scripts/worker.ts` (`npm run worker`) corre como cron en Railway:
   - **Opción A (recomendada): worker en Railway** (ya existe un sidecar de
     Python en la infraestructura del dueño; puede ser un servicio Node con
     `tsx` reutilizando el pipeline TS tal cual, corriendo como cron de Railway).
@@ -181,3 +182,4 @@ dispositivo.
 | Dossiers pre-generados + recomendación en runtime | Generar tarda minutos (no se hace esperar al usuario); recomendar es 1 llamada corta |
 | Identidad anónima por deviceId antes que auth | Permite construir y validar la personalización ya, sin fricción de registro |
 | `master` es la rama de producción en Vercel | Configurado manualmente en Vercel Settings (el repo usa `master`, no `main`) |
+| Worker de generación como cron en Railway (`npm run worker`) | Generar tarda minutos: excede los timeouts de Vercel; Railway ya es infraestructura del dueño y usa la URL interna del Postgres |

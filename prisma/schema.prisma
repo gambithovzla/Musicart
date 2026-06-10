@@ -77,11 +77,13 @@ model Profile {
 }
 
 model DailyPick {
-  id       String  @id @default(cuid())
-  deviceId String
-  date     String // YYYY-MM-DD
-  albumId  String
-  reason   String? // "por qué este disco, para ti, hoy"
+  id          String  @id @default(cuid())
+  deviceId    String
+  date        String // YYYY-MM-DD
+  albumId     String
+  reason      String? // "por qué este disco, para ti, hoy"
+  mood        String? // ánimo del check-in ("nostálgico", "enérgico"…)
+  regenerated Boolean @default(false) // ya se regeneró por cambio de mood (máx. 1)
 
   album Album @relation(fields: [albumId], references: [id])
 

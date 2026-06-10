@@ -6,6 +6,7 @@ type LlmOptions = {
   user: string;
   temperature?: number;
   maxTokens?: number;
+  timeoutMs?: number; // default 120 s (pipeline); la recomendación en runtime usa uno corto
 };
 
 function getProvider(): "openai" | "anthropic" {
@@ -38,7 +39,7 @@ async function callOpenAI(opts: LlmOptions): Promise<string> {
         { role: "user", content: opts.user },
       ],
     }),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000),
   });
   if (!res.ok) {
     throw new Error(`OpenAI ${res.status}: ${(await res.text()).slice(0, 300)}`);
@@ -66,7 +67,7 @@ async function callAnthropic(opts: LlmOptions): Promise<string> {
       system: opts.system,
       messages: [{ role: "user", content: opts.user }],
     }),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000),
   });
   if (!res.ok) {
     throw new Error(`Anthropic ${res.status}: ${(await res.text()).slice(0, 300)}`);

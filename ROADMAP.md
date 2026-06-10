@@ -61,7 +61,7 @@ están pre-generados.
 
 ### Tareas
 
-- [ ] **1.1 Motor de recomendación** (`src/lib/recommend.ts`)
+- [x] **1.1 Motor de recomendación** (`src/lib/recommend.ts`)
   - Server-side. Input: perfil del device, últimas N reviews (con ratings),
     mood de hoy (opcional), catálogo de dossiers publicados (título, artista,
     año, tags/facts resumidos), historial de DailyPicks recientes (no repetir).

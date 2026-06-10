@@ -6,6 +6,7 @@ import { gatherAlbumFacts } from "./facts";
 import { generateDossier, type GeneratedDossier } from "./generate";
 import { verifyDossier, type VerificationReport } from "./verify";
 import { extractPalette } from "../palette";
+import { enqueueAlbum } from "../curator";
 
 export type PipelineResult = {
   albumId: string;
@@ -102,6 +103,7 @@ export async function runDossierPipeline(
       artistStory: dossier.artistStory,
       whyItMatters: dossier.whyItMatters,
       questionsJson: JSON.stringify(dossier.questions),
+      jumpsJson: JSON.stringify(dossier.jumps ?? []),
       trackNotes: {
         create: payload.tracklist.map((t) => {
           const note = dossier.trackNotes.find((n) => n.position === t.position);
@@ -114,6 +116,25 @@ export async function runDossierPipeline(
       },
     },
   });
+
+  // 5. Los saltos de un dossier publicado alimentan la cola de generación:
+  //    así la madriguera se excava sola. Si falla, no tumba el pipeline.
+  if (status === "published") {
+    for (const jump of dossier.jumps ?? []) {
+      try {
+        const encolado = await enqueueAlbum({
+          title: jump.title,
+          artist: jump.artist,
+          source: "jump",
+          reason: `Salto desde "${payload.album.title}": ${jump.connection}`,
+          priority: 60,
+        });
+        if (encolado) log(`Salto encolado: "${jump.title}" de ${jump.artist}`);
+      } catch (err) {
+        log(`No se pudo encolar el salto "${jump.title}": ${(err as Error).message}`);
+      }
+    }
+  }
 
   return { albumId: album.id, dossierId: saved.id, status, report };
 }

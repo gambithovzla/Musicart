@@ -134,7 +134,7 @@ verifica; solo lo verificado se publica.
     endpoint/listado simple para revisarlos y publicarlos a mano.
   - Alertas básicas: si una corrida falla todo, que quede registrado (log o
     notificación).
-- [ ] **2.4 Hilos de descubrimiento** (la madriguera MJ → Prince → Beatles)
+- [x] **2.4 Hilos de descubrimiento** (la madriguera MJ → Prince → Beatles)
   - Cada dossier sugiere 2-3 "saltos": rivalidades, colaboraciones, influencias
     ("de aquí puedes saltar a…"), verificados contra los facts.
   - UI: al final del dossier, tarjetas de salto que llevan a otros álbumes del

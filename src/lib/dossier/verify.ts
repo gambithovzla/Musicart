@@ -84,6 +84,9 @@ export async function llmVerify(
     `ARTISTA: ${dossier.artistStory}`,
     `POR QUÉ IMPORTA: ${dossier.whyItMatters}`,
     ...dossier.trackNotes.map((t) => `NOTA (${t.title}): ${t.note}`),
+    // De los saltos solo se verifica la conexión afirmada (el álbum destino
+    // es recomendación curatorial, no una afirmación factual).
+    ...(dossier.jumps ?? []).map((j) => `SALTO HACIA ${j.artist}: ${j.connection}`),
   ].join("\n\n");
 
   const raw = await llm({

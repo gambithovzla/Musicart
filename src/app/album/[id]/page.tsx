@@ -2,9 +2,17 @@
 
 import Image from "next/image";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { albumThemeStyle } from "@/lib/theme";
-import { parseJson, type AlbumLinks, type DossierAudio, type Palette } from "@/lib/types";
+import { queueKey } from "@/lib/curator";
+import {
+  parseJson,
+  type AlbumLinks,
+  type DiscoveryJump,
+  type DossierAudio,
+  type Palette,
+} from "@/lib/types";
 import { Stars } from "@/components/Stars";
 import { ListenLinks } from "@/components/ListenLinks";
 import { ReflectionForm } from "@/components/ReflectionForm";
@@ -52,6 +60,28 @@ export default async function AlbumPage({
   const links = parseJson<AlbumLinks>(album.linksJson, {});
   const questions = parseJson<string[]>(dossier.questionsJson, []);
   const audio = parseJson<DossierAudio | null>(dossier.audioJson, null);
+
+  // Saltos de descubrimiento: si el destino ya está publicado, se enlaza;
+  // si no, la cola de generación ya lo tiene apuntado y "viene en camino".
+  const jumps = parseJson<DiscoveryJump[]>(dossier.jumpsJson, []);
+  const publicados =
+    jumps.length > 0
+      ? await prisma.album.findMany({
+          where: { dossiers: { some: { locale: "es", status: "published" } } },
+          select: {
+            id: true,
+            title: true,
+            coverUrl: true,
+            artist: { select: { name: true } },
+          },
+        })
+      : [];
+  const saltos = jumps.map((jump) => {
+    const destino = publicados.find(
+      (a) => queueKey(a.title, a.artist.name) === queueKey(jump.title, jump.artist),
+    );
+    return { jump, albumId: destino?.id ?? null, coverUrl: destino?.coverUrl ?? null };
+  });
 
   const notedTracks = dossier.trackNotes.filter((t) => t.note);
   const narratorSections: NarratorSection[] = [
@@ -222,6 +252,62 @@ export default async function AlbumPage({
             <ReflectionForm albumId={album.id} questions={questions} />
           </div>
         </section>
+
+        {/* — Saltos de descubrimiento: la madriguera sigue — */}
+        {saltos.length > 0 && (
+          <section className="mb-16">
+            <SectionTitle n="07" title="Sigue la madriguera" />
+            <p className="mt-2 text-sm text-dim">
+              De este disco puedes saltar a…
+            </p>
+            <div className="mt-5 flex flex-col gap-3">
+              {saltos.map(({ jump, albumId, coverUrl }) => {
+                const tarjeta = (
+                  <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-surface p-4">
+                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg">
+                      {coverUrl ? (
+                        <Image
+                          src={coverUrl}
+                          alt={`Portada de ${jump.title}`}
+                          fill
+                          sizes="56px"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-album-dark">
+                          <span className="font-serif text-xl text-album-light">♪</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">
+                        {jump.title}{" "}
+                        <span className="font-normal text-dim">· {jump.artist}</span>
+                      </p>
+                      <p className="font-serif mt-1 text-sm italic leading-snug text-foreground/80">
+                        {jump.connection}
+                      </p>
+                      <p className="mt-1.5 text-xs text-dim">
+                        {albumId ? "Léelo en Musicart →" : "La IA lo está preparando…"}
+                      </p>
+                    </div>
+                  </div>
+                );
+                return albumId ? (
+                  <Link
+                    key={`${jump.artist}-${jump.title}`}
+                    href={`/album/${albumId}`}
+                    className="transition-transform active:scale-[0.99]"
+                  >
+                    {tarjeta}
+                  </Link>
+                ) : (
+                  <div key={`${jump.artist}-${jump.title}`}>{tarjeta}</div>
+                );
+              })}
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );

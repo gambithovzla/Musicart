@@ -47,7 +47,7 @@ La base: el ritual diario funciona en producción para todos los usuarios
 
 ---
 
-## 🔨 Fase 1 — El cerebro recomendador (EN CURSO)
+## ✅ Fase 1 — El cerebro recomendador (COMPLETADA · junio 2026)
 
 **Objetivo:** que al abrir la app, la recomendación sea *tuya*: la IA elige un
 disco del catálogo según tu perfil + tu diario + tu ánimo de hoy, y escribe el
@@ -107,7 +107,7 @@ opcional `LLM_MODEL` (default `gpt-4o-mini`).
 
 ---
 
-## 📦 Fase 2 — Catálogo que crece solo
+## 🔨 Fase 2 — Catálogo que crece solo (EN CURSO)
 
 **Objetivo:** que el catálogo pase de 3 discos demo a una biblioteca real sin
 intervención humana. La IA decide qué generar; el pipeline existente genera y
@@ -115,11 +115,12 @@ verifica; solo lo verificado se publica.
 
 ### Tareas
 
-- [ ] **2.1 Curador IA** (`src/lib/curator.ts` o en el worker)
+- [x] **2.1 Curador IA** (`src/lib/curator.ts` o en el worker)
   - LLM propone los próximos álbumes a generar: clásicos imprescindibles +
     huecos del catálogo + afinidades con lo que los usuarios puntúan alto.
   - Lista priorizada persistida (nuevo modelo `GenerationQueue` o similar).
-- [ ] **2.2 Worker de generación** — decisión de arquitectura:
+- [x] **2.2 Worker de generación** — decisión tomada: **Opción A (Railway)**.
+  `scripts/worker.ts` (`npm run worker`) corre como cron en Railway:
   - **Opción A (recomendada): worker en Railway** (ya existe un sidecar de
     Python en la infraestructura del dueño; puede ser un servicio Node con
     `tsx` reutilizando el pipeline TS tal cual, corriendo como cron de Railway).
@@ -128,16 +129,22 @@ verifica; solo lo verificado se publica.
     simple de desplegar, pero limitado en tiempo de ejecución.
   - El worker toma N items de la cola por corrida nocturna, ejecuta
     `runDossierPipeline(..., { publish: true })`, registra resultados.
-- [ ] **2.3 Control de calidad**
+- [x] **2.3 Control de calidad**
   - Los dossiers que no pasan verificación quedan `draft` (ya implementado);
     endpoint/listado simple para revisarlos y publicarlos a mano.
   - Alertas básicas: si una corrida falla todo, que quede registrado (log o
     notificación).
-- [ ] **2.4 Hilos de descubrimiento** (la madriguera MJ → Prince → Beatles)
+- [x] **2.4 Hilos de descubrimiento** (la madriguera MJ → Prince → Beatles)
   - Cada dossier sugiere 2-3 "saltos": rivalidades, colaboraciones, influencias
     ("de aquí puedes saltar a…"), verificados contra los facts.
   - UI: al final del dossier, tarjetas de salto que llevan a otros álbumes del
     catálogo (o alimentan la cola de generación si aún no existen).
+
+### Pendiente del dueño (infra, una sola vez)
+
+- [ ] Crear el servicio cron del worker en Railway (pasos exactos en el README,
+  sección "El catálogo crece solo").
+- [ ] Definir `ADMIN_SECRET` en Vercel (protege el panel `/revision`).
 
 ### Criterios de aceptación
 
@@ -181,3 +188,4 @@ dispositivo.
 | Dossiers pre-generados + recomendación en runtime | Generar tarda minutos (no se hace esperar al usuario); recomendar es 1 llamada corta |
 | Identidad anónima por deviceId antes que auth | Permite construir y validar la personalización ya, sin fricción de registro |
 | `master` es la rama de producción en Vercel | Configurado manualmente en Vercel Settings (el repo usa `master`, no `main`) |
+| Worker de generación como cron en Railway (`npm run worker`) | Generar tarda minutos: excede los timeouts de Vercel; Railway ya es infraestructura del dueño y usa la URL interna del Postgres |

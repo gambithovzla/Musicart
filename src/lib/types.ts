@@ -40,6 +40,14 @@ export type FactsPayload = {
   sources: string[]; // URLs consultadas
 };
 
+// Un salto de descubrimiento: de este disco puedes saltar a aquel otro.
+// La connection SOLO puede afirmar relaciones respaldadas por el facts payload.
+export type DiscoveryJump = {
+  title: string; // álbum destino
+  artist: string;
+  connection: string; // la relación real que los une (rivalidad, colaboración, influencia…)
+};
+
 // Contenido narrativo de un dossier (output estructurado del LLM o escrito a mano).
 export type DossierContent = {
   intro: string; // resumen de 2 minutos: la historia detrás del disco
@@ -47,6 +55,7 @@ export type DossierContent = {
   whyItMatters: string; // por qué fue importante
   questions: string[]; // preguntas de reflexión post-escucha
   trackNotes: { position: number; title: string; note?: string }[];
+  jumps?: DiscoveryJump[]; // 0-3 saltos de descubrimiento (la madriguera)
 };
 
 // MP3s de narración pre-renderizados por sección (TTS). Si falta, la UI usa Web Speech API.

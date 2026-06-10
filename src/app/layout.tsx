@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
+import { DeviceSync } from "@/components/DeviceSync";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -41,6 +42,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={`${inter.variable} ${fraunces.variable} antialiased`}>
+        <DeviceSync />
         <div className="mx-auto min-h-dvh max-w-lg pb-24">{children}</div>
         <BottomNav />
       </body>

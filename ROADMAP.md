@@ -61,7 +61,7 @@ están pre-generados.
 
 ### Tareas
 
-- [ ] **1.1 Motor de recomendación** (`src/lib/recommend.ts`)
+- [x] **1.1 Motor de recomendación** (`src/lib/recommend.ts`)
   - Server-side. Input: perfil del device, últimas N reviews (con ratings),
     mood de hoy (opcional), catálogo de dossiers publicados (título, artista,
     año, tags/facts resumidos), historial de DailyPicks recientes (no repetir).
@@ -71,22 +71,22 @@ están pre-generados.
     "dijiste que buscas la historia") — el prompt incluye solo datos reales.
   - Guardar en `DailyPick` (deviceId + date + albumId + reason). Cache: una
     recomendación por device por día; si ya existe, se devuelve la guardada.
-- [ ] **1.2 Check-in de mood** en la home
+- [x] **1.2 Check-in de mood** en la home
   - UI ligera antes/sobre el reveal: "¿Cómo te sientes hoy?" (chips: enérgico,
     nostálgico, relajado, curioso, melancólico… + skip).
   - El mood del día se guarda (campo en DailyPick o nuevo modelo MoodCheckin)
     y entra como señal al motor 1.1. Si el usuario cambia el mood, se puede
     regenerar el pick del día (máx. 1 regeneración para controlar costo).
-- [ ] **1.3 Home personalizada**
+- [x] **1.3 Home personalizada**
   - La home usa el pick personalizado del device (si hay perfil/historial) y
     muestra el `reason` destacado en el reveal.
   - Usuario nuevo sin señales → rotación global actual como fallback, con
     invitación a llenar el perfil ("dinos quién eres y mañana será para ti").
-- [ ] **1.4 Resiliencia y fallback**
+- [x] **1.4 Resiliencia y fallback**
   - Sin `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`, timeout o error del LLM → cae a
     la rotación global sin romper la página (nunca un 500 por culpa de la IA).
   - `LLM_PROVIDER`/`LLM_MODEL` respetados; key leída en runtime de Vercel.
-- [ ] **1.5 Limpieza de build**
+- [x] **1.5 Limpieza de build**
   - Quitar `prisma db seed` del comando `build` (ya no hará falta sembrar en
     cada deploy una vez el catálogo sea real).
 

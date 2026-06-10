@@ -1,6 +1,6 @@
-// Selección del álbum del día.
-// MVP: rotación determinista global sobre los dossiers publicados.
-// Fase 2: pick personalizado por perfil vía LLM (DailyPick por deviceId).
+// Rotación determinista global sobre los dossiers publicados.
+// Desde la Fase 1 es el fallback del pick personalizado (src/lib/recommend.ts):
+// usuarios sin señales, o cualquier fallo de la IA, caen aquí. Nunca se rompe.
 
 import { prisma } from "./db";
 

@@ -71,7 +71,7 @@ están pre-generados.
     "dijiste que buscas la historia") — el prompt incluye solo datos reales.
   - Guardar en `DailyPick` (deviceId + date + albumId + reason). Cache: una
     recomendación por device por día; si ya existe, se devuelve la guardada.
-- [ ] **1.2 Check-in de mood** en la home
+- [x] **1.2 Check-in de mood** en la home
   - UI ligera antes/sobre el reveal: "¿Cómo te sientes hoy?" (chips: enérgico,
     nostálgico, relajado, curioso, melancólico… + skip).
   - El mood del día se guarda (campo en DailyPick o nuevo modelo MoodCheckin)

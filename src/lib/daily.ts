@@ -4,12 +4,19 @@
 
 import { prisma } from "./db";
 
-export function todayKey(tz?: string | null): string {
+export function todayKey(tzOrDate?: string | null | Date): string {
+  // Si recibe un Date, formatea esa fecha concreta (usos de analytics/duet)
+  if (tzOrDate instanceof Date) {
+    const y = tzOrDate.getFullYear();
+    const m = String(tzOrDate.getMonth() + 1).padStart(2, "0");
+    const d = String(tzOrDate.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
   const now = new Date();
-  if (tz) {
+  if (tzOrDate) {
     try {
       // en-CA produce el formato YYYY-MM-DD que necesitamos
-      return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(now);
+      return new Intl.DateTimeFormat("en-CA", { timeZone: tzOrDate }).format(now);
     } catch {
       // timezone inválido → cae al UTC del servidor
     }

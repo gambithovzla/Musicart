@@ -102,6 +102,7 @@ export async function getPersonalizedPick(
   deviceId: string,
   userId?: string | null,
   tz?: string | null,
+  lang?: string | null, // idioma elegido hoy ("Español", "Italiano", "any", …)
 ): Promise<PickPersonal | null> {
   const ctx: PickCtx = { deviceId, userId: userId ?? null };
   if (!ctx.deviceId && !ctx.userId) return null;
@@ -121,7 +122,7 @@ export async function getPersonalizedPick(
         };
       }
     }
-    return await recomendarYGuardar(ctx, { mood: null }, tz);
+    return await recomendarYGuardar(ctx, { mood: null, lang: lang ?? null }, tz);
   } catch (err) {
     console.error("[recommend] pick personalizado falló, va rotación global:", err);
     return null;
@@ -180,7 +181,7 @@ async function dossierDelAlbum(albumId: string): Promise<DossierConAlbum | null>
 
 async function recomendarYGuardar(
   ctx: PickCtx,
-  opts: { mood: string | null; albumPrevio?: string; regenerated?: boolean },
+  opts: { mood: string | null; lang?: string | null; albumPrevio?: string; regenerated?: boolean },
   tz?: string | null,
 ): Promise<PickPersonal | null> {
   try {
@@ -238,6 +239,7 @@ async function recomendarYGuardar(
         profile: parsedProfile,
         reviews,
         mood: opts.mood,
+        lang: opts.lang && opts.lang !== "Cualquiera" ? opts.lang : null,
         catalogo,
         picksRecientes,
         albumPrevio: opts.albumPrevio
@@ -318,6 +320,7 @@ async function elegirConLlm(input: {
     include: { album: { include: { artist: true } } };
   }>[];
   mood: string | null;
+  lang: string | null;  // idioma elegido hoy (null = cualquiera)
   catalogo: DossierConAlbum[];
   picksRecientes: Prisma.DailyPickGetPayload<{
     include: { album: { include: { artist: true } } };
@@ -387,7 +390,7 @@ Reglas estrictas:
 4. Sobre el disco solo puedes mencionar lo que aparece en el catálogo (título, artista, año, duración, etiquetas). PROHIBIDO inventar datos del álbum o del usuario.
 5. Evita repetir discos recomendados en días recientes, salvo que no haya alternativa razonable.
 6. Si el usuario indicó su ánimo de hoy, dale prioridad como señal.
-7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.`;
+7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.${input.lang ? `\n8. IDIOMA DE HOY: el usuario quiere escuchar en "${input.lang}" hoy. Prioriza artistas que cantan en ese idioma. Si no hay ninguno en el catálogo, elige el más cercano y mencionalo en la "reason".` : ""}`;
 
   const user = `CATÁLOGO DISPONIBLE (elige uno por su albumId):
 ${catalogoTexto}

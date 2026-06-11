@@ -10,10 +10,11 @@ export type CuriosityQuestion = {
 };
 
 export type CuriosityAnswer = {
-  id: string;       // question id
-  answer: string;   // opción elegida
-  extra?: string;   // texto libre opcional
-  date: string;     // YYYY-MM-DD
+  id: string;        // question id (estático o "ai-YYYY-MM-DD")
+  question?: string; // texto de la pregunta (necesario para preguntas IA)
+  answer: string;    // opción elegida
+  extra?: string;    // texto libre opcional
+  date: string;      // YYYY-MM-DD
 };
 
 export const QUESTIONS: CuriosityQuestion[] = [
@@ -113,8 +114,8 @@ export function formatCuriosities(answers: CuriosityAnswer[], limit = 8): string
   return answers
     .slice(-limit)
     .map((a) => {
-      const q = QUESTIONS.find((q) => q.id === a.id);
-      const pregunta = q?.text ?? a.id;
+      // Para preguntas IA, la pregunta viene en el propio objeto (a.question).
+      const pregunta = a.question ?? QUESTIONS.find((q) => q.id === a.id)?.text ?? a.id;
       return `- ${pregunta} → "${a.answer}"${a.extra ? ` (añadió: "${a.extra.slice(0, 100)}")` : ""}`;
     })
     .join("\n");

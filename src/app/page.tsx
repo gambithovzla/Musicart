@@ -8,12 +8,13 @@ import { getTodayPick, formatDateEs, todayKey } from "@/lib/daily";
 import { getPersonalizedPick } from "@/lib/recommend";
 import { getMadriguera } from "@/lib/madriguera";
 import { hasProfile } from "@/app/actions";
-import { DEVICE_COOKIE, TZ_COOKIE } from "@/lib/device";
+import { DEVICE_COOKIE, TZ_COOKIE, LANG_COOKIE, parseTodayLang } from "@/lib/device";
 import { albumThemeStyle } from "@/lib/theme";
 import { parseJson, type Palette } from "@/lib/types";
 import { DailyReveal } from "@/components/DailyReveal";
 import { MoodCheckin } from "@/components/MoodCheckin";
 import { CuriosityCard } from "@/components/CuriosityCard";
+import { LanguageGate } from "@/components/LanguageGate";
 import { todayQuestion } from "@/lib/curiosities";
 import type { CuriosityAnswer } from "@/lib/curiosities";
 import { getListenerIdentity, profileWhere } from "@/lib/identity";
@@ -33,10 +34,18 @@ export default async function Home() {
   const tzRaw = jar.get(TZ_COOKIE)?.value;
   const tz = tzRaw ? decodeURIComponent(tzRaw) : null;
   const userId = session?.user?.id ?? null;
+  const dateKey = todayKey(tz);
+
+  // Gate de idioma: usuarios con deviceId que no han elegido idioma hoy.
+  const langRaw = jar.get(LANG_COOKIE)?.value;
+  const todayLang = parseTodayLang(langRaw, dateKey);
+  if (deviceId && !todayLang) {
+    return <LanguageGate dateKey={dateKey} />;
+  }
 
   const personal =
     deviceId || userId
-      ? await getPersonalizedPick(deviceId, userId, tz)
+      ? await getPersonalizedPick(deviceId, userId, tz, todayLang)
       : null;
   const pick = personal?.dossier ?? (await getTodayPick(tz));
 
@@ -53,16 +62,14 @@ export default async function Home() {
     );
   }
 
-  const dateKey = todayKey(tz);
-
   const [tienePerfil, madriguera, identity] = await Promise.all([
     hasProfile(),
     getMadriguera(pick.album.id),
     getListenerIdentity(),
   ]);
 
-  // Cargar pregunta del día (si el usuario tiene perfil).
-  let curiosityQuestion: ReturnType<typeof todayQuestion> = null;
+  // Pregunta del día: fallback estático; el CuriosityCard carga la IA en background.
+  let initialCuriosityQuestion: ReturnType<typeof todayQuestion> = null;
   if (tienePerfil) {
     const profileFilter = profileWhere(identity);
     const profile = profileFilter
@@ -71,13 +78,24 @@ export default async function Home() {
     const prev = profile
       ? parseJson<Record<string, unknown>>(profile.answersJson, {})
       : {};
-    const answered = new Set<string>(
-      (Array.isArray(prev.curiosities) ? (prev.curiosities as CuriosityAnswer[]) : [])
-        .filter((a) => a.date === dateKey)
-        .map((a) => a.id),
-    );
-    curiosityQuestion = todayQuestion(answered, dateKey);
+
+    // Si ya hay una pregunta generada para hoy, usarla de inmediato.
+    const cached = prev.todayCuriosity as
+      | { date: string; id: string; text: string; options: string[] }
+      | undefined;
+    if (cached?.date === dateKey && cached.text) {
+      initialCuriosityQuestion = { id: cached.id, text: cached.text, options: cached.options };
+    } else {
+      // Fallback estático mientras el CuriosityCard genera la IA en background.
+      const answered = new Set<string>(
+        (Array.isArray(prev.curiosities) ? (prev.curiosities as CuriosityAnswer[]) : [])
+          .filter((a) => a.date === dateKey)
+          .map((a) => a.id),
+      );
+      initialCuriosityQuestion = todayQuestion(answered, dateKey);
+    }
   }
+
   const palette = parseJson<Palette | null>(pick.album.paletteJson, null);
 
   return (
@@ -114,8 +132,11 @@ export default async function Home() {
             madriguera,
           }}
         />
-        {curiosityQuestion && (
-          <CuriosityCard question={curiosityQuestion} dateKey={dateKey} />
+        {initialCuriosityQuestion && (
+          <CuriosityCard
+            initialQuestion={initialCuriosityQuestion}
+            dateKey={dateKey}
+          />
         )}
       </div>
     </main>

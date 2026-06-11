@@ -196,7 +196,7 @@ dispositivo.
 
 ---
 
-## 🔨 Fase 4 — Producto pulido y monetización (EN CURSO)
+## ✅ Fase 4 — Producto pulido y monetización (COMPLETADA · junio 2026)
 
 ### Tareas
 
@@ -209,7 +209,8 @@ dispositivo.
 - [x] **4.4 Rutas temáticas** — `/explorar` con colecciones curadas (jazz, rock,
   español, calma…)
 - [x] **4.5 Stripe freemium** — 5 dossiers/mes gratis; Pro ilimitado vía Stripe Checkout
-- [ ] **4.6 Analytics** — métricas de producto y validación con usuarios reales
+- [x] **4.6 Analytics** — panel de métricas en `/revision` (usuarios, lecturas,
+  reseñas, Pro, freemium, top álbumes, moods)
 
 ### Criterios de aceptación (parcial)
 
@@ -221,6 +222,7 @@ dispositivo.
   cuando existe `audioJson`; si no, cae a Web Speech del navegador.
 - [x] Plan gratis con límite mensual de dossiers; el disco del día no cuenta; Pro
   desbloquea lecturas ilimitadas.
+- [x] El admin ve métricas de producto agregadas en el panel de revisión.
 
 ---
 

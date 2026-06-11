@@ -5,8 +5,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
 import { prisma } from "@/lib/db";
+import { getProductMetrics } from "@/lib/analytics";
 import { dossierHasAudio } from "@/lib/dossier/render-audio";
 import { publishDossier, discardDossier } from "./actions";
+import { AnalyticsPanel } from "./AnalyticsPanel";
 import { TtsControls } from "./TtsControls";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +38,8 @@ export default async function RevisionPage() {
     );
   }
 
-  const [drafts, cola, publicados] = await Promise.all([
+  const [metrics, drafts, cola, publicados] = await Promise.all([
+    getProductMetrics(),
     prisma.dossier.findMany({
       where: { status: "draft", locale: "es" },
       include: { album: { include: { artist: true } } },
@@ -69,6 +72,8 @@ export default async function RevisionPage() {
         <h1 className="font-serif mt-2 text-3xl font-semibold">Revisión</h1>
         <p className="mt-1 text-sm text-dim">{session.user.email}</p>
       </header>
+
+      <AnalyticsPanel metrics={metrics} />
 
       <section className="mt-10">
         <h2 className="font-serif text-xl">

@@ -73,7 +73,7 @@ llena la cola automáticamente. Los **saltos** de cada dossier publicado tambié
 alimentan la cola: la madriguera se excava sola.
 
 - **Revisión humana:** `/revision` (cuenta admin en `ADMIN_EMAILS`) lista drafts,
-  cola y botones TTS. Enlace visible en Perfil si eres admin.
+  cola, métricas de producto y botones TTS. Enlace visible en Perfil si eres admin.
 - **Correr el worker a mano** (p. ej. para acelerar el catálogo): pon en `.env`
   la URL **pública** de Postgres (`…proxy.rlwy.net`) y `OPENAI_API_KEY`, luego
   `npm run worker -- --batch 2`.
@@ -136,4 +136,4 @@ src/components/       DailyReveal, MoodCheckin, Narrator, ReflectionForm, Listen
 - ✅ **Fase 2** — Catálogo que crece solo (curador IA + worker + madriguera);
   validado en producción (jun 2026)
 - ✅ **Fase 3** — Cuentas reales (Auth.js, multi-dispositivo, export/borrado de datos)
-- 🔨 **Fase 4** — TTS, compartir, conductor, rutas, Stripe freemium (en curso); analytics pendiente
+- ✅ **Fase 4** — TTS, compartir, conductor, rutas, Stripe freemium, analytics admin

@@ -142,6 +142,10 @@ verifica; solo lo verificado se publica.
     endpoint/listado simple para revisarlos y publicarlos a mano.
   - Alertas básicas: si una corrida falla todo, que quede registrado (log o
     notificación).
+  - **Generar a demanda desde el panel**: el dueño escribe disco + artista en
+    `/revision` y la IA lo crea en vivo (1-3 min), publicando si pasa la
+    verificación. Red de seguridad: queda en la cola con prioridad máxima por
+    si el live se corta (`generarAlbumAhora` en `revision/actions.ts`).
 - [x] **2.4 Hilos de descubrimiento** (la madriguera MJ → Prince → Beatles)
   - Cada dossier sugiere 2-3 "saltos": rivalidades, colaboraciones, influencias
     ("de aquí puedes saltar a…"), verificados contra los facts.

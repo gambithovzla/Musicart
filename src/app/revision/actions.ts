@@ -5,6 +5,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
+import { enqueueAlbum, queueKey } from "@/lib/curator";
+import { runDossierPipeline } from "@/lib/dossier/pipeline";
 import {
   dossierAudioInputFromRow,
   findDossiersMissingAudio,
@@ -26,6 +28,77 @@ export async function discardDossier(dossierId: string) {
   await prisma.trackNote.deleteMany({ where: { dossierId } });
   await prisma.dossier.delete({ where: { id: dossierId } });
   revalidatePath("/revision");
+}
+
+export type GenerarAlbumResult = {
+  message: string;
+  albumId: string | null;
+  // "published" | "draft" si terminó en vivo; "queued" si quedó para el robot.
+  estado: "published" | "draft" | "queued";
+};
+
+/**
+ * Crea un disco a demanda desde el panel (el dueño elige qué y cuándo).
+ * Genera en vivo (tarda 1-3 min) y, como red de seguridad, lo deja también en
+ * la cola con prioridad máxima: si la generación en vivo no alcanza a terminar
+ * (timeout de Vercel), el worker lo recoge en su próxima corrida.
+ */
+export async function generarAlbumAhora(input: {
+  title: string;
+  artist: string;
+  publish: boolean;
+}): Promise<GenerarAlbumResult> {
+  await requireAdmin();
+  const title = input.title.trim();
+  const artist = input.artist.trim();
+  if (!title || !artist) {
+    throw new Error("Escribe el disco y el artista.");
+  }
+
+  // Red de seguridad: a la cola con prioridad máxima (no estorba si ya existe).
+  await enqueueAlbum({
+    title,
+    artist,
+    source: "manual",
+    priority: 1,
+    reason: "Pedido a mano desde el panel",
+  });
+
+  try {
+    const result = await runDossierPipeline(title, artist, {
+      publish: input.publish,
+    });
+
+    // Terminó en vivo: la cola ya no necesita reintentarlo.
+    const observaciones = result.report.ok
+      ? null
+      : [...result.report.hardErrors, ...result.report.unsupportedClaims]
+          .slice(0, 5)
+          .join(" · ")
+          .slice(0, 500);
+    await prisma.generationQueue.updateMany({
+      where: { key: queueKey(title, artist) },
+      data: { status: "done", result: result.status, error: observaciones },
+    });
+
+    revalidatePath("/revision");
+    revalidatePath(`/album/${result.albumId}`);
+
+    const message =
+      result.status === "published"
+        ? `✓ «${title}» de ${artist} ya está publicado en el catálogo.`
+        : `◦ «${title}» quedó como borrador: la verificación encontró algo que revisar. Léelo abajo y decide si lo publicas.`;
+    return { message, albumId: result.albumId, estado: result.status };
+  } catch (e) {
+    // No terminó en vivo, pero sigue en la cola con prioridad máxima.
+    const detalle = (e as Error).message.slice(0, 200);
+    revalidatePath("/revision");
+    return {
+      message: `No pude crearlo en vivo (${detalle}). Quedó en la cola con prioridad máxima: el robot lo intentará en su próxima corrida.`,
+      albumId: null,
+      estado: "queued",
+    };
+  }
 }
 
 export async function generateDossierTts(

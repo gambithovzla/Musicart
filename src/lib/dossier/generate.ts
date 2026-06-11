@@ -17,7 +17,7 @@ FORMATO DE SALIDA — SOLO un objeto JSON válido, sin texto extra:
 {
   "intro": "La historia detrás del disco, ~200-250 palabras. Empieza con un gancho. Termina invitando a escucharlo completo.",
   "artistStory": "Quién era el artista en ese momento de su vida, ~120-180 palabras.",
-  "whyItMatters": "Por qué este disco importa, ~100-150 palabras.",
+  "whyItMatters": "Por qué este disco importa, ~100-150 palabras. Esta sección es 100% editorial: tu opinión como curador sobre por qué vale la pena escucharlo hoy. No pongas datos ni fechas aquí.",
   "questions": ["3 preguntas de reflexión post-escucha, personales, sin respuesta correcta"],
   "trackNotes": [{ "position": 4, "title": "título EXACTO del tracklist", "note": "1-2 frases" }],
   "difficulty": 2,

@@ -12,6 +12,41 @@ export type VerificationReport = {
   unsupportedClaims: string[];
 };
 
+function payloadCorpus(payload: FactsPayload): string {
+  return JSON.stringify(payload).toLowerCase();
+}
+
+// El verificador LLM suele marcar opiniones como unsupported. Solo conservamos
+// claims con anclas factuales concretas (años, cifras) ausentes del payload.
+function filterFalsePositives(
+  claims: string[],
+  payload: FactsPayload,
+): string[] {
+  const corpus = payloadCorpus(payload);
+  return claims.filter((claim) => {
+    const years = claim.match(/\b(19|20)\d{2}\b/g) ?? [];
+    if (years.some((y) => !corpus.includes(y))) return true;
+
+    const numbers = claim.match(/\b\d+\b/g) ?? [];
+    if (numbers.some((n) => !corpus.includes(n))) return true;
+
+    const quantified =
+      claim.match(/\b(diez|once|doce|quince|veinte|treinta|cien|mil)\b/gi) ?? [];
+    const hasMeasurement =
+      /\b(horas?|minutos?|d[ií]as|semanas|meses|copias|ventas|oyentes|escuchas)\b/i.test(
+        claim,
+      );
+    if (
+      hasMeasurement &&
+      quantified.some((w) => !corpus.includes(w.toLowerCase()))
+    ) {
+      return true;
+    }
+
+    return false;
+  });
+}
+
 function normalize(s: string): string {
   return s
     .toLowerCase()
@@ -28,10 +63,10 @@ export function hardValidate(
 ): string[] {
   const errors: string[] = [];
   const payloadText = JSON.stringify(payload);
+  // whyItMatters es 100% editorial — no se validan años ni hechos ahí.
   const narrative = [
     dossier.intro,
     dossier.artistStory,
-    dossier.whyItMatters,
     ...dossier.trackNotes.map((t) => t.note ?? ""),
   ].join("\n");
 
@@ -65,12 +100,30 @@ export function hardValidate(
 }
 
 // — Capa 2: verificador LLM —
-const VERIFIER_SYSTEM = `Eres un verificador de hechos implacable. Recibes un FACTS PAYLOAD (la única fuente de verdad) y un TEXTO generado.
+const VERIFIER_SYSTEM = `Eres un verificador de hechos preciso. Recibes un FACTS PAYLOAD (la única fuente de verdad) y un TEXTO generado.
 
-Tu tarea: encontrar afirmaciones FACTUALES del texto que NO estén respaldadas por el payload.
-- Factual = fechas, premios, cifras, nombres propios, eventos, anécdotas, relaciones entre personas.
-- NO factual (ignóralas): opiniones estéticas, descripciones de sonido, invitaciones a escuchar, preguntas, interpretaciones emocionales.
-- Una afirmación está respaldada si el payload la contiene o la implica directamente (puede estar parafraseada o en otro idioma).
+Tu tarea: encontrar SOLO afirmaciones ESTRICTAMENTE FACTUALES del texto que NO estén respaldadas por el payload.
+
+SIEMPRE RESPALDADO — no marques como unsupported:
+- Mencionar el título del álbum, el nombre del artista o el año de lanzamiento tal como aparecen en payload.album
+- Parafrasear hechos de payload.facts o payload.passages (incluye contexto de Wikipedia)
+- Describir el estilo, sonido, atmósfera o significado artístico de canciones o del álbum
+- Valoraciones editoriales, impacto cultural en términos generales, invitaciones a escuchar
+
+FACTUAL — verifica SOLO estas, y márcalas unsupported si no están en el payload:
+- Fechas, años o décadas distintas a payload.album.year
+- Premios y galardones con nombre propio
+- Cifras exactas (charts, ventas, duración) no presentes en el payload
+- Nombres propios de personas, lugares o sellos no mencionados en el payload
+- Eventos concretos narrados como hechos (ej. "grabado en Abbey Road", "rompió con su pareja")
+
+NO FACTUAL — ignóralas siempre:
+- Opiniones estéticas y descripciones subjetivas de tracks
+- "Pilar del jazz", "cambió la música", "obra definitiva", "punto crucial de su carrera"
+- Caracterizaciones de género usadas como descripción ("enfoque modal", "hard rock")
+- Interpretaciones emocionales y preguntas
+
+Una afirmación está respaldada si aparece en facts, passages, album o tracklist (puede estar parafraseada o en otro idioma). Ante la duda, NO la marques.
 
 Responde SOLO con JSON: { "unsupported": ["afirmación textual 1", "..."] }
 Si todo está respaldado: { "unsupported": [] }`;
@@ -79,10 +132,10 @@ export async function llmVerify(
   dossier: GeneratedDossier,
   payload: FactsPayload,
 ): Promise<string[]> {
+  // whyItMatters es 100% editorial — fuera del alcance del verificador.
   const text = [
     `INTRO: ${dossier.intro}`,
     `ARTISTA: ${dossier.artistStory}`,
-    `POR QUÉ IMPORTA: ${dossier.whyItMatters}`,
     ...dossier.trackNotes.map((t) => `NOTA (${t.title}): ${t.note}`),
   ].join("\n\n");
 
@@ -99,7 +152,8 @@ export async function verifyDossier(
   payload: FactsPayload,
 ): Promise<VerificationReport> {
   const hardErrors = hardValidate(dossier, payload);
-  const unsupportedClaims = await llmVerify(dossier, payload);
+  const rawClaims = await llmVerify(dossier, payload);
+  const unsupportedClaims = filterFalsePositives(rawClaims, payload);
   return {
     ok: hardErrors.length === 0 && unsupportedClaims.length === 0,
     hardErrors,

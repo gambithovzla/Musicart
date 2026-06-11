@@ -77,10 +77,10 @@ export default async function RevisionPage() {
       <AnalyticsPanel metrics={metrics} />
 
       <section className="mt-10">
-        <h2 className="font-serif text-xl">Añadir disco</h2>
+        <h2 className="font-serif text-xl">Crear un disco</h2>
         <p className="mt-1 text-sm text-dim">
-          Escribe el disco que quieras y la IA lo crea al instante — los que
-          quieras, cuando quieras. El robot diario sigue funcionando aparte.
+          Toca el botón y la IA elige y crea un disco nuevo para el catálogo —las
+          veces que quieras, cuando quieras. El robot diario sigue funcionando aparte.
         </p>
         <GenerarDiscoForm />
       </section>

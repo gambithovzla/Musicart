@@ -92,7 +92,9 @@ npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
   cada deploy. (El seed ya no corre en el build; para un entorno nuevo:
   `npm run db:seed`.)
 - Variables en Vercel: `DATABASE_URL`, `OPENAI_API_KEY` (recomendaciones en
-  runtime) y `ADMIN_SECRET` (panel `/revision`).
+  runtime), `ADMIN_SECRET` (panel `/revision`) y, para la Fase 3, `AUTH_SECRET`,
+  `AUTH_URL` (p. ej. `https://musicart-three.vercel.app`), `GOOGLE_CLIENT_ID`,
+  `GOOGLE_CLIENT_SECRET`. Email opcional: `AUTH_RESEND_KEY`, `EMAIL_FROM`.
 
 > ⚠️ SQLite no funciona en Vercel (filesystem efímero) — por eso Postgres.
 

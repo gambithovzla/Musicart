@@ -46,7 +46,9 @@ src/app/page.tsx         Home: el ritual diario, personalizado por device (cooki
 src/app/album/[id]/      Dossier completo del disco + saltos de descubrimiento.
 src/app/diario/          Historial de escuchas con racha (client + server actions).
 src/app/perfil/          Onboarding ligero (client + server actions).
+src/app/entrar/          Inicio de sesión (Google + email) y fusión del device.
 src/app/revision/        Panel del dueño: drafts + cola (/revision?clave=ADMIN_SECRET).
+src/auth.ts              Auth.js: providers, Prisma adapter, sesión en DB.
 src/app/actions.ts       Server actions: saveReview, getReview, saveProfile,
                          getJournal, checkInMood.
 src/lib/daily.ts         Rotación global determinista: el fallback eterno del
@@ -64,6 +66,7 @@ src/lib/dossier/         Pipeline anti-alucinación:
   llm.ts                   adapter OpenAI/Anthropic (env: LLM_PROVIDER, LLM_MODEL)
 src/lib/sources/         Clientes de las APIs externas.
 src/lib/types.ts         Tipos de dominio (FactsPayload, DossierContent, Palette…).
+src/lib/merge-device.ts  Fusión Profile/Reviews/DailyPicks al iniciar sesión.
 src/lib/device.ts        Identidad anónima por dispositivo (localStorage + cookie
                          musicart_device para personalizar en el servidor).
 src/lib/theme.ts|palette.ts  Theming de la UI con la paleta de la portada.

@@ -171,13 +171,14 @@ dispositivo.
 
 ### Tareas
 
-- [ ] **3.1 Auth.js** (Google + email) sobre Next.js App Router
+- [x] **3.1 Auth.js** (Google + email) sobre Next.js App Router
   - Modelos Prisma: `User`, `Account`, `Session`, `VerificationToken`.
   - Rutas `/api/auth/[...nextauth]` y pantalla `/entrar`.
-  - Variables: `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
-- [ ] **3.2 Fusión de identidad** al iniciar sesión
+  - Variables: `AUTH_SECRET`, `AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`;
+    email opcional: `AUTH_RESEND_KEY`, `EMAIL_FROM`.
+- [x] **3.2 Fusión de identidad** al iniciar sesión
   - Fusionar `Profile`, `Review` y `DailyPick` del `deviceId` actual con el
-    `User` (sin perder diario ni racha).
+    `User` (sin perder diario ni racha) — `/entrar/completado`.
 - [ ] **3.3 Sesión multi-dispositivo**
   - El motor de recomendación y el diario leen por `userId` cuando hay sesión;
     `deviceId` sigue como fallback anónimo.

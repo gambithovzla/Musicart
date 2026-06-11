@@ -132,6 +132,12 @@ export default function PerfilPage() {
       >
         {saved ? "Perfil guardado ✓" : "Guardar perfil"}
       </button>
+
+      <p className="mt-6 text-center text-sm text-dim">
+        <a href="/entrar" className="underline underline-offset-2">
+          Entrar para llevar tu diario a otro dispositivo →
+        </a>
+      </p>
     </main>
   );
 }

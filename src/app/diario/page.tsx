@@ -4,6 +4,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { getJournal } from "@/app/actions";
+import { getListenerIdentity } from "@/lib/identity";
+import { getMusicalThread } from "@/lib/musical-thread";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +36,11 @@ function computeStreak(entries: Entry[]): number {
 }
 
 export default async function DiarioPage() {
-  const entries = await getJournal();
+  const identity = await getListenerIdentity();
+  const [entries, thread] = await Promise.all([
+    getJournal(),
+    getMusicalThread(identity),
+  ]);
   const streak = computeStreak(entries);
 
   return (
@@ -53,6 +59,16 @@ export default async function DiarioPage() {
               </span>
             )}
           </p>
+        )}
+        {thread && (
+          <div className="mt-6 rounded-2xl border border-white/10 bg-gradient-to-br from-album/10 to-transparent p-5">
+            <p className="text-xs uppercase tracking-[0.25em] text-album-light/80">
+              El hilo de tu vida musical
+            </p>
+            <p className="font-serif mt-3 text-base leading-relaxed text-foreground/90">
+              {thread.content}
+            </p>
+          </div>
         )}
         {entries.length > 0 && (
           <Link

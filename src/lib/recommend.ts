@@ -11,6 +11,11 @@ import {
   profileWhere,
   reviewsWhere,
 } from "./identity";
+import {
+  detectReturnRitual,
+  fallbackReturnReason,
+  type ReturnRitual,
+} from "./return-ritual";
 import { parseJson, type FactsPayload } from "./types";
 
 const MAX_REVIEWS = 10;
@@ -26,6 +31,8 @@ export type PickPersonal = {
   reason: string | null;
   mood: string | null;
   regenerated: boolean;
+  returnPick: boolean;
+  absenceDays: number | null;
 };
 
 type PickCtx = { deviceId: string; userId: string | null };
@@ -52,6 +59,8 @@ async function saveTodaysPick(
     reason: string | null;
     mood: string | null;
     regenerated: boolean;
+    returnPick?: boolean;
+    absenceDays?: number | null;
   },
 ) {
   const existing = await findTodaysPick(ctx, date);
@@ -63,6 +72,8 @@ async function saveTodaysPick(
         reason: data.reason,
         mood: data.mood,
         regenerated: data.regenerated,
+        returnPick: data.returnPick ?? false,
+        absenceDays: data.absenceDays ?? null,
         ...(ctx.userId ? { userId: ctx.userId } : {}),
       },
     });
@@ -77,6 +88,8 @@ async function saveTodaysPick(
       reason: data.reason,
       mood: data.mood,
       regenerated: data.regenerated,
+      returnPick: data.returnPick ?? false,
+      absenceDays: data.absenceDays ?? null,
     },
   });
 }
@@ -101,6 +114,8 @@ export async function getPersonalizedPick(
           reason: guardado.reason,
           mood: guardado.mood,
           regenerated: guardado.regenerated,
+          returnPick: guardado.returnPick,
+          absenceDays: guardado.absenceDays,
         };
       }
     }
@@ -204,28 +219,63 @@ async function recomendarYGuardar(
     if (!profile && reviews.length === 0 && !opts.mood) return null;
     if (catalogo.length === 0) return null;
 
-    const eleccion = await elegirConLlm({
-      profile: profile ? parseJson<Record<string, unknown>>(profile.answersJson, {}) : null,
-      reviews,
-      mood: opts.mood,
-      catalogo,
-      picksRecientes,
-      albumPrevio: opts.albumPrevio
-        ? catalogo.find((d) => d.album.id === opts.albumPrevio) ?? null
-        : null,
-    });
+    const returnRitual =
+      !opts.regenerated && !opts.mood
+        ? await detectReturnRitual(identity, date)
+        : null;
+
+    let eleccion: { albumId: string; reason: string };
+    try {
+      eleccion = await elegirConLlm({
+        profile: profile ? parseJson<Record<string, unknown>>(profile.answersJson, {}) : null,
+        reviews,
+        mood: opts.mood,
+        catalogo,
+        picksRecientes,
+        albumPrevio: opts.albumPrevio
+          ? catalogo.find((d) => d.album.id === opts.albumPrevio) ?? null
+          : null,
+        returnRitual,
+      });
+    } catch (err) {
+      if (!returnRitual) throw err;
+      const recientesIds = new Set(picksRecientes.map((p) => p.albumId));
+      const pool = catalogo
+        .filter((d) => !recientesIds.has(d.album.id))
+        .sort((a, b) => a.album.difficulty - b.album.difficulty);
+      const dossier = pool[0] ?? catalogo[0];
+      if (!dossier) throw err;
+      eleccion = {
+        albumId: dossier.album.id,
+        reason: fallbackReturnReason(
+          returnRitual.absenceDays,
+          dossier.album.title,
+          dossier.album.artist.name,
+        ),
+      };
+    }
 
     const dossier = catalogo.find((d) => d.album.id === eleccion.albumId);
     if (!dossier) {
       throw new Error(`El LLM eligió un albumId fuera del catálogo: ${eleccion.albumId}`);
     }
-    const reason = eleccion.reason?.trim().slice(0, 600) || null;
+
+    let reason = eleccion.reason?.trim().slice(0, 600) || null;
+    if (returnRitual && !reason) {
+      reason = fallbackReturnReason(
+        returnRitual.absenceDays,
+        dossier.album.title,
+        dossier.album.artist.name,
+      );
+    }
 
     await saveTodaysPick(ctx, date, {
       albumId: dossier.album.id,
       reason,
       mood: opts.mood,
       regenerated: opts.regenerated ?? false,
+      returnPick: Boolean(returnRitual),
+      absenceDays: returnRitual?.absenceDays ?? null,
     });
 
     return {
@@ -233,6 +283,8 @@ async function recomendarYGuardar(
       reason,
       mood: opts.mood,
       regenerated: opts.regenerated ?? false,
+      returnPick: Boolean(returnRitual),
+      absenceDays: returnRitual?.absenceDays ?? null,
     };
   } catch (err) {
     console.error("[recommend] el motor falló, va rotación global:", err);
@@ -251,6 +303,7 @@ async function elegirConLlm(input: {
     include: { album: { include: { artist: true } } };
   }>[];
   albumPrevio: DossierConAlbum | null;
+  returnRitual: ReturnRitual | null;
 }): Promise<{ albumId: string; reason: string }> {
   const catalogoTexto = input.catalogo
     .map((d) => {
@@ -300,6 +353,10 @@ async function elegirConLlm(input: {
     ? `\nHOY YA SE LE HABÍA RECOMENDADO: "${input.albumPrevio.album.title}" de ${input.albumPrevio.album.artist.name}, pero acaba de contarnos su ánimo. Puedes mantener ese disco si encaja con el ánimo (escribiendo una razón nueva que lo conecte) o elegir otro que encaje mejor.\n`
     : "";
 
+  const regresoTexto = input.returnRitual
+    ? `\nREGRESO TRAS AUSENCIA: el usuario vuelve después de ${input.returnRitual.absenceDays} días sin el ritual (último pick: ${input.returnRitual.lastPickDate}). Elige un disco acogedor para reenganchar — prioriza dificultad baja/media si la ausencia fue larga. En "reason" reconoce el regreso con calidez ("te guardé algo", "bienvenido de vuelta"), SIN culpa, SIN mencionar rachas rotas ni gamificación.\n`
+    : "";
+
   const system = `Eres el curador musical de Musicart: cercano, melómano, hablas en español y de "tú".
 Tu trabajo: elegir UN disco del catálogo para este usuario hoy, y explicar por qué ese disco, para él/ella, hoy.
 
@@ -321,7 +378,7 @@ SU DIARIO (reseñas recientes, de la más nueva a la más vieja):
 ${diarioTexto}
 
 ÁNIMO DE HOY: ${input.mood ?? "(no indicado)"}
-${regeneracionTexto}
+${regeneracionTexto}${regresoTexto}
 DISCOS RECOMENDADOS EN DÍAS RECIENTES (evítalos si puedes):
 ${recientesTexto}
 
@@ -338,5 +395,20 @@ Responde el JSON ahora.`;
   if (!parsed.albumId || !parsed.reason) {
     throw new Error(`Respuesta del LLM incompleta: ${raw.slice(0, 200)}`);
   }
+
+  if (input.returnRitual) {
+    const dossier = input.catalogo.find((d) => d.album.id === parsed.albumId);
+    if (dossier && parsed.reason.length < 40) {
+      return {
+        albumId: parsed.albumId,
+        reason: fallbackReturnReason(
+          input.returnRitual.absenceDays,
+          dossier.album.title,
+          dossier.album.artist.name,
+        ),
+      };
+    }
+  }
+
   return { albumId: parsed.albumId, reason: parsed.reason };
 }

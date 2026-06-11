@@ -6,7 +6,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { saveProfile } from "@/app/actions";
 import { signOutAction } from "@/app/entrar/actions";
 import { PrivacyPanel } from "@/components/PrivacyPanel";
+import { DuetPanel } from "@/components/DuetPanel";
 import { PushToggle } from "@/components/PushToggle";
+import type { DuetSummary } from "@/lib/duet";
 import { SubscriptionPanel } from "@/components/SubscriptionPanel";
 import { getDeviceId } from "@/lib/device";
 
@@ -44,11 +46,13 @@ export function ProfileForm({
   user,
   isAdmin = false,
   initialAnswers,
+  duet,
   subscription,
 }: {
   user: UserInfo | null;
   isAdmin?: boolean;
   initialAnswers: Partial<ProfileAnswers> | null;
+  duet?: DuetSummary | null;
   subscription?: SubscriptionInfo;
 }) {
   const [answers, setAnswers] = useState<ProfileAnswers>(EMPTY);
@@ -192,6 +196,8 @@ export function ProfileForm({
       )}
 
       <PushToggle />
+
+      {user && duet && <DuetPanel duet={duet} />}
 
       <section className="mt-8">
         <h2 className="font-serif text-lg">¿Cuándo escuchas música?</h2>

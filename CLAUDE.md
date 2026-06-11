@@ -9,7 +9,8 @@ El usuario nunca sube contenido: la IA cura el catálogo, recomienda y explica
 Music/YouTube Music; Musicart es el guía.
 
 **Antes de escribir código, lee `ROADMAP.md`**: ahí están la visión completa,
-la fase **🔨 EN CURSO**, las tareas con checkbox y los criterios de aceptación.
+las fases con checkbox y los criterios de aceptación. **Fases 0–5 completas**
+(jun 2026); no hay fase EN CURSO hasta que el dueño defina la siguiente.
 
 ## Reglas de trabajo para la IA
 
@@ -39,13 +40,16 @@ LLM por fetch directo (OpenAI o Anthropic, sin SDKs).
 
 ```
 prisma/schema.prisma     Modelos: Artist, Album, Dossier (jumpsJson), TrackNote,
-                         Profile, DailyPick (reason, mood, regenerated), Review,
-                         GenerationQueue. Campos *Json son String (portabilidad).
+                         Profile, DailyPick (reason, mood, returnPick), Review,
+                         GenerationQueue, PushSubscription, Rewind, MusicalThread,
+                         DuetPair/DuetPick, DossierChat. Campos *Json son String.
 prisma/seed.ts           Seed idempotente con 3 discos demo (manual: npm run db:seed).
 src/app/page.tsx         Home: el ritual diario, personalizado por device (cookie).
 src/app/album/[id]/      Dossier completo del disco + saltos de descubrimiento.
-src/app/diario/          Historial de escuchas con racha (client + server actions).
-src/app/perfil/          Onboarding ligero (client + server actions).
+src/app/diario/          Historial de escuchas con racha + hilo musical (5.4).
+src/app/rebobinada/      Carta mensual del mes musical (5.2).
+src/app/dueto/           Disco compartido semanal entre dos cuentas (5.5).
+src/app/perfil/          Onboarding, push, dueto, Stripe (client + server actions).
 src/app/entrar/          Inicio de sesión (Google + email) y fusión del device.
 src/app/revision/        Panel del dueño: drafts + cola (/revision?clave=ADMIN_SECRET).
 src/auth.ts              Auth.js: providers, Prisma adapter, sesión en DB.
@@ -53,8 +57,13 @@ src/app/actions.ts       Server actions: saveReview, getReview, saveProfile,
                          getJournal, checkInMood.
 src/lib/daily.ts         Rotación global determinista: el fallback eterno del
                          pick personalizado (usuarios sin señales o IA caída).
-src/lib/recommend.ts     Motor de recomendación (Fase 1 + 3.3): pick por perfil+diario+
-                         mood; con sesión comparte pick por userId entre dispositivos.
+src/lib/recommend.ts     Motor de recomendación (Fase 1 + 3.3 + 5.6): pick por perfil+
+                         diario+mood; pick de regreso tras ausencia (return-ritual).
+src/lib/musical-thread.ts Fase 5.4: conecta reseñas del diario entre sí (cacheada).
+src/lib/duet.ts          Fase 5.5: invitación, pick semanal por intersección de gustos.
+src/lib/rewind.ts        Fase 5.2: rebobinada mensual cacheada.
+src/lib/album-chat.ts    Fase 5.3: chat en dossier con FactsPayload y límites diarios.
+src/lib/return-ritual.ts Fase 5.6: detecta ausencia y personaliza el pick de regreso.
 src/lib/identity.ts      Fase 3.3: userId + deviceId y filtros de consulta.
 src/lib/user-data.ts     Fase 3.4: exportación y borrado de datos del oyente.
 src/lib/curator.ts       Curador IA (Fase 2): propone álbumes → GenerationQueue;
@@ -73,7 +82,7 @@ src/lib/device.ts        Identidad anónima por dispositivo (localStorage + cook
                          musicart_device para personalizar en el servidor).
 src/lib/theme.ts|palette.ts  Theming de la UI con la paleta de la portada.
 src/components/          DailyReveal, MoodCheckin, ShareAlbum, DeviceSync, Narrator (voz),
-                         ReflectionForm, ListenLinks…
+                         ReflectionForm, AlbumChat, DuetPanel, PushToggle, InstallPrompt…
 src/app/explorar/        Rutas temáticas (Fase 4.4).
 scripts/dossier.ts       CLI: npm run dossier -- "Álbum" "Artista" --publish
 scripts/worker.ts        Worker del catálogo (cron Railway): npm run worker
@@ -88,6 +97,7 @@ npm run db:migrate   # prisma migrate dev
 npm run db:seed      # seed idempotente (manual; el build ya no siembra)
 npm run dossier -- "Álbum" "Artista" --publish   # generar un dossier (CLI, requiere API key)
 npm run worker -- --batch 2                      # corrida del worker de catálogo (curador + pipeline)
+npm run push                                     # envío Web Push del disco del día (cron Railway)
 ```
 
 ## Entornos y despliegue

@@ -7,7 +7,7 @@ import { auth } from "@/auth";
 import { getTodayPick, formatDateEs } from "@/lib/daily";
 import { getPersonalizedPick } from "@/lib/recommend";
 import { hasProfile } from "@/app/actions";
-import { DEVICE_COOKIE } from "@/lib/device";
+import { DEVICE_COOKIE, TZ_COOKIE } from "@/lib/device";
 import { albumThemeStyle } from "@/lib/theme";
 import { parseJson, type Palette } from "@/lib/types";
 import { DailyReveal } from "@/components/DailyReveal";
@@ -22,17 +22,17 @@ function firstSentence(text: string, maxLen = 160): string {
 }
 
 export default async function Home() {
-  const [session, deviceId] = await Promise.all([
-    auth(),
-    cookies().then((c) => c.get(DEVICE_COOKIE)?.value ?? ""),
-  ]);
+  const [session, jar] = await Promise.all([auth(), cookies()]);
+  const deviceId = jar.get(DEVICE_COOKIE)?.value ?? "";
+  const tzRaw = jar.get(TZ_COOKIE)?.value;
+  const tz = tzRaw ? decodeURIComponent(tzRaw) : null;
   const userId = session?.user?.id ?? null;
 
   const personal =
     deviceId || userId
-      ? await getPersonalizedPick(deviceId, userId)
+      ? await getPersonalizedPick(deviceId, userId, tz)
       : null;
-  const pick = personal?.dossier ?? (await getTodayPick());
+  const pick = personal?.dossier ?? (await getTodayPick(tz));
 
   if (!pick) {
     return (
@@ -76,7 +76,7 @@ export default async function Home() {
             difficulty: pick.album.difficulty,
             impact: pick.album.impact,
             hook: firstSentence(pick.intro),
-            dateLabel: formatDateEs(),
+            dateLabel: formatDateEs(tz),
             reason: personal?.reason ?? null,
             personalized: Boolean(personal),
             showProfileInvite: !tienePerfil,

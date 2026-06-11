@@ -4,22 +4,33 @@
 
 import { prisma } from "./db";
 
-export function todayKey(date = new Date()): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
+export function todayKey(tz?: string | null): string {
+  const now = new Date();
+  if (tz) {
+    try {
+      // en-CA produce el formato YYYY-MM-DD que necesitamos
+      return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(now);
+    } catch {
+      // timezone inválido → cae al UTC del servidor
+    }
+  }
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
-export function formatDateEs(date = new Date()): string {
+export function formatDateEs(tz?: string | null): string {
+  const now = new Date();
   return new Intl.DateTimeFormat("es-ES", {
     weekday: "long",
     day: "numeric",
     month: "long",
-  }).format(date);
+    ...(tz ? { timeZone: tz } : {}),
+  }).format(now);
 }
 
-export async function getTodayPick() {
+export async function getTodayPick(tz?: string | null) {
   const dossiers = await prisma.dossier.findMany({
     where: { status: "published", locale: "es" },
     include: { album: { include: { artist: true } } },
@@ -27,9 +38,8 @@ export async function getTodayPick() {
   });
   if (dossiers.length === 0) return null;
 
-  const now = new Date();
-  const daysSinceEpoch = Math.floor(
-    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000,
-  );
+  const key = todayKey(tz);
+  const [y, m, d] = key.split("-").map(Number);
+  const daysSinceEpoch = Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
   return dossiers[daysSinceEpoch % dossiers.length];
 }

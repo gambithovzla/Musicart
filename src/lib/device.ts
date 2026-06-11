@@ -4,6 +4,7 @@
 
 const KEY = "musicart:device";
 export const DEVICE_COOKIE = "musicart_device";
+export const TZ_COOKIE = "musicart_tz";
 
 export function getDeviceId(): string {
   if (typeof window === "undefined") return "";

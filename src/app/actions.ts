@@ -1,7 +1,9 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { TZ_COOKIE } from "@/lib/device";
 import {
   dedupeReviewsByAlbum,
   getListenerIdentity,
@@ -91,8 +93,10 @@ export async function saveProfile(deviceId: string, answers: Record<string, unkn
 
 export async function checkInMood(deviceId: string, mood: string) {
   if (!deviceId || !mood.trim()) return { ok: false };
-  const session = await auth();
-  return applyMood(deviceId, mood.trim().slice(0, 40), session?.user?.id);
+  const [session, jar] = await Promise.all([auth(), cookies()]);
+  const tzRaw = jar.get(TZ_COOKIE)?.value;
+  const tz = tzRaw ? decodeURIComponent(tzRaw) : null;
+  return applyMood(deviceId, mood.trim().slice(0, 40), session?.user?.id, tz);
 }
 
 export async function getJournal() {

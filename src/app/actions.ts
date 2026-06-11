@@ -1,7 +1,6 @@
 "use server";
 
-// Server actions del loop diario: reflexiones, perfil y diario del melómano.
-
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { applyMood } from "@/lib/recommend";
 
@@ -42,10 +41,19 @@ export async function getReview(deviceId: string, albumId: string) {
 
 export async function saveProfile(deviceId: string, answers: Record<string, unknown>) {
   if (!deviceId) throw new Error("Sin deviceId");
+  const session = await auth();
+  const userId = session?.user?.id;
   await prisma.profile.upsert({
     where: { deviceId },
-    update: { answersJson: JSON.stringify(answers) },
-    create: { deviceId, answersJson: JSON.stringify(answers) },
+    update: {
+      answersJson: JSON.stringify(answers),
+      ...(userId ? { userId } : {}),
+    },
+    create: {
+      deviceId,
+      answersJson: JSON.stringify(answers),
+      userId: userId ?? null,
+    },
   });
   return { ok: true };
 }

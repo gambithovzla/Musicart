@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Stars } from "./Stars";
+import { EscalaEstrellas } from "./EscalaEstrellas";
 import { ShareAlbum } from "./ShareAlbum";
 
 export type DailyAlbum = {
@@ -48,7 +49,7 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
         initial={{ opacity: 0, scale: 0.9, filter: "blur(12px)" }}
         animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
         transition={{ duration: 0.9, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        className="relative mx-auto mt-8 aspect-square w-full max-w-xs overflow-hidden rounded-2xl shadow-2xl"
+        className="relative mx-auto mt-8 aspect-square w-full max-w-xs overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/10"
         style={{ boxShadow: "0 25px 60px -12px var(--album-dark)" }}
       >
         {album.coverUrl ? (
@@ -90,6 +91,8 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
           </span>
         </div>
 
+        <EscalaEstrellas className="mx-auto mt-3 max-w-xs text-center" />
+
         {album.reason ? (
           <div className="mx-auto mt-6 max-w-sm rounded-2xl border border-album/30 bg-album/10 px-5 py-4">
             <p className="text-[0.65rem] uppercase tracking-[0.25em] text-album-light">
@@ -114,7 +117,7 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
       >
         <Link
           href={`/album/${album.albumId}`}
-          className="block rounded-2xl bg-album px-6 py-4 text-center text-base font-semibold text-black transition-transform active:scale-[0.98]"
+          className="block rounded-2xl bg-album px-6 py-4 text-center text-base font-semibold text-black shadow-lg shadow-album/30 transition-transform active:scale-[0.98]"
         >
           Descubrir este disco
         </Link>

@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { Stars } from "./Stars";
 import { EscalaEstrellas } from "./EscalaEstrellas";
 import { ShareAlbum } from "./ShareAlbum";
+import type { MadrigueraAlbum } from "@/lib/madriguera";
 
 export type DailyAlbum = {
   albumId: string;
@@ -24,6 +25,7 @@ export type DailyAlbum = {
   personalized: boolean;
   showProfileInvite: boolean; // sin perfil aún: invitar a contarnos quién escucha
   returnWelcome?: boolean; // Fase 5.6: regreso tras ausencia del ritual
+  madriguera: MadrigueraAlbum[]; // discos para seguir explorando al terminar
 };
 
 export function DailyReveal({ album }: { album: DailyAlbum }) {
@@ -129,9 +131,60 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
             subtitle={album.reason ?? album.hook}
           />
         </div>
+
+        {album.madriguera.length > 0 && (
+          <section className="mt-10">
+            <h3 className="text-center text-xs uppercase tracking-[0.25em] text-dim">
+              ¿Ya lo escuchaste? Sigue la madriguera
+            </h3>
+            <p className="mx-auto mt-2 max-w-xs text-center text-sm text-dim">
+              El disco de hoy es la puerta. Si tienes la tarde por delante, baja
+              un poco más.
+            </p>
+            <div className="mt-5 flex flex-col gap-3">
+              {album.madriguera.map((m) => (
+                <Link
+                  key={m.albumId}
+                  href={`/album/${m.albumId}`}
+                  className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-3 transition-transform active:scale-[0.98]"
+                >
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-album-dark">
+                    {m.coverUrl ? (
+                      <Image
+                        src={m.coverUrl}
+                        alt={`Portada de ${m.title}`}
+                        fill
+                        sizes="56px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <span className="font-serif text-xl text-album-light">♪</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-serif text-base font-semibold">
+                      {m.title}
+                    </p>
+                    <p className="truncate text-sm text-dim">
+                      {m.artist} · {m.year}
+                    </p>
+                    {m.connection && (
+                      <p className="mt-1 line-clamp-2 text-xs italic text-foreground/70">
+                        {m.connection}
+                      </p>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
         <Link
           href="/explorar"
-          className="mt-4 block text-center text-sm text-dim underline underline-offset-4"
+          className="mt-8 block text-center text-sm text-dim underline underline-offset-4"
         >
           Explorar rutas temáticas →
         </Link>

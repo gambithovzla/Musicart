@@ -10,6 +10,7 @@ import { dossierHasAudio } from "@/lib/dossier/render-audio";
 import { publishDossier, discardDossier } from "./actions";
 import { AnalyticsPanel } from "./AnalyticsPanel";
 import { TtsControls } from "./TtsControls";
+import { GenerarDiscoForm } from "./GenerarDiscoForm";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -76,6 +77,15 @@ export default async function RevisionPage() {
       <AnalyticsPanel metrics={metrics} />
 
       <section className="mt-10">
+        <h2 className="font-serif text-xl">Crear un disco</h2>
+        <p className="mt-1 text-sm text-dim">
+          Toca el botón y la IA elige y crea un disco nuevo para el catálogo —las
+          veces que quieras, cuando quieras. El robot diario sigue funcionando aparte.
+        </p>
+        <GenerarDiscoForm />
+      </section>
+
+      <section className="mt-12">
         <h2 className="font-serif text-xl">
           Drafts pendientes{" "}
           <span className="text-base text-dim">({drafts.length})</span>

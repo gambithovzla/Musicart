@@ -142,6 +142,13 @@ verifica; solo lo verificado se publica.
     endpoint/listado simple para revisarlos y publicarlos a mano.
   - Alertas básicas: si una corrida falla todo, que quede registrado (log o
     notificación).
+  - **Generar a demanda desde el panel**: dos caminos en `/revision`.
+    (a) Un botón "Que la IA elija y cree un disco": el curador decide qué falta
+    (huecos, ratings, diversidad) y lo genera en vivo, sin que el dueño escriba
+    nada (`generarDiscoSugerido` — una corrida del worker a mano).
+    (b) Manual opcional: escribir disco + artista (`generarAlbumAhora`).
+    Ambos publican si pasan la verificación; red de seguridad en la cola por si
+    el live se corta (timeout). Aprovecha `maxDuration=300`.
 - [x] **2.4 Hilos de descubrimiento** (la madriguera MJ → Prince → Beatles)
   - Cada dossier sugiere 2-3 "saltos": rivalidades, colaboraciones, influencias
     ("de aquí puedes saltar a…"), verificados contra los facts.
@@ -245,6 +252,10 @@ feature usa los datos que ya guardamos y respeta el pipeline anti-alucinación.
   compartido a la semana elegido por la intersección de gustos
 - [x] **5.6 Racha con alma** — si te alejas, el pick del regreso llega con
   cariño ("te guardé algo especial"); sin gamificación vacía
+- [x] **5.7 La madriguera** — al terminar el disco del día, la home te ofrece
+  2-3 discos conectados para seguir explorando el catálogo (sin tocar el ritual
+  de UN pick al día). Reutiliza los saltos de descubrimiento del dossier (ya
+  verificados); sin IA en runtime, determinista (`src/lib/madriguera.ts`)
 
 ### Criterios de aceptación
 
@@ -253,6 +264,9 @@ feature usa los datos que ya guardamos y respeta el pipeline anti-alucinación.
 - [x] Dos cuentas pueden vincularse por código y ver un disco semanal en `/dueto`.
 - [x] Tras ≥4 días sin pick (con ritual previo), la home saluda el regreso sin
   culpa ni gamificación vacía.
+- [x] Al terminar el disco del día, la home muestra discos conectados para
+  seguir explorando; si el dossier no tiene saltos publicados, completa por
+  afinidad de etiquetas y, si no hay catálogo, se omite sin romper.
 
 ---
 

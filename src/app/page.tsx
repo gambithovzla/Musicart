@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { auth } from "@/auth";
 import { getTodayPick, formatDateEs } from "@/lib/daily";
 import { getPersonalizedPick } from "@/lib/recommend";
+import { getMadriguera } from "@/lib/madriguera";
 import { hasProfile } from "@/app/actions";
 import { DEVICE_COOKIE, TZ_COOKIE } from "@/lib/device";
 import { albumThemeStyle } from "@/lib/theme";
@@ -47,7 +48,10 @@ export default async function Home() {
     );
   }
 
-  const tienePerfil = await hasProfile();
+  const [tienePerfil, madriguera] = await Promise.all([
+    hasProfile(),
+    getMadriguera(pick.album.id),
+  ]);
   const palette = parseJson<Palette | null>(pick.album.paletteJson, null);
 
   return (
@@ -81,6 +85,7 @@ export default async function Home() {
             personalized: Boolean(personal),
             showProfileInvite: !tienePerfil,
             returnWelcome: personal?.returnPick ?? false,
+            madriguera,
           }}
         />
       </div>

@@ -278,7 +278,8 @@ disco se sienta elegido para ti, no una rotación genérica.
 ### Tareas
 
 - [x] **6.1 Onboarding de gustos** — el perfil pregunta géneros (chips) y
-  artistas favoritos (chips que escribes). El motor los pondera con fuerza
+  artistas favoritos (autocompletado con foto vía Deezer, `/api/artists`).
+  El motor los pondera con fuerza
   (regla 7 del prompt) y, si la IA se cae, `elegirPorGusto` elige por afinidad
   (géneros + artistas + diario 4★) en vez de la rotación global: un rockero ya
   no recibe una balada.

@@ -117,3 +117,6 @@ npm run worker -- --batch 2                      # corrida del worker de catálo
   existe en la fase de build → P1001 en `migrate deploy`; además el worker no
   necesita Next). `railway.json` lo evita — no lo borres. Las migraciones las
   aplica el build de Vercel.
+- Tampoco re-corras `npm ci` en el buildCommand de Railway: la fase de install
+  ya instaló todo (incluidas devDependencies) y un segundo `npm ci` choca con
+  la caché montada de Nixpacks → EBUSY. El buildCommand es un `echo` a propósito.

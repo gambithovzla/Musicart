@@ -27,10 +27,21 @@ export async function runDossierPipeline(
   const { payload } = gathered;
 
   // ¿Ya existe? El cache es permanente.
-  const existing = await prisma.album.findFirst({
-    where: { mbid: gathered.mbid ?? undefined },
-    include: { dossiers: true },
-  });
+  // IMPORTANTE: si mbid es null (fuente iTunes, no MusicBrainz), NO usar
+  // `where: { mbid: undefined }` porque Prisma ignora el filtro y devuelve
+  // el primer álbum de la BD — causa que un disco nuevo devuelva el ID de otro.
+  const existing = gathered.mbid
+    ? await prisma.album.findFirst({
+        where: { mbid: gathered.mbid },
+        include: { dossiers: true },
+      })
+    : await prisma.album.findFirst({
+        where: {
+          title: payload.album.title,
+          artist: { name: payload.album.artist },
+        },
+        include: { dossiers: true },
+      });
   if (existing?.dossiers.some((d) => d.locale === "es")) {
     log(`"${payload.album.title}" ya tiene dossier — no se regenera.`);
     const dossier = existing.dossiers.find((d) => d.locale === "es")!;

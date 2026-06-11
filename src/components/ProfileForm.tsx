@@ -300,7 +300,6 @@ export function ProfileForm({
             {answers.artists.map((a) => (
               <motion.span
                 key={a}
-                layout
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 className="flex items-center gap-2 rounded-full border border-album bg-album py-1 pl-1 pr-3 text-sm font-medium text-black"

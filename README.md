@@ -54,11 +54,15 @@ Un **curador IA** decide qué álbumes faltan (clásicos imprescindibles, huecos
 género/época/idioma, afinidades con lo que los usuarios puntúan alto) y los
 encola en `GenerationQueue`. Un **worker** (`npm run worker`) toma la cola,
 genera con el pipeline anti-alucinación y publica solo lo verificado; lo que no
-pasa queda en `draft`. Los **saltos** de cada dossier publicado también
+pasa queda en `draft`. Si el curador IA falla, un **bootstrap de clásicos**
+llena la cola automáticamente. Los **saltos** de cada dossier publicado también
 alimentan la cola: la madriguera se excava sola.
 
 - **Revisión humana:** `/revision?clave=ADMIN_SECRET` lista los drafts (publicar
   / descartar) y el estado de la cola con sus errores.
+- **Correr el worker a mano** (p. ej. para acelerar el catálogo): pon en `.env`
+  la URL **pública** de Postgres (`…proxy.rlwy.net`) y `OPENAI_API_KEY`, luego
+  `npm run worker -- --batch 2`.
 - **Dónde corre el worker:** servicio cron en **Railway** (mismo proyecto que el
   Postgres). El archivo `railway.json` del repo ya trae toda la configuración
   (build sin Next, comando `npm run worker`, cron `0 6 * * *`). Alta una sola
@@ -110,8 +114,7 @@ src/components/       DailyReveal, MoodCheckin, Narrator, ReflectionForm, Listen
 - ✅ **Fase 0** — MVP en producción (Vercel + Railway, ritual diario, pipeline IA)
 - ✅ **Fase 1** — El cerebro recomendador: pick personalizado por perfil + diario
   + mood, con el "por qué este disco, para ti, hoy"
-- 🔨 **Fase 2** — Catálogo que crece solo (curador IA + worker) e hilos de
-  descubrimiento: código mergeado y worker corriendo como cron en Railway
-  (06:00 UTC diario); validando las primeras corridas reales
-- 👤 **Fase 3** — Cuentas reales (auth) y sincronización multi-dispositivo
+- ✅ **Fase 2** — Catálogo que crece solo (curador IA + worker + madriguera);
+  validado en producción (jun 2026)
+- 🔨 **Fase 3** — Cuentas reales (Auth.js) y sincronización multi-dispositivo
 - 💎 **Fase 4** — TTS calidad podcast, modo conductor, compartibles, freemium

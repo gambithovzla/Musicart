@@ -107,14 +107,13 @@ opcional `LLM_MODEL` (default `gpt-4o-mini`).
 
 ---
 
-## 🔨 Fase 2 — Catálogo que crece solo (EN CURSO)
+## ✅ Fase 2 — Catálogo que crece solo (COMPLETADA · junio 2026)
 
-> **Estado (10-jun-2026, noche):** las 4 tareas están mergeadas a `master`
-> (PRs #5, #6 y #7) y la infraestructura quedó montada: worker desplegado en
-> Railway ("Ready") con cron diario a las 06:00 UTC y `ADMIN_SECRET` en Vercel.
-> **Falta validar la primera corrida real del worker** (revisar
-> `/revision?clave=…` y que el catálogo crezca) antes de declarar la fase
-> COMPLETADA — y preguntar al dueño si se arranca la Fase 3.
+> **Estado (11-jun-2026):** primera corrida validada en producción. El worker
+> encoló vía curador IA, generó y publicó *Abbey Road*, *The Dark Side of the
+> Moon* y *La leyenda del tiempo* (catálogo: 3 → 6 publicados). Panel
+> `/revision` operativo. Respaldo `bootstrapCatalogQueue` si el curador falla.
+> Cron Railway 06:00 UTC + `npm run worker` manual con `DATABASE_URL` de Railway.
 
 **Objetivo:** que el catálogo pase de 3 discos demo a una biblioteca real sin
 intervención humana. La IA decide qué generar; el pipeline existente genera y
@@ -126,6 +125,7 @@ verifica; solo lo verificado se publica.
   - LLM propone los próximos álbumes a generar: clásicos imprescindibles +
     huecos del catálogo + afinidades con lo que los usuarios puntúan alto.
   - Lista priorizada persistida (nuevo modelo `GenerationQueue` o similar).
+  - Bootstrap de clásicos fijos si el curador falla (`bootstrapCatalogQueue`).
 - [x] **2.2 Worker de generación** — decisión tomada: **Opción A (Railway)**.
   `scripts/worker.ts` (`npm run worker`) corre como cron en Railway:
   - **Opción A (recomendada): worker en Railway** (ya existe un sidecar de
@@ -136,6 +136,7 @@ verifica; solo lo verificado se publica.
     simple de desplegar, pero limitado en tiempo de ejecución.
   - El worker toma N items de la cola por corrida nocturna, ejecuta
     `runDossierPipeline(..., { publish: true })`, registra resultados.
+  - Validación de entorno al arrancar (`DATABASE_URL` Postgres + API key).
 - [x] **2.3 Control de calidad**
   - Los dossiers que no pasan verificación quedan `draft` (ya implementado);
     endpoint/listado simple para revisarlos y publicarlos a mano.
@@ -153,25 +154,41 @@ verifica; solo lo verificado se publica.
   sección "El catálogo crece solo"). Hecho: servicio "Musicart" Ready, cron
   06:00 UTC, configurado por `railway.json`.
 - [x] Definir `ADMIN_SECRET` en Vercel (protege el panel `/revision`).
+- [x] Primera corrida real del worker (manual o cron) con catálogo creciendo.
 
 ### Criterios de aceptación
 
-- El catálogo crece solo (≥ N discos/semana sin tocar nada).
-- Nada se publica sin pasar la verificación anti-alucinación.
-- Los saltos de descubrimiento solo afirman relaciones respaldadas por facts.
+- [x] El catálogo crece solo (≥ N discos/semana sin tocar nada).
+- [x] Nada se publica sin pasar la verificación anti-alucinación.
+- [x] Los saltos de descubrimiento solo afirman relaciones respaldadas por facts.
 
 ---
 
-## 👤 Fase 3 — Cuentas reales
+## 🔨 Fase 3 — Cuentas reales (EN CURSO)
 
 **Objetivo:** el usuario inicia sesión y su historia lo sigue en cualquier
 dispositivo.
 
-- [ ] Auth.js (Google + email) sobre Next.js App Router
-- [ ] Modelo `User`; migración de identidad: al iniciar sesión, fusionar el
-  Profile/Reviews/DailyPicks del deviceId actual con la cuenta
-- [ ] Sesión multi-dispositivo (el diario y la racha viajan contigo)
-- [ ] Privacidad: export/borrado de datos del usuario
+### Tareas
+
+- [ ] **3.1 Auth.js** (Google + email) sobre Next.js App Router
+  - Modelos Prisma: `User`, `Account`, `Session`, `VerificationToken`.
+  - Rutas `/api/auth/[...nextauth]` y pantalla `/entrar`.
+  - Variables: `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+- [ ] **3.2 Fusión de identidad** al iniciar sesión
+  - Fusionar `Profile`, `Review` y `DailyPick` del `deviceId` actual con el
+    `User` (sin perder diario ni racha).
+- [ ] **3.3 Sesión multi-dispositivo**
+  - El motor de recomendación y el diario leen por `userId` cuando hay sesión;
+    `deviceId` sigue como fallback anónimo.
+- [ ] **3.4 Privacidad**
+  - Export y borrado de datos del usuario.
+
+### Criterios de aceptación
+
+- Iniciar sesión en el móvil y en el desktop muestra el mismo diario y pick coherente.
+- Usuario anónimo sigue funcionando igual si no entra.
+- Tras login, el perfil y las reseñas del device actual quedan ligados a la cuenta.
 
 ---
 

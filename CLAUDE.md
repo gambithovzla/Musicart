@@ -53,7 +53,8 @@ src/lib/daily.ts         Rotación global determinista: el fallback eterno del
                          pick personalizado (usuarios sin señales o IA caída).
 src/lib/recommend.ts     Motor de recomendación (Fase 1): pick por perfil+diario+
                          mood, cache diario en DailyPick, regeneración máx. 1.
-src/lib/curator.ts       Curador IA (Fase 2): propone álbumes → GenerationQueue.
+src/lib/curator.ts       Curador IA (Fase 2): propone álbumes → GenerationQueue;
+                         bootstrapCatalogQueue si el curador falla.
 src/lib/db.ts            Singleton de PrismaClient.
 src/lib/dossier/         Pipeline anti-alucinación:
   facts.ts                 reúne hechos (MusicBrainz, Wikipedia, Last.fm, iTunes, Odesli)

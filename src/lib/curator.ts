@@ -8,6 +8,63 @@ import { llm, extractJson } from "./dossier/llm";
 
 const MAX_PROPOSALS = 10;
 
+/** Clásicos verificables para arrancar la cola si el curador IA falla o no hay API. */
+const BOOTSTRAP_CLASSICS: {
+  title: string;
+  artist: string;
+  reason: string;
+  priority: number;
+}[] = [
+  {
+    title: "Abbey Road",
+    artist: "The Beatles",
+    reason: "Canon imprescindible del rock; puerta de entrada a la madriguera.",
+    priority: 10,
+  },
+  {
+    title: "Kind of Blue",
+    artist: "Miles Davis",
+    reason: "El jazz modal en estado puro; diversifica época y género.",
+    priority: 15,
+  },
+  {
+    title: "The Dark Side of the Moon",
+    artist: "Pink Floyd",
+    reason: "Obra conceptual con documentación abundante en Wikipedia.",
+    priority: 20,
+  },
+  {
+    title: "Thriller",
+    artist: "Michael Jackson",
+    reason: "Puerta al pop ochentoso y a la rivalidad con Prince.",
+    priority: 25,
+  },
+  {
+    title: "Purple Rain",
+    artist: "Prince",
+    reason: "Complemento natural tras Thriller; funk y pop en los 80.",
+    priority: 30,
+  },
+  {
+    title: "Songs in the Key of Life",
+    artist: "Stevie Wonder",
+    reason: "Soul clásico; equilibra el catálogo anglosajón.",
+    priority: 35,
+  },
+  {
+    title: "Buena Vista Social Club",
+    artist: "Buena Vista Social Club",
+    reason: "Música en español con contexto histórico rico.",
+    priority: 40,
+  },
+  {
+    title: "OK Computer",
+    artist: "Radiohead",
+    reason: "Rock alternativo de los 90; audiencia joven melómana.",
+    priority: 45,
+  },
+];
+
 function normalizar(s: string): string {
   return s
     .toLowerCase()
@@ -163,5 +220,31 @@ Propón exactamente ${cuantos} álbumes. Responde el JSON ahora.`;
     }
   }
   log(`Curador: ${encolados} álbumes nuevos en la cola.`);
+  return encolados;
+}
+
+/**
+ * Encola clásicos fijos cuando la cola sigue vacía (p. ej. curador sin API key).
+ * Idempotente: omite duplicados ya en catálogo o cola.
+ */
+export async function bootstrapCatalogQueue(
+  max = 5,
+  log: (msg: string) => void = () => {},
+): Promise<number> {
+  let encolados = 0;
+  for (const item of BOOTSTRAP_CLASSICS) {
+    if (encolados >= max) break;
+    const ok = await enqueueAlbum({
+      ...item,
+      source: "manual",
+    });
+    if (ok) {
+      encolados++;
+      log(`Respaldo encolado: "${item.title}" de ${item.artist}`);
+    }
+  }
+  if (encolados > 0) {
+    log(`Bootstrap: ${encolados} clásicos añadidos a la cola.`);
+  }
   return encolados;
 }

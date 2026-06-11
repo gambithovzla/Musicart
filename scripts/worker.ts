@@ -10,10 +10,47 @@
 // Si todos los intentos de la corrida fallan, sale con código 1 (alerta del cron).
 
 import { prisma } from "../src/lib/db";
-import { proposeNextAlbums } from "../src/lib/curator";
+import { proposeNextAlbums, bootstrapCatalogQueue } from "../src/lib/curator";
 import { runDossierPipeline } from "../src/lib/dossier/pipeline";
 
 const MAX_ATTEMPTS = 3; // un item que falla 3 veces deja de reintentarse
+
+function assertWorkerEnv(): void {
+  const dbUrl = process.env.DATABASE_URL ?? "";
+  if (!/^postgres(ql)?:\/\//i.test(dbUrl)) {
+    throw new Error(
+      "DATABASE_URL debe ser PostgreSQL (p. ej. la URL de Railway). " +
+        "Copia la URL pública (proxy.rlwy.net) en tu .env para correr el worker en local.",
+    );
+  }
+  if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    throw new Error(
+      "Falta OPENAI_API_KEY o ANTHROPIC_API_KEY (curador + pipeline + verificador).",
+    );
+  }
+}
+
+async function countPending(): Promise<number> {
+  return prisma.generationQueue.count({ where: { status: "pending" } });
+}
+
+async function feedQueue(minPendientes: number, log: (msg: string) => void) {
+  let pendientes = await countPending();
+  if (pendientes >= minPendientes) return;
+
+  log(`Cola baja (${pendientes} pendientes): llamando al curador…`);
+  try {
+    await proposeNextAlbums(minPendientes, log);
+  } catch (err) {
+    log(`⚠ El curador falló: ${(err as Error).message}`);
+  }
+
+  pendientes = await countPending();
+  if (pendientes >= minPendientes) return;
+
+  log(`Cola sigue baja (${pendientes}): encolando clásicos de respaldo…`);
+  await bootstrapCatalogQueue(minPendientes - pendientes, log);
+}
 
 function argNum(flag: string, fallback: number): number {
   const idx = process.argv.indexOf(flag);
@@ -22,24 +59,14 @@ function argNum(flag: string, fallback: number): number {
 }
 
 async function main() {
+  assertWorkerEnv();
   const batch = argNum("--batch", Number(process.env.WORKER_BATCH) || 2);
   const minPendientes = argNum("--propose", 5);
 
   console.log(`\n🎵 Musicart — worker de catálogo (batch ${batch})\n`);
 
   // 1. Mantener la cola alimentada.
-  const pendientes = await prisma.generationQueue.count({
-    where: { status: "pending" },
-  });
-  if (pendientes < minPendientes) {
-    console.log(`Cola baja (${pendientes} pendientes): llamando al curador…`);
-    try {
-      await proposeNextAlbums(minPendientes, (msg) => console.log(`   ${msg}`));
-    } catch (err) {
-      // Sin propuestas nuevas aún se puede generar lo que ya está en cola.
-      console.error(`   ⚠ El curador falló: ${(err as Error).message}`);
-    }
-  }
+  await feedQueue(minPendientes, (msg) => console.log(`   ${msg}`));
 
   // 2. Tomar el lote: pendientes primero, luego fallidos con reintentos restantes.
   const items = await prisma.generationQueue.findMany({

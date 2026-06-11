@@ -100,11 +100,12 @@ async function saveTodaysPick(
 export async function getPersonalizedPick(
   deviceId: string,
   userId?: string | null,
+  tz?: string | null,
 ): Promise<PickPersonal | null> {
   const ctx: PickCtx = { deviceId, userId: userId ?? null };
   if (!ctx.deviceId && !ctx.userId) return null;
   try {
-    const date = todayKey();
+    const date = todayKey(tz);
     const guardado = await findTodaysPick(ctx, date);
     if (guardado) {
       const dossier = await dossierDelAlbum(guardado.albumId);
@@ -119,7 +120,7 @@ export async function getPersonalizedPick(
         };
       }
     }
-    return await recomendarYGuardar(ctx, { mood: null });
+    return await recomendarYGuardar(ctx, { mood: null }, tz);
   } catch (err) {
     console.error("[recommend] pick personalizado falló, va rotación global:", err);
     return null;
@@ -130,15 +131,16 @@ export async function applyMood(
   deviceId: string,
   mood: string,
   userId?: string | null,
+  tz?: string | null,
 ): Promise<{ ok: boolean }> {
   const ctx: PickCtx = { deviceId, userId: userId ?? null };
   if ((!ctx.deviceId && !ctx.userId) || !mood) return { ok: false };
   try {
-    const date = todayKey();
+    const date = todayKey(tz);
     const guardado = await findTodaysPick(ctx, date);
 
     if (!guardado) {
-      const pick = await recomendarYGuardar(ctx, { mood });
+      const pick = await recomendarYGuardar(ctx, { mood }, tz);
       return { ok: pick !== null };
     }
 
@@ -154,7 +156,7 @@ export async function applyMood(
       mood,
       albumPrevio: guardado.albumId,
       regenerated: true,
-    });
+    }, tz);
     if (!pick) {
       await prisma.dailyPick.update({
         where: { id: guardado.id },
@@ -178,9 +180,10 @@ async function dossierDelAlbum(albumId: string): Promise<DossierConAlbum | null>
 async function recomendarYGuardar(
   ctx: PickCtx,
   opts: { mood: string | null; albumPrevio?: string; regenerated?: boolean },
+  tz?: string | null,
 ): Promise<PickPersonal | null> {
   try {
-    const date = todayKey();
+    const date = todayKey(tz);
     const identity: ListenerIdentity = {
       deviceId: ctx.deviceId,
       userId: ctx.userId,

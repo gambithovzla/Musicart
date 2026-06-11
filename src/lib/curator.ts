@@ -124,10 +124,13 @@ export async function enqueueAlbum(input: {
  * El curador propone los próximos álbumes a generar y los encola.
  * Devuelve cuántos se encolaron (los duplicados se descartan en silencio).
  * Pensado para el worker: si el LLM falla, el error sube y queda registrado.
+ *
+ * `perfilAdmin`: si se pasa, el curador prioriza géneros y artistas del dueño.
  */
 export async function proposeNextAlbums(
   count = 5,
   log: (msg: string) => void = () => {},
+  perfilAdmin?: { genres: string[]; artists: string[] } | null,
 ): Promise<number> {
   const cuantos = Math.min(MAX_PROPOSALS, Math.max(1, count));
 
@@ -171,18 +174,32 @@ export async function proposeNextAlbums(
           .join("\n")
       : "(aún no hay reseñas altas)";
 
+  const gustaAdmin =
+    perfilAdmin && (perfilAdmin.genres.length > 0 || perfilAdmin.artists.length > 0)
+      ? [
+          perfilAdmin.genres.length
+            ? `Géneros favoritos del dueño: ${perfilAdmin.genres.join(", ")}`
+            : null,
+          perfilAdmin.artists.length
+            ? `Artistas favoritos del dueño: ${perfilAdmin.artists.join(", ")}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : null;
+
   const system = `Eres el curador jefe de Musicart, una app en español que cuenta la historia de un álbum al día.
 Tu trabajo: decidir qué álbumes generar a continuación para que el catálogo crezca con criterio.
 
 Criterios, en este orden:
-1. Clásicos imprescindibles del canon que aún falten (los discos que todo melómano debería conocer).
+${gustaAdmin ? `0. PRIORIDAD DEL DUEÑO: el admin tiene estos gustos — propón álbumes que encajen con ellos primero:\n${gustaAdmin}\n` : ""}1. Clásicos imprescindibles del canon que aún falten (los discos que todo melómano debería conocer).
 2. Diversidad: géneros, épocas, países e idiomas variados — incluye música en español (rock latino, salsa, flamenco, etc.), no solo canon anglosajón.
 3. Afinidades: si los usuarios puntúan alto ciertos discos, propone vecinos musicales con conexión real.
 
 Reglas:
 - NO propongas álbumes que ya están en el catálogo ni en la cola.
 - Álbumes reales y verificables (existen en MusicBrainz/Wikipedia). Nada oscuro al punto de no tener documentación.
-- "priority": 1 (urgentísimo) a 100; los imprescindibles van bajos.
+- "priority": 1 (urgentísimo) a 100; los imprescindibles van bajos.${gustaAdmin ? " Los que encajan con el gusto del dueño deben tener priority <= 20." : ""}
 - "reason": 1 frase en español explicando por qué ese disco ahora.
 
 Responde SOLO un objeto JSON:

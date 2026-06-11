@@ -3,6 +3,7 @@
 // Acciones del panel de revisión (Fase 2.3). Solo admins (ADMIN_EMAILS).
 
 import { revalidatePath } from "next/cache";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
 import {
@@ -12,6 +13,7 @@ import {
   queueKey,
 } from "@/lib/curator";
 import { runDossierPipeline } from "@/lib/dossier/pipeline";
+import { parseJson } from "@/lib/types";
 import {
   dossierAudioInputFromRow,
   findDossiersMissingAudio,
@@ -114,6 +116,28 @@ export async function generarAlbumAhora(input: {
  * Es "una corrida del worker, a mano": si no hay nada propuesto, el curador
  * propone; luego genera el de mayor prioridad. Aprovecha maxDuration=300.
  */
+async function cargarPerfilAdmin(): Promise<{ genres: string[]; artists: string[] } | null> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id && !session?.user?.email) return null;
+    const where = session.user.id
+      ? { userId: session.user.id }
+      : { deviceId: session.user.email! };
+    const profile = await prisma.profile.findFirst({ where });
+    if (!profile) return null;
+    const data = parseJson<Record<string, unknown>>(profile.answersJson, {});
+    const genres = Array.isArray(data.genres)
+      ? (data.genres as unknown[]).filter((x): x is string => typeof x === "string")
+      : [];
+    const artists = Array.isArray(data.artists)
+      ? (data.artists as unknown[]).filter((x): x is string => typeof x === "string")
+      : [];
+    return genres.length || artists.length ? { genres, artists } : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function generarDiscoSugerido(): Promise<GenerarAlbumResult> {
   await requireAdmin();
 
@@ -128,21 +152,37 @@ export async function generarDiscoSugerido(): Promise<GenerarAlbumResult> {
     { createdAt: "asc" as const },
   ];
 
-  // 1. ¿Ya hay algo propuesto? Si no, que el curador IA proponga (o clásicos).
+  // 1. Cargar perfil del admin para que el curador proponga según su gusto.
+  const perfilAdmin = await cargarPerfilAdmin();
+
+  // 2. Si el admin tiene perfil, siempre proponemos primero: así los álbumes que
+  //    encajan con su gusto llegan con prioridad ≤ 20 y ganan a ítems viejos de
+  //    la cola que no tienen relación con él (p. ej. sugerencias genéricas anteriores).
+  if (perfilAdmin) {
+    try {
+      await proposeNextAlbums(3, () => {}, perfilAdmin);
+    } catch {
+      // sin API key: los clásicos siguen disponibles como respaldo
+    }
+  }
+
   let item = await prisma.generationQueue.findFirst({
     where: pendienteWhere,
     orderBy: ordenPrioridad,
   });
   if (!item) {
-    try {
-      await proposeNextAlbums(3);
-    } catch {
-      await bootstrapCatalogQueue(3);
+    if (!perfilAdmin) {
+      // sin perfil: propuesta genérica o clásicos de respaldo
+      try {
+        await proposeNextAlbums(3);
+      } catch {
+        await bootstrapCatalogQueue(3);
+      }
+      item = await prisma.generationQueue.findFirst({
+        where: pendienteWhere,
+        orderBy: ordenPrioridad,
+      });
     }
-    item = await prisma.generationQueue.findFirst({
-      where: pendienteWhere,
-      orderBy: ordenPrioridad,
-    });
   }
   if (!item) {
     revalidatePath("/revision");

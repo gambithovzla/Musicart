@@ -62,9 +62,9 @@ export function GenerarDiscoForm() {
           : "✨ Que la IA elija y cree un disco"}
       </button>
       <p className="-mt-2 text-xs text-dim">
-        La IA decide qué disco le falta al catálogo —según los huecos, lo que la
-        gente puntúa alto y la diversidad— lo genera y lo deja publicado. Tú solo
-        tocas el botón.
+        La IA propone según tu perfil de géneros y artistas, huecos del catálogo
+        y diversidad — lo genera y lo deja publicado. Cuantos más gustos tengas
+        en tu perfil, más acertada la propuesta.
       </p>
 
       {/* Camino 2: manual, opcional. */}

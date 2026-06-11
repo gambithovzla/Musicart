@@ -448,6 +448,8 @@ function formatPerfil(profile: Record<string, unknown>): string {
   const artistas = comoLista(profile.artists);
   const momentos = comoLista(profile.moments);
   const busca = comoLista(profile.seeks);
+  const intereses = comoLista(profile.interests);
+  const bio = typeof profile.bio === "string" ? profile.bio.trim() : "";
   const tiempo = typeof profile.listenTime === "string" ? profile.listenTime : "";
   const anchors = typeof profile.anchors === "string" ? profile.anchors : "";
   const lineas = [
@@ -456,6 +458,8 @@ function formatPerfil(profile: Record<string, unknown>): string {
     busca.length ? `Busca en un disco: ${busca.join(", ")}` : null,
     momentos.length ? `Escucha: ${momentos.join(", ")}` : null,
     tiempo ? `Tiempo por sesión: ${tiempo}` : null,
+    intereses.length ? `Intereses fuera de la música: ${intereses.join(", ")}` : null,
+    bio ? `Contexto personal: "${bio}"` : null,
     anchors ? `Otros que lo marcaron: ${anchors}` : null,
   ].filter(Boolean);
   return lineas.length ? lineas.join("\n") : "(perfil vacío)";

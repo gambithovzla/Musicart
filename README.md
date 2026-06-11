@@ -109,6 +109,9 @@ npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
   runtime), `ADMIN_EMAILS` (panel `/revision`) y, para la Fase 3, `AUTH_SECRET`,
   `AUTH_URL` (p. ej. `https://musicart-three.vercel.app`), `GOOGLE_CLIENT_ID`,
   `GOOGLE_CLIENT_SECRET`. Email opcional: `AUTH_RESEND_KEY`, `EMAIL_FROM`.
+  Stripe (Fase 4.5): `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`
+  (endpoint `https://tu-dominio/api/stripe/webhook`). Opcional: `FREEMIUM_DOSSIER_LIMIT`
+  (default 5). Blob TTS: `BLOB_READ_WRITE_TOKEN`.
 
 > ⚠️ SQLite no funciona en Vercel (filesystem efímero) — por eso Postgres.
 
@@ -133,4 +136,4 @@ src/components/       DailyReveal, MoodCheckin, Narrator, ReflectionForm, Listen
 - ✅ **Fase 2** — Catálogo que crece solo (curador IA + worker + madriguera);
   validado en producción (jun 2026)
 - ✅ **Fase 3** — Cuentas reales (Auth.js, multi-dispositivo, export/borrado de datos)
-- 🔨 **Fase 4** — Compartir, modo conductor, rutas temáticas (en curso); TTS, Stripe y analytics pendientes
+- 🔨 **Fase 4** — TTS, compartir, conductor, rutas, Stripe freemium (en curso); analytics pendiente

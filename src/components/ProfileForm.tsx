@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { saveProfile } from "@/app/actions";
 import { signOutAction } from "@/app/entrar/actions";
 import { PrivacyPanel } from "@/components/PrivacyPanel";
+import { SubscriptionPanel } from "@/components/SubscriptionPanel";
 import { getDeviceId } from "@/lib/device";
 
 const MOMENTS = ["Manejando", "Trabajando", "En casa", "Entrenando", "Antes de dormir"];
@@ -30,14 +31,24 @@ type UserInfo = {
   image: string | null | undefined;
 };
 
+type SubscriptionInfo = {
+  isPro: boolean;
+  used: number;
+  limit: number;
+  stripeReady: boolean;
+  status: string | null;
+};
+
 export function ProfileForm({
   user,
   isAdmin = false,
   initialAnswers,
+  subscription,
 }: {
   user: UserInfo | null;
   isAdmin?: boolean;
   initialAnswers: Partial<ProfileAnswers> | null;
+  subscription?: SubscriptionInfo;
 }) {
   const [answers, setAnswers] = useState<ProfileAnswers>(EMPTY);
   const [status, setStatus] = useState<SaveStatus>("idle");
@@ -167,6 +178,17 @@ export function ProfileForm({
       )}
 
       <SaveIndicator status={status} />
+
+      {subscription && (
+        <SubscriptionPanel
+          isPro={subscription.isPro}
+          used={subscription.used}
+          limit={subscription.limit}
+          hasAccount={Boolean(user)}
+          stripeReady={subscription.stripeReady}
+          status={subscription.status}
+        />
+      )}
 
       <section className="mt-8">
         <h2 className="font-serif text-lg">¿Cuándo escuchas música?</h2>

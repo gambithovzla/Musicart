@@ -3,7 +3,15 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { auth } from "@/auth";
+import { isAdminEmail } from "@/lib/admin";
 import { prisma } from "@/lib/db";
+import {
+  checkDossierAccess,
+  recordDossierView,
+} from "@/lib/freemium";
+import { getListenerIdentity } from "@/lib/identity";
+import { stripeConfigured } from "@/lib/stripe";
 import { albumThemeStyle } from "@/lib/theme";
 import { queueKey } from "@/lib/curator";
 import {
@@ -17,6 +25,7 @@ import { Stars } from "@/components/Stars";
 import { ListenLinks } from "@/components/ListenLinks";
 import { ReflectionForm } from "@/components/ReflectionForm";
 import { ShareAlbum } from "@/components/ShareAlbum";
+import { Paywall } from "@/components/Paywall";
 import { Narrator, type NarratorSection } from "@/components/Narrator";
 
 export const dynamic = "force-dynamic";
@@ -67,7 +76,21 @@ export default async function AlbumPage({
   const dossier = album?.dossiers[0];
   if (!album || !dossier) notFound();
 
+  const [session, identity] = await Promise.all([auth(), getListenerIdentity()]);
+  if (dossier.status !== "published" && !isAdminEmail(session?.user?.email)) {
+    notFound();
+  }
+  const access = await checkDossierAccess(
+    identity,
+    album.id,
+    session?.user?.email,
+  );
+  if (access.allowed) {
+    await recordDossierView(identity, album.id);
+  }
+
   const palette = parseJson<Palette | null>(album.paletteJson, null);
+  const stripeReady = stripeConfigured();
   const links = parseJson<AlbumLinks>(album.linksJson, {});
   const questions = parseJson<string[]>(dossier.questionsJson, []);
   const audio = parseJson<DossierAudio | null>(dossier.audioJson, null);
@@ -176,18 +199,6 @@ export default async function AlbumPage({
           </div>
         </header>
 
-        {/* — Narración por voz — */}
-        <section className="mt-8">
-          <Narrator
-            sections={narratorSections}
-            meta={{
-              albumTitle: album.title,
-              artistName: album.artist.name,
-              coverUrl: album.coverUrl,
-            }}
-          />
-        </section>
-
         <section className="mt-4">
           <ShareAlbum
             albumId={album.id}
@@ -197,15 +208,42 @@ export default async function AlbumPage({
           />
         </section>
 
-        {/* — Antes de escuchar — */}
-        <section className="mt-12">
-          <SectionTitle n="01" title="La historia detrás del disco" />
-          <div className="prose-dossier mt-4">
-            {dossier.intro.split("\n\n").map((p, i) => (
-              <p key={i}>{p}</p>
-            ))}
-          </div>
-        </section>
+        {!access.allowed ? (
+          <>
+            <section className="mt-12">
+              <SectionTitle n="01" title="La historia detrás del disco" />
+              <div className="prose-dossier mt-4">
+                <p>{dossier.intro.split("\n\n")[0]}</p>
+              </div>
+            </section>
+            <Paywall
+              used={access.used}
+              limit={access.limit}
+              hasAccount={Boolean(session?.user)}
+              stripeReady={stripeReady}
+            />
+          </>
+        ) : (
+          <>
+            <section className="mt-8">
+              <Narrator
+                sections={narratorSections}
+                meta={{
+                  albumTitle: album.title,
+                  artistName: album.artist.name,
+                  coverUrl: album.coverUrl,
+                }}
+              />
+            </section>
+
+            <section className="mt-12">
+              <SectionTitle n="01" title="La historia detrás del disco" />
+              <div className="prose-dossier mt-4">
+                {dossier.intro.split("\n\n").map((p, i) => (
+                  <p key={i}>{p}</p>
+                ))}
+              </div>
+            </section>
 
         <section className="mt-12">
           <SectionTitle n="02" title={`Quién era ${album.artist.name}`} />
@@ -281,7 +319,6 @@ export default async function AlbumPage({
           </div>
         </section>
 
-        {/* — Saltos de descubrimiento: la madriguera sigue — */}
         {saltos.length > 0 && (
           <section className="mb-16">
             <SectionTitle n="07" title="Sigue la madriguera" />
@@ -335,6 +372,8 @@ export default async function AlbumPage({
               })}
             </div>
           </section>
+        )}
+          </>
         )}
       </div>
     </main>

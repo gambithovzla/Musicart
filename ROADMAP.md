@@ -208,7 +208,7 @@ dispositivo.
   por álbum; Web Share API + copiar enlace
 - [x] **4.4 Rutas temáticas** — `/explorar` con colecciones curadas (jazz, rock,
   español, calma…)
-- [ ] **4.5 Stripe freemium** — límite de dossiers/mes gratis, ilimitado de pago
+- [x] **4.5 Stripe freemium** — 5 dossiers/mes gratis; Pro ilimitado vía Stripe Checkout
 - [ ] **4.6 Analytics** — métricas de producto y validación con usuarios reales
 
 ### Criterios de aceptación (parcial)
@@ -219,6 +219,8 @@ dispositivo.
 - [x] Hay al menos 3 rutas temáticas navegables con discos del catálogo.
 - [x] Los dossiers publicados pueden narrarse con voz podcast (MP3 pre-renderizado)
   cuando existe `audioJson`; si no, cae a Web Speech del navegador.
+- [x] Plan gratis con límite mensual de dossiers; el disco del día no cuenta; Pro
+  desbloquea lecturas ilimitadas.
 
 ---
 

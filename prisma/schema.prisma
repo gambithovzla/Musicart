@@ -33,9 +33,10 @@ model Album {
 
   artistId   String
   artist     Artist      @relation(fields: [artistId], references: [id])
-  dossiers   Dossier[]
-  reviews    Review[]
-  dailyPicks DailyPick[]
+  dossiers     Dossier[]
+  reviews      Review[]
+  dailyPicks   DailyPick[]
+  dossierViews DossierView[]
 }
 
 model Dossier {
@@ -140,11 +141,16 @@ model User {
   image         String?
   createdAt     DateTime  @default(now())
 
-  accounts   Account[]
-  sessions   Session[]
-  profile    Profile?
-  reviews    Review[]
-  dailyPicks DailyPick[]
+  accounts     Account[]
+  sessions     Session[]
+  profile      Profile?
+  reviews      Review[]
+  dailyPicks   DailyPick[]
+  dossierViews DossierView[]
+
+  stripeCustomerId   String?   @unique
+  subscriptionStatus String? // active | trialing | canceled | past_due
+  subscriptionEndsAt DateTime?
 }
 
 model Account {
@@ -173,6 +179,22 @@ model Session {
   expires      DateTime
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Lecturas de dossier por oyente y mes (freemium: N álbumes únicos/mes en plan gratis).
+model DossierView {
+  id          String   @id @default(cuid())
+  albumId     String
+  listenerKey String // u:<userId> o d:<deviceId>
+  monthKey    String // YYYY-MM
+  createdAt   DateTime @default(now())
+
+  album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+
+  @@unique([albumId, listenerKey, monthKey])
+  @@index([listenerKey, monthKey])
 }
 
 model VerificationToken {

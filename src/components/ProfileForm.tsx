@@ -15,15 +15,27 @@ import { getDeviceId } from "@/lib/device";
 const MOMENTS = ["Manejando", "Trabajando", "En casa", "Entrenando", "Antes de dormir"];
 const SEEKS = ["La historia", "La emoción", "La técnica", "Descubrir lo nuevo"];
 const TIMES = ["20 min", "45 min", "1 hora o más"];
+const GENRES = [
+  "Rock", "Pop", "Jazz", "Salsa", "Hip-hop", "Electrónica", "Indie", "Metal",
+  "Clásica", "Folk", "R&B / Soul", "Reggae", "Punk", "Blues", "Cumbia",
+  "Bolero", "Funk", "Reguetón", "Trap", "Bossa nova",
+];
 
 export type ProfileAnswers = {
   moments: string[];
   seeks: string[];
-  anchors: string;
+  genres: string[];
+  artists: string[];
+  artistImages?: Record<string, string>; // nombre → foto (solo para mostrar)
+  anchors?: string; // libre, opcional (perfiles antiguos); ya no se muestra
   listenTime: string;
 };
 
-const EMPTY: ProfileAnswers = { moments: [], seeks: [], anchors: "", listenTime: "" };
+type ArtistSuggestion = { name: string; image: string | null };
+
+const EMPTY: ProfileAnswers = {
+  moments: [], seeks: [], genres: [], artists: [], listenTime: "",
+};
 const STORAGE_KEY = "musicart:profile";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -56,6 +68,8 @@ export function ProfileForm({
   subscription?: SubscriptionInfo;
 }) {
   const [answers, setAnswers] = useState<ProfileAnswers>(EMPTY);
+  const [artistInput, setArtistInput] = useState("");
+  const [suggestions, setSuggestions] = useState<ArtistSuggestion[]>([]);
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [hydrated, setHydrated] = useState(false);
   const [signingOut, startSignOut] = useTransition();
@@ -71,7 +85,14 @@ export function ProfileForm({
     } catch {
       // perfil local corrupto
     }
-    setAnswers(merged);
+    // Perfiles antiguos no traen genres/artists: garantizamos arrays.
+    setAnswers({
+      ...merged,
+      moments: Array.isArray(merged.moments) ? merged.moments : [],
+      seeks: Array.isArray(merged.seeks) ? merged.seeks : [],
+      genres: Array.isArray(merged.genres) ? merged.genres : [],
+      artists: Array.isArray(merged.artists) ? merged.artists : [],
+    });
     setHydrated(true);
   }, [initialAnswers]);
 
@@ -107,7 +128,7 @@ export function ProfileForm({
     setAnswers((a) => ({ ...a, ...patch }));
   }
 
-  function toggle(list: "moments" | "seeks", value: string) {
+  function toggle(list: "moments" | "seeks" | "genres", value: string) {
     setAnswers((a) => ({
       ...a,
       [list]: a[list].includes(value)
@@ -115,6 +136,57 @@ export function ProfileForm({
         : [...a[list], value],
     }));
   }
+
+  function addArtist(name: string, image?: string | null) {
+    const value = name.trim();
+    if (!value) return;
+    setAnswers((a) => {
+      if (a.artists.some((x) => x.toLowerCase() === value.toLowerCase())) return a;
+      return {
+        ...a,
+        artists: [...a.artists, value],
+        artistImages: image
+          ? { ...(a.artistImages ?? {}), [value]: image }
+          : a.artistImages,
+      };
+    });
+    setArtistInput("");
+    setSuggestions([]);
+  }
+
+  function removeArtist(name: string) {
+    setAnswers((a) => {
+      const images = { ...(a.artistImages ?? {}) };
+      delete images[name];
+      return { ...a, artists: a.artists.filter((x) => x !== name), artistImages: images };
+    });
+  }
+
+  // Autocompletado con foto (Deezer vía /api/artists), con debounce.
+  useEffect(() => {
+    const q = artistInput.trim();
+    if (q.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/artists?q=${encodeURIComponent(q)}`, {
+          signal: ctrl.signal,
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { results?: ArtistSuggestion[] };
+        setSuggestions(Array.isArray(data.results) ? data.results : []);
+      } catch {
+        // sin sugerencias: el usuario igual puede escribir y pulsar Enter
+      }
+    }, 250);
+    return () => {
+      ctrl.abort();
+      clearTimeout(t);
+    };
+  }, [artistInput]);
 
   const displayName = user?.name?.split(" ")[0] ?? user?.email?.split("@")[0];
 
@@ -200,6 +272,134 @@ export function ProfileForm({
       {user && duet && <DuetPanel duet={duet} />}
 
       <section className="mt-8">
+        <h2 className="font-serif text-lg">¿Qué géneros te mueven?</h2>
+        <p className="mt-1 text-xs text-dim">
+          Los que quieras — con esto tu primer disco ya va por tu lado
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {GENRES.map((g) => (
+            <Chip
+              key={g}
+              label={g}
+              active={answers.genres.includes(g)}
+              onClick={() => toggle("genres", g)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="font-serif text-lg">Artistas que amas</h2>
+        <p className="mt-1 text-xs text-dim">
+          Escribe un nombre y elígelo de la lista (con su foto). Cuantos más,
+          mejor te conocemos.
+        </p>
+
+        {answers.artists.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {answers.artists.map((a) => (
+              <motion.span
+                key={a}
+                layout
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="flex items-center gap-2 rounded-full border border-album bg-album py-1 pl-1 pr-3 text-sm font-medium text-black"
+              >
+                {answers.artistImages?.[a] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={answers.artistImages[a]}
+                    alt=""
+                    className="h-7 w-7 rounded-full object-cover ring-1 ring-black/20"
+                  />
+                ) : (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/15 text-xs">
+                    ♪
+                  </span>
+                )}
+                {a}
+                <button
+                  type="button"
+                  onClick={() => removeArtist(a)}
+                  aria-label={`Quitar ${a}`}
+                  className="text-black/60 transition-colors hover:text-black"
+                >
+                  ✕
+                </button>
+              </motion.span>
+            ))}
+          </div>
+        )}
+
+        <div className="relative mt-3">
+          <input
+            value={artistInput}
+            onChange={(e) => setArtistInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault();
+                // Si hay sugerencias, agrega la primera (con foto); si no, el texto.
+                if (suggestions[0]) addArtist(suggestions[0].name, suggestions[0].image);
+                else addArtist(artistInput);
+              } else if (e.key === "Backspace" && !artistInput && answers.artists.length) {
+                removeArtist(answers.artists[answers.artists.length - 1]);
+              }
+            }}
+            placeholder={answers.artists.length ? "Añadir otro…" : "Ej.: Soda Stereo, Radiohead…"}
+            className="w-full rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm transition-colors placeholder:text-white/25 focus:border-album focus:outline-none focus:ring-2 focus:ring-album/25"
+          />
+
+          <AnimatePresence>
+            {suggestions.filter(
+              (s) => !answers.artists.some((a) => a.toLowerCase() === s.name.toLowerCase()),
+            ).length > 0 && (
+              <motion.ul
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="absolute z-10 mt-2 max-h-72 w-full overflow-auto rounded-2xl border border-white/10 bg-surface p-1.5 shadow-2xl"
+              >
+                {suggestions
+                  .filter(
+                    (s) =>
+                      !answers.artists.some(
+                        (a) => a.toLowerCase() === s.name.toLowerCase(),
+                      ),
+                  )
+                  .map((s) => (
+                    <li key={s.name}>
+                      <button
+                        type="button"
+                        // onMouseDown: actúa antes de que el input pierda foco.
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          addArtist(s.name, s.image);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-sm transition-colors hover:bg-white/5"
+                      >
+                        {s.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={s.image}
+                            alt=""
+                            className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-white/10"
+                          />
+                        ) : (
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-base">
+                            ♪
+                          </span>
+                        )}
+                        <span className="truncate font-medium">{s.name}</span>
+                      </button>
+                    </li>
+                  ))}
+              </motion.ul>
+            )}
+          </AnimatePresence>
+        </div>
+      </section>
+
+      <section className="mt-8">
         <h2 className="font-serif text-lg">¿Cuándo escuchas música?</h2>
         <p className="mt-1 text-xs text-dim">Puedes elegir varios</p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -241,17 +441,6 @@ export function ProfileForm({
             />
           ))}
         </div>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="font-serif text-lg">Tres discos o artistas que te marcaron</h2>
-        <textarea
-          value={answers.anchors}
-          onChange={(e) => update({ anchors: e.target.value })}
-          rows={3}
-          placeholder="Ej.: Continuum, Héctor Lavoe, AC/DC…"
-          className="mt-3 w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-sm transition-colors placeholder:text-white/25 focus:border-album focus:outline-none focus:ring-2 focus:ring-album/25"
-        />
       </section>
 
       {!user && (

@@ -222,6 +222,10 @@ async function recomendarYGuardar(
     if (!profile && reviews.length === 0 && !opts.mood) return null;
     if (catalogo.length === 0) return null;
 
+    const parsedProfile = profile
+      ? parseJson<Record<string, unknown>>(profile.answersJson, {})
+      : null;
+
     const returnRitual =
       !opts.regenerated && !opts.mood
         ? await detectReturnRitual(identity, date)
@@ -230,7 +234,7 @@ async function recomendarYGuardar(
     let eleccion: { albumId: string; reason: string };
     try {
       eleccion = await elegirConLlm({
-        profile: profile ? parseJson<Record<string, unknown>>(profile.answersJson, {}) : null,
+        profile: parsedProfile,
         reviews,
         mood: opts.mood,
         catalogo,
@@ -241,21 +245,33 @@ async function recomendarYGuardar(
         returnRitual,
       });
     } catch (err) {
-      if (!returnRitual) throw err;
-      const recientesIds = new Set(picksRecientes.map((p) => p.albumId));
-      const pool = catalogo
-        .filter((d) => !recientesIds.has(d.album.id))
-        .sort((a, b) => a.album.difficulty - b.album.difficulty);
-      const dossier = pool[0] ?? catalogo[0];
-      if (!dossier) throw err;
-      eleccion = {
-        albumId: dossier.album.id,
-        reason: fallbackReturnReason(
-          returnRitual.absenceDays,
-          dossier.album.title,
-          dossier.album.artist.name,
-        ),
-      };
+      // La IA falló: el oyente nunca cae en la rotación global si tenemos sus
+      // gustos. Elegimos por afinidad (géneros, artistas, diario) sin IA.
+      if (returnRitual) {
+        const recientesIds = new Set(picksRecientes.map((p) => p.albumId));
+        const pool = catalogo
+          .filter((d) => !recientesIds.has(d.album.id))
+          .sort((a, b) => a.album.difficulty - b.album.difficulty);
+        const dossier = pool[0] ?? catalogo[0];
+        if (!dossier) throw err;
+        eleccion = {
+          albumId: dossier.album.id,
+          reason: fallbackReturnReason(
+            returnRitual.absenceDays,
+            dossier.album.title,
+            dossier.album.artist.name,
+          ),
+        };
+      } else {
+        const porGusto = elegirPorGusto({
+          profile: parsedProfile,
+          reviews,
+          catalogo,
+          picksRecientes,
+        });
+        if (!porGusto) throw err;
+        eleccion = porGusto;
+      }
     }
 
     const dossier = catalogo.find((d) => d.album.id === eleccion.albumId);
@@ -324,7 +340,7 @@ async function elegirConLlm(input: {
     .join("\n");
 
   const perfilTexto = input.profile
-    ? JSON.stringify(input.profile)
+    ? formatPerfil(input.profile)
     : "(sin perfil todavía)";
 
   const diarioTexto =
@@ -369,7 +385,8 @@ Reglas estrictas:
 3. "reason": 1 a 3 frases en español, cálidas y concretas, citando SOLO señales reales del usuario que aparecen abajo (sus estrellas, sus respuestas, su perfil, su ánimo de hoy). Ej.: "Le diste 5★ a X…", "dijiste que buscas la historia…".
 4. Sobre el disco solo puedes mencionar lo que aparece en el catálogo (título, artista, año, duración, etiquetas). PROHIBIDO inventar datos del álbum o del usuario.
 5. Evita repetir discos recomendados en días recientes, salvo que no haya alternativa razonable.
-6. Si el usuario indicó su ánimo de hoy, dale prioridad como señal.`;
+6. Si el usuario indicó su ánimo de hoy, dale prioridad como señal.
+7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.`;
 
   const user = `CATÁLOGO DISPONIBLE (elige uno por su albumId):
 ${catalogoTexto}
@@ -414,4 +431,115 @@ Responde el JSON ahora.`;
   }
 
   return { albumId: parsed.albumId, reason: parsed.reason };
+}
+
+// ─── Perfil legible para el prompt ───────────────────────────────────────────
+// En vez de volcar el JSON crudo, resaltamos lo que define el gusto (géneros y
+// artistas) para que el LLM lo pondere bien.
+
+function comoLista(valor: unknown): string[] {
+  return Array.isArray(valor)
+    ? valor.filter((x): x is string => typeof x === "string")
+    : [];
+}
+
+function formatPerfil(profile: Record<string, unknown>): string {
+  const generos = comoLista(profile.genres);
+  const artistas = comoLista(profile.artists);
+  const momentos = comoLista(profile.moments);
+  const busca = comoLista(profile.seeks);
+  const tiempo = typeof profile.listenTime === "string" ? profile.listenTime : "";
+  const anchors = typeof profile.anchors === "string" ? profile.anchors : "";
+  const lineas = [
+    generos.length ? `Géneros favoritos: ${generos.join(", ")}` : null,
+    artistas.length ? `Artistas que ama: ${artistas.join(", ")}` : null,
+    busca.length ? `Busca en un disco: ${busca.join(", ")}` : null,
+    momentos.length ? `Escucha: ${momentos.join(", ")}` : null,
+    tiempo ? `Tiempo por sesión: ${tiempo}` : null,
+    anchors ? `Otros que lo marcaron: ${anchors}` : null,
+  ].filter(Boolean);
+  return lineas.length ? lineas.join("\n") : "(perfil vacío)";
+}
+
+// ─── Fallback por gusto, sin IA ──────────────────────────────────────────────
+// Si la IA no está disponible, elegimos por afinidad con el perfil (géneros,
+// artistas favoritos) y el diario (lo que puntuó 4★+). Así el oyente NUNCA cae
+// en la rotación global ciega: un rockero recibe rock, no una balada.
+
+type ReviewConAlbum = Prisma.ReviewGetPayload<{
+  include: { album: { include: { artist: true } } };
+}>;
+type PickConAlbum = Prisma.DailyPickGetPayload<{
+  include: { album: { include: { artist: true } } };
+}>;
+
+function normalizar(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function elegirPorGusto(input: {
+  profile: Record<string, unknown> | null;
+  reviews: ReviewConAlbum[];
+  catalogo: DossierConAlbum[];
+  picksRecientes: PickConAlbum[];
+}): { albumId: string; reason: string } | null {
+  const generos = input.profile ? comoLista(input.profile.genres).map(normalizar) : [];
+  const artistas = [
+    ...(input.profile ? comoLista(input.profile.artists) : []),
+    ...input.reviews.filter((r) => r.rating >= 4).map((r) => r.album.artist.name),
+  ].map(normalizar);
+  const tagsGustados = new Set<string>();
+  for (const r of input.reviews.filter((x) => x.rating >= 4)) {
+    for (const t of parseJson<Partial<FactsPayload>>(r.album.factsJson, {}).tags ?? []) {
+      tagsGustados.add(normalizar(t));
+    }
+  }
+
+  if (generos.length === 0 && artistas.length === 0 && tagsGustados.size === 0) {
+    return null; // sin señales de gusto → que decida la rotación global
+  }
+
+  const recientes = new Set(input.picksRecientes.map((p) => p.albumId));
+  const candidatos: { dossier: DossierConAlbum; score: number; motivo: string }[] = [];
+
+  for (const d of input.catalogo) {
+    if (recientes.has(d.album.id)) continue;
+    const tags = (parseJson<Partial<FactsPayload>>(d.album.factsJson, {}).tags ?? []).map(
+      normalizar,
+    );
+    const artista = normalizar(d.album.artist.name);
+    let score = 0;
+    let motivo = "";
+
+    if (artistas.some((a) => a && (artista.includes(a) || a.includes(artista)))) {
+      score += 6;
+      motivo = `${d.album.artist.name} es de los tuyos`;
+    }
+    if (generos.some((g) => tags.some((t) => t.includes(g) || g.includes(t)))) {
+      score += 3;
+      if (!motivo) motivo = "encaja con tus géneros";
+    }
+    const tagMatch = [...tagsGustados].filter((t) => tags.includes(t)).length;
+    score += tagMatch;
+    if (!motivo && tagMatch > 0) motivo = "conecta con lo que ya te gustó";
+
+    if (score > 0) candidatos.push({ dossier: d, score, motivo });
+  }
+
+  if (candidatos.length === 0) return null;
+  candidatos.sort((a, b) => b.score - a.score);
+
+  // Entre los mejores, una elección estable por día (varía cada día).
+  const top = candidatos.slice(0, Math.max(3, Math.ceil(candidatos.length * 0.3)));
+  const dia = Math.floor(Date.now() / 86_400_000);
+  const elegido = top[dia % top.length];
+
+  return {
+    albumId: elegido.dossier.album.id,
+    reason: elegido.motivo ? `Hoy, porque ${elegido.motivo}.` : "Hoy va por tu lado.",
+  };
 }

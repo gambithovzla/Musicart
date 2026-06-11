@@ -193,7 +193,7 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
             href="/perfil"
             className="mt-4 block text-center text-sm text-dim underline underline-offset-4"
           >
-            Dinos quién eres y mañana este disco será para ti →
+            Cuéntanos qué te gusta y el disco de hoy será para ti →
           </Link>
         )}
       </motion.div>

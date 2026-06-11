@@ -167,6 +167,19 @@ model PushSubscription {
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// Fase 5.3 — preguntas al dossier (rate-limited por oyente/día)
+model DossierChat {
+  id          String   @id @default(cuid())
+  listenerKey String
+  albumId     String
+  dateKey     String // YYYY-MM-DD
+  question    String
+  createdAt   DateTime @default(now())
+
+  @@index([listenerKey, dateKey])
+  @@index([listenerKey, albumId, dateKey])
+}
+
 // Fase 5.2 — rebobinada mensual: carta cacheada por oyente y mes
 model Rewind {
   id          String   @id @default(cuid())

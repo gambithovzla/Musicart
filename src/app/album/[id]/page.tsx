@@ -26,7 +26,9 @@ import { ListenLinks } from "@/components/ListenLinks";
 import { ReflectionForm } from "@/components/ReflectionForm";
 import { ShareAlbum } from "@/components/ShareAlbum";
 import { Paywall } from "@/components/Paywall";
+import { AlbumChat } from "@/components/AlbumChat";
 import { Narrator, type NarratorSection } from "@/components/Narrator";
+import { getChatQuota } from "@/lib/album-chat";
 
 export const dynamic = "force-dynamic";
 
@@ -94,6 +96,9 @@ export default async function AlbumPage({
   const links = parseJson<AlbumLinks>(album.linksJson, {});
   const questions = parseJson<string[]>(dossier.questionsJson, []);
   const audio = parseJson<DossierAudio | null>(dossier.audioJson, null);
+  const chatQuota = access.allowed
+    ? await getChatQuota(identity, album.id, session?.user?.email)
+    : null;
 
   // Saltos de descubrimiento: si el destino ya está publicado, se enlaza;
   // si no, la cola de generación ya lo tiene apuntado y "viene en camino".
@@ -244,6 +249,13 @@ export default async function AlbumPage({
                 ))}
               </div>
             </section>
+
+            <AlbumChat
+              albumId={album.id}
+              albumTitle={album.title}
+              suggestedQuestions={questions.slice(0, 3)}
+              initialQuota={chatQuota}
+            />
 
         <section className="mt-12">
           <SectionTitle n="02" title={`Quién era ${album.artist.name}`} />

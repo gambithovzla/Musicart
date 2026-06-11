@@ -237,8 +237,8 @@ feature usa los datos que ya guardamos y respeta el pipeline anti-alucinación.
   (toggle en Perfil, `npm run push` para el cron, claves VAPID)
 - [x] **5.2 Rebobinada mensual** — `/rebobinada`: carta IA del mes pasado
   (cacheada) o resumen vivo del mes en curso; enlace desde el diario
-- [ ] **5.3 Conversar con el disco** — preguntas sobre el dossier respondidas
-  SOLO con los hechos del FactsPayload (anti-alucinación)
+- [x] **5.3 Conversar con el disco** — chat en el dossier con FactsPayload,
+  límites diarios (3/día gratis, 15 Pro), filtro anti-abuso sin LLM
 - [ ] **5.4 El hilo de tu vida musical** — la IA conecta tus reseñas entre sí
   en el diario ("este disco nace de la misma ruptura que aquel")
 - [ ] **5.5 Modo dueto** — cuenta vinculada con otra persona: un disco

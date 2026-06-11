@@ -95,9 +95,11 @@ npm run worker -- --batch 2                      # corrida del worker de catálo
   corre `npm run db:seed` a mano (sigue siendo idempotente).
 - **Variables en Vercel:** `DATABASE_URL`, `OPENAI_API_KEY` (la usa el motor de
   recomendación en runtime), `ADMIN_SECRET` (protege el panel `/revision`).
-- **Worker del catálogo (Fase 2):** servicio cron en Railway que corre
-  `npm run worker`. Sus variables: `DATABASE_URL` (ahí sí la URL **interna**
-  `railway.internal`) y `OPENAI_API_KEY`. Pasos de alta en el README.
+- **Worker del catálogo (Fase 2):** servicio cron en Railway (ya dado de alta
+  y "Ready") que corre `npm run worker` cada día a las 06:00 UTC. Toda su
+  configuración vive en `railway.json` (build no-op, start, cron). Sus
+  variables: `DATABASE_URL` (ahí sí la URL **interna** `railway.internal`) y
+  `OPENAI_API_KEY`.
 - Flujo de trabajo: rama → PR → el dueño hace merge a `master` desde GitHub
   (normalmente desde el teléfono). No mergear sin su OK.
 

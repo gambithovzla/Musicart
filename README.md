@@ -111,7 +111,7 @@ src/components/       DailyReveal, MoodCheckin, Narrator, ReflectionForm, Listen
 - ✅ **Fase 1** — El cerebro recomendador: pick personalizado por perfil + diario
   + mood, con el "por qué este disco, para ti, hoy"
 - 🔨 **Fase 2** — Catálogo que crece solo (curador IA + worker) e hilos de
-  descubrimiento: código listo; falta dar de alta el cron en Railway y la
-  variable `ADMIN_SECRET` en Vercel
+  descubrimiento: código mergeado y worker corriendo como cron en Railway
+  (06:00 UTC diario); validando las primeras corridas reales
 - 👤 **Fase 3** — Cuentas reales (auth) y sincronización multi-dispositivo
 - 💎 **Fase 4** — TTS calidad podcast, modo conductor, compartibles, freemium

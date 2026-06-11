@@ -109,6 +109,13 @@ opcional `LLM_MODEL` (default `gpt-4o-mini`).
 
 ## 🔨 Fase 2 — Catálogo que crece solo (EN CURSO)
 
+> **Estado (10-jun-2026, noche):** las 4 tareas están mergeadas a `master`
+> (PRs #5, #6 y #7) y la infraestructura quedó montada: worker desplegado en
+> Railway ("Ready") con cron diario a las 06:00 UTC y `ADMIN_SECRET` en Vercel.
+> **Falta validar la primera corrida real del worker** (revisar
+> `/revision?clave=…` y que el catálogo crezca) antes de declarar la fase
+> COMPLETADA — y preguntar al dueño si se arranca la Fase 3.
+
 **Objetivo:** que el catálogo pase de 3 discos demo a una biblioteca real sin
 intervención humana. La IA decide qué generar; el pipeline existente genera y
 verifica; solo lo verificado se publica.
@@ -142,9 +149,10 @@ verifica; solo lo verificado se publica.
 
 ### Pendiente del dueño (infra, una sola vez)
 
-- [ ] Crear el servicio cron del worker en Railway (pasos exactos en el README,
-  sección "El catálogo crece solo").
-- [ ] Definir `ADMIN_SECRET` en Vercel (protege el panel `/revision`).
+- [x] Crear el servicio cron del worker en Railway (pasos exactos en el README,
+  sección "El catálogo crece solo"). Hecho: servicio "Musicart" Ready, cron
+  06:00 UTC, configurado por `railway.json`.
+- [x] Definir `ADMIN_SECRET` en Vercel (protege el panel `/revision`).
 
 ### Criterios de aceptación
 

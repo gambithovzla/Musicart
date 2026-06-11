@@ -226,6 +226,28 @@ dispositivo.
 
 ---
 
+## 🔨 Fase 5 — La magia que retiene (EN CURSO)
+
+**Objetivo:** convertir el ritual en hábito y el hábito en suscripción. Cada
+feature usa los datos que ya guardamos y respeta el pipeline anti-alucinación.
+
+### Tareas
+
+- [x] **5.1 Notificación ritual** — Web Push diaria con tu disco del día
+  (toggle en Perfil, `npm run push` para el cron, claves VAPID)
+- [x] **5.2 Rebobinada mensual** — `/rebobinada`: carta IA del mes pasado
+  (cacheada) o resumen vivo del mes en curso; enlace desde el diario
+- [ ] **5.3 Conversar con el disco** — preguntas sobre el dossier respondidas
+  SOLO con los hechos del FactsPayload (anti-alucinación)
+- [ ] **5.4 El hilo de tu vida musical** — la IA conecta tus reseñas entre sí
+  en el diario ("este disco nace de la misma ruptura que aquel")
+- [ ] **5.5 Modo dueto** — cuenta vinculada con otra persona: un disco
+  compartido a la semana elegido por la intersección de gustos
+- [ ] **5.6 Racha con alma** — si te alejas, el pick del regreso llega con
+  cariño ("te guardé algo especial"); sin gamificación vacía
+
+---
+
 ## Decisiones técnicas tomadas (no re-litigar sin razón)
 
 | Decisión | Por qué |

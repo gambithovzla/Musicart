@@ -54,6 +54,24 @@ export default async function DiarioPage() {
             )}
           </p>
         )}
+        {entries.length > 0 && (
+          <Link
+            href="/rebobinada"
+            className="mt-4 flex items-center justify-between rounded-2xl border border-album/25 bg-album/5 px-4 py-3 text-sm transition-transform active:scale-[0.99]"
+          >
+            <span>
+              <span className="font-serif font-medium text-album-light">
+                Tu rebobinada
+              </span>
+              <span className="mt-0.5 block text-xs text-dim">
+                La carta de tu mes musical, escrita para ti
+              </span>
+            </span>
+            <span aria-hidden className="text-album-light">
+              →
+            </span>
+          </Link>
+        )}
       </header>
 
       {entries.length === 0 && (

@@ -111,7 +111,10 @@ npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
   `GOOGLE_CLIENT_SECRET`. Email opcional: `AUTH_RESEND_KEY`, `EMAIL_FROM`.
   Stripe (Fase 4.5): `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`
   (endpoint `https://tu-dominio/api/stripe/webhook`). Opcional: `FREEMIUM_DOSSIER_LIMIT`
-  (default 5). Blob TTS: `BLOB_READ_WRITE_TOKEN`.
+  (default 5). Blob TTS: `BLOB_READ_WRITE_TOKEN`. Web Push (Fase 5.1):
+  `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
+  (genera las claves con `npx web-push generate-vapid-keys`); el envío diario
+  es `npm run push` (cron en Railway con las mismas variables + `DATABASE_URL`).
 
 > ⚠️ SQLite no funciona en Vercel (filesystem efímero) — por eso Postgres.
 
@@ -137,3 +140,5 @@ src/components/       DailyReveal, MoodCheckin, Narrator, ReflectionForm, Listen
   validado en producción (jun 2026)
 - ✅ **Fase 3** — Cuentas reales (Auth.js, multi-dispositivo, export/borrado de datos)
 - ✅ **Fase 4** — TTS, compartir, conductor, rutas, Stripe freemium, analytics admin
+- 🔨 **Fase 5** — Notificación ritual (Web Push) y rebobinada mensual listas;
+  conversar con el disco, hilo musical, dueto y racha con alma pendientes

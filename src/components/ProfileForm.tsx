@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { saveProfile } from "@/app/actions";
 import { signOutAction } from "@/app/entrar/actions";
 import { PrivacyPanel } from "@/components/PrivacyPanel";
+import { PushToggle } from "@/components/PushToggle";
 import { SubscriptionPanel } from "@/components/SubscriptionPanel";
 import { getDeviceId } from "@/lib/device";
 
@@ -189,6 +190,8 @@ export function ProfileForm({
           status={subscription.status}
         />
       )}
+
+      <PushToggle />
 
       <section className="mt-8">
         <h2 className="font-serif text-lg">¿Cuándo escuchas música?</h2>

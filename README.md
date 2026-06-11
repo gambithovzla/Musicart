@@ -119,4 +119,4 @@ src/components/       DailyReveal, MoodCheckin, Narrator, ReflectionForm, Listen
 - ✅ **Fase 2** — Catálogo que crece solo (curador IA + worker + madriguera);
   validado en producción (jun 2026)
 - ✅ **Fase 3** — Cuentas reales (Auth.js, multi-dispositivo, export/borrado de datos)
-- 💎 **Fase 4** — TTS calidad podcast, modo conductor, compartibles, freemium
+- 🔨 **Fase 4** — Compartir, modo conductor, rutas temáticas (en curso); TTS, Stripe y analytics pendientes

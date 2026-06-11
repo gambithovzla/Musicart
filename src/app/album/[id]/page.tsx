@@ -16,6 +16,7 @@ import {
 import { Stars } from "@/components/Stars";
 import { ListenLinks } from "@/components/ListenLinks";
 import { ReflectionForm } from "@/components/ReflectionForm";
+import { ShareAlbum } from "@/components/ShareAlbum";
 import { Narrator, type NarratorSection } from "@/components/Narrator";
 
 export const dynamic = "force-dynamic";
@@ -41,8 +42,18 @@ export async function generateMetadata({
   const { id } = await params;
   const album = await getAlbum(id);
   if (!album) return { title: "Musicart" };
+  const dossier = album.dossiers[0];
+  const description = dossier?.intro
+    ? dossier.intro.slice(0, 160) + (dossier.intro.length > 160 ? "…" : "")
+    : `${album.title} de ${album.artist.name} — curaduría musical en Musicart`;
   return {
     title: `${album.title} — ${album.artist.name} · Musicart`,
+    description,
+    openGraph: {
+      title: `${album.title} — ${album.artist.name}`,
+      description,
+      type: "music.album",
+    },
   };
 }
 
@@ -166,7 +177,23 @@ export default async function AlbumPage({
 
         {/* — Narración por voz — */}
         <section className="mt-8">
-          <Narrator sections={narratorSections} />
+          <Narrator
+            sections={narratorSections}
+            meta={{
+              albumTitle: album.title,
+              artistName: album.artist.name,
+              coverUrl: album.coverUrl,
+            }}
+          />
+        </section>
+
+        <section className="mt-4">
+          <ShareAlbum
+            albumId={album.id}
+            title={album.title}
+            artist={album.artist.name}
+            variant="link"
+          />
         </section>
 
         {/* — Antes de escuchar — */}

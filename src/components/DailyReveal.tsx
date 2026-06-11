@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Stars } from "./Stars";
+import { ShareAlbum } from "./ShareAlbum";
 
 export type DailyAlbum = {
   albumId: string;
@@ -111,6 +112,20 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
           className="block rounded-2xl bg-album px-6 py-4 text-center text-base font-semibold text-black transition-transform active:scale-[0.98]"
         >
           Descubrir este disco
+        </Link>
+        <div className="mt-4">
+          <ShareAlbum
+            albumId={album.albumId}
+            title={album.title}
+            artist={album.artist}
+            subtitle={album.reason ?? album.hook}
+          />
+        </div>
+        <Link
+          href="/explorar"
+          className="mt-4 block text-center text-sm text-dim underline underline-offset-4"
+        >
+          Explorar rutas temáticas →
         </Link>
         {album.showProfileInvite && (
           <Link

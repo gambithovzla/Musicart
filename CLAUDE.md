@@ -72,8 +72,9 @@ src/lib/merge-device.ts  Fusión Profile/Reviews/DailyPicks al iniciar sesión.
 src/lib/device.ts        Identidad anónima por dispositivo (localStorage + cookie
                          musicart_device para personalizar en el servidor).
 src/lib/theme.ts|palette.ts  Theming de la UI con la paleta de la portada.
-src/components/          DailyReveal, MoodCheckin, DeviceSync, Narrator (voz),
+src/components/          DailyReveal, MoodCheckin, ShareAlbum, DeviceSync, Narrator (voz),
                          ReflectionForm, ListenLinks…
+src/app/explorar/        Rutas temáticas (Fase 4.4).
 scripts/dossier.ts       CLI: npm run dossier -- "Álbum" "Artista" --publish
 scripts/worker.ts        Worker del catálogo (cron Railway): npm run worker
 ```

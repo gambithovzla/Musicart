@@ -196,14 +196,26 @@ dispositivo.
 
 ---
 
-## 💎 Fase 4 — Producto pulido y monetización
+## 🔨 Fase 4 — Producto pulido y monetización (EN CURSO)
 
-- [ ] TTS calidad podcast pre-renderizado (`Dossier.audioJson` ya lo soporta)
-- [ ] Modo conductor: audio continuo + Media Session API
-- [ ] Tarjetas compartibles ("mi disco de hoy") para redes
-- [ ] Rutas temáticas (semana del soul, historia del grunge…)
-- [ ] Stripe freemium (límite de dossiers/mes gratis, ilimitado de pago)
-- [ ] Analytics de producto y validación con usuarios reales
+### Tareas
+
+- [ ] **4.1 TTS calidad podcast** — pre-renderizar MP3s (`audioJson`) vía script CLI
+- [x] **4.2 Modo conductor** — narración continua + Media Session API (controles en
+  pantalla de bloqueo, saltar secciones)
+- [x] **4.3 Tarjetas compartibles** — botón compartir en home y dossier; OG image
+  por álbum; Web Share API + copiar enlace
+- [x] **4.4 Rutas temáticas** — `/explorar` con colecciones curadas (jazz, rock,
+  español, calma…)
+- [ ] **4.5 Stripe freemium** — límite de dossiers/mes gratis, ilimitado de pago
+- [ ] **4.6 Analytics** — métricas de producto y validación con usuarios reales
+
+### Criterios de aceptación (parcial)
+
+- [x] El usuario puede compartir su disco del día o un dossier con un enlace que
+  se ve bien en redes (OG image).
+- [x] La narración funciona en modo conductor con controles del sistema.
+- [x] Hay al menos 3 rutas temáticas navegables con discos del catálogo.
 
 ---
 

@@ -116,7 +116,7 @@ export async function generarAlbumAhora(input: {
  * Es "una corrida del worker, a mano": si no hay nada propuesto, el curador
  * propone; luego genera el de mayor prioridad. Aprovecha maxDuration=300.
  */
-async function cargarPerfilAdmin(): Promise<{ genres: string[]; artists: string[] } | null> {
+async function cargarPerfilAdmin(): Promise<{ genres: string[]; artists: string[]; languages: string[] } | null> {
   try {
     const session = await auth();
     if (!session?.user?.id && !session?.user?.email) return null;
@@ -132,7 +132,12 @@ async function cargarPerfilAdmin(): Promise<{ genres: string[]; artists: string[
     const artists = Array.isArray(data.artists)
       ? (data.artists as unknown[]).filter((x): x is string => typeof x === "string")
       : [];
-    return genres.length || artists.length ? { genres, artists } : null;
+    const languages = Array.isArray(data.languages)
+      ? (data.languages as unknown[]).filter((x): x is string => typeof x === "string")
+      : [];
+    return genres.length || artists.length || languages.length
+      ? { genres, artists, languages }
+      : null;
   } catch {
     return null;
   }

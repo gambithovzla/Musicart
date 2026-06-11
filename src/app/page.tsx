@@ -4,7 +4,7 @@
 
 import { cookies } from "next/headers";
 import { auth } from "@/auth";
-import { getTodayPick, formatDateEs } from "@/lib/daily";
+import { getTodayPick, formatDateEs, todayKey } from "@/lib/daily";
 import { getPersonalizedPick } from "@/lib/recommend";
 import { getMadriguera } from "@/lib/madriguera";
 import { hasProfile } from "@/app/actions";
@@ -13,6 +13,11 @@ import { albumThemeStyle } from "@/lib/theme";
 import { parseJson, type Palette } from "@/lib/types";
 import { DailyReveal } from "@/components/DailyReveal";
 import { MoodCheckin } from "@/components/MoodCheckin";
+import { CuriosityCard } from "@/components/CuriosityCard";
+import { todayQuestion } from "@/lib/curiosities";
+import type { CuriosityAnswer } from "@/lib/curiosities";
+import { getListenerIdentity, profileWhere } from "@/lib/identity";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -48,10 +53,31 @@ export default async function Home() {
     );
   }
 
-  const [tienePerfil, madriguera] = await Promise.all([
+  const dateKey = todayKey(tz);
+
+  const [tienePerfil, madriguera, identity] = await Promise.all([
     hasProfile(),
     getMadriguera(pick.album.id),
+    getListenerIdentity(),
   ]);
+
+  // Cargar pregunta del día (si el usuario tiene perfil).
+  let curiosityQuestion: ReturnType<typeof todayQuestion> = null;
+  if (tienePerfil) {
+    const profileFilter = profileWhere(identity);
+    const profile = profileFilter
+      ? await prisma.profile.findFirst({ where: profileFilter })
+      : null;
+    const prev = profile
+      ? parseJson<Record<string, unknown>>(profile.answersJson, {})
+      : {};
+    const answered = new Set<string>(
+      (Array.isArray(prev.curiosities) ? (prev.curiosities as CuriosityAnswer[]) : [])
+        .filter((a) => a.date === dateKey)
+        .map((a) => a.id),
+    );
+    curiosityQuestion = todayQuestion(answered, dateKey);
+  }
   const palette = parseJson<Palette | null>(pick.album.paletteJson, null);
 
   return (
@@ -88,6 +114,9 @@ export default async function Home() {
             madriguera,
           }}
         />
+        {curiosityQuestion && (
+          <CuriosityCard question={curiosityQuestion} dateKey={dateKey} />
+        )}
       </div>
     </main>
   );

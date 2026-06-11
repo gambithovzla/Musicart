@@ -17,6 +17,7 @@ import {
   type ReturnRitual,
 } from "./return-ritual";
 import { parseJson, type FactsPayload } from "./types";
+import { formatCuriosities, type CuriosityAnswer } from "./curiosities";
 
 const MAX_REVIEWS = 10;
 const MAX_RECENT_PICKS = 7;
@@ -446,21 +447,27 @@ function comoLista(valor: unknown): string[] {
 function formatPerfil(profile: Record<string, unknown>): string {
   const generos = comoLista(profile.genres);
   const artistas = comoLista(profile.artists);
+  const idiomas = comoLista(profile.languages);
   const momentos = comoLista(profile.moments);
   const busca = comoLista(profile.seeks);
   const intereses = comoLista(profile.interests);
   const bio = typeof profile.bio === "string" ? profile.bio.trim() : "";
   const tiempo = typeof profile.listenTime === "string" ? profile.listenTime : "";
   const anchors = typeof profile.anchors === "string" ? profile.anchors : "";
+  const curiosities = Array.isArray(profile.curiosities)
+    ? formatCuriosities(profile.curiosities as CuriosityAnswer[])
+    : "";
   const lineas = [
     generos.length ? `Géneros favoritos: ${generos.join(", ")}` : null,
     artistas.length ? `Artistas que ama: ${artistas.join(", ")}` : null,
+    idiomas.length ? `Idiomas en los que disfruta música: ${idiomas.join(", ")}` : null,
     busca.length ? `Busca en un disco: ${busca.join(", ")}` : null,
     momentos.length ? `Escucha: ${momentos.join(", ")}` : null,
     tiempo ? `Tiempo por sesión: ${tiempo}` : null,
     intereses.length ? `Intereses fuera de la música: ${intereses.join(", ")}` : null,
     bio ? `Contexto personal: "${bio}"` : null,
     anchors ? `Otros que lo marcaron: ${anchors}` : null,
+    curiosities ? `Lo que me ha contado (preguntas del día):\n${curiosities}` : null,
   ].filter(Boolean);
   return lineas.length ? lineas.join("\n") : "(perfil vacío)";
 }

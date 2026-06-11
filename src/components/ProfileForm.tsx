@@ -24,12 +24,14 @@ const INTERESTS = [
   "Fútbol", "Deportes", "Literatura", "Cine", "Filosofía", "Arte",
   "Tecnología", "Viajes", "Cocina", "Gaming", "Teatro", "Fotografía",
 ];
+const LANGUAGES = ["Español", "English", "Italiano", "Français", "Português"];
 
 export type ProfileAnswers = {
   moments: string[];
   seeks: string[];
   genres: string[];
   artists: string[];
+  languages: string[];    // idiomas en que disfruta música
   interests: string[];    // quién eres más allá de la música
   bio?: string;           // línea libre opcional: trabajo, rutina, contexto
   artistImages?: Record<string, string>; // nombre → foto (solo para mostrar)
@@ -40,7 +42,7 @@ export type ProfileAnswers = {
 type ArtistSuggestion = { name: string; image: string | null };
 
 const EMPTY: ProfileAnswers = {
-  moments: [], seeks: [], genres: [], artists: [], interests: [], listenTime: "",
+  moments: [], seeks: [], genres: [], artists: [], languages: [], interests: [], listenTime: "",
 };
 const STORAGE_KEY = "musicart:profile";
 
@@ -98,6 +100,7 @@ export function ProfileForm({
       seeks: Array.isArray(merged.seeks) ? merged.seeks : [],
       genres: Array.isArray(merged.genres) ? merged.genres : [],
       artists: Array.isArray(merged.artists) ? merged.artists : [],
+      languages: Array.isArray(merged.languages) ? merged.languages : [],
       interests: Array.isArray(merged.interests) ? merged.interests : [],
     });
     setHydrated(true);
@@ -135,7 +138,7 @@ export function ProfileForm({
     setAnswers((a) => ({ ...a, ...patch }));
   }
 
-  function toggle(list: "moments" | "seeks" | "genres" | "interests", value: string) {
+  function toggle(list: "moments" | "seeks" | "genres" | "interests" | "languages", value: string) {
     setAnswers((a) => ({
       ...a,
       [list]: a[list].includes(value)
@@ -290,6 +293,23 @@ export function ProfileForm({
               label={g}
               active={answers.genres.includes(g)}
               onClick={() => toggle("genres", g)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="font-serif text-lg">¿En qué idiomas disfrutas música?</h2>
+        <p className="mt-1 text-xs text-dim">
+          Te recomendaremos discos en los que te sientas cómodo/a
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {LANGUAGES.map((l) => (
+            <Chip
+              key={l}
+              label={l}
+              active={answers.languages.includes(l)}
+              onClick={() => toggle("languages", l)}
             />
           ))}
         </div>

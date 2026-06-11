@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { TZ_COOKIE } from "@/lib/device";
+import type { CuriosityAnswer } from "@/lib/curiosities";
+import { parseJson } from "@/lib/types";
 import {
   dedupeReviewsByAlbum,
   getListenerIdentity,
@@ -127,4 +129,47 @@ export async function hasProfile(): Promise<boolean> {
   const where = profileWhere(identity);
   if (!where) return false;
   return Boolean(await prisma.profile.findFirst({ where, select: { id: true } }));
+}
+
+/** Guarda una respuesta a la pregunta del día en el perfil del usuario. */
+export async function answerCuriosity(
+  deviceId: string,
+  answer: CuriosityAnswer,
+): Promise<{ ok: boolean }> {
+  if (!deviceId || !answer.id || !answer.answer) return { ok: false };
+  const session = await auth();
+  const userId = session?.user?.id ?? null;
+
+  const identity = await getListenerIdentity();
+  const where = profileWhere(identity);
+  const existing = where
+    ? await prisma.profile.findFirst({ where })
+    : null;
+
+  const prev = existing
+    ? parseJson<Record<string, unknown>>(existing.answersJson, {})
+    : {};
+  const prevAnswers: CuriosityAnswer[] = Array.isArray(prev.curiosities)
+    ? (prev.curiosities as CuriosityAnswer[])
+    : [];
+
+  // No duplicar la misma pregunta en el mismo día.
+  const filtered = prevAnswers.filter(
+    (a) => !(a.id === answer.id && a.date === answer.date),
+  );
+  const updated = { ...prev, curiosities: [...filtered, answer] };
+
+  await prisma.profile.upsert({
+    where: { deviceId },
+    update: {
+      answersJson: JSON.stringify(updated),
+      ...(userId ? { userId } : {}),
+    },
+    create: {
+      deviceId,
+      answersJson: JSON.stringify(updated),
+      userId: userId ?? null,
+    },
+  });
+  return { ok: true };
 }

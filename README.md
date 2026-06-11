@@ -24,9 +24,13 @@ de descubrimiento — verificado, narrado y personalizado.
 3. **Dossier** — la historia, el artista, las canciones con notas, por qué importa.
 4. **Narración por voz** — todo el dossier se puede escuchar.
 5. **Escuchar** — deep links a Spotify / Apple Music / YouTube Music.
-6. **Reflexión** — rating + preguntas → se guarda en el **Diario** (con racha 🔥).
+6. **Reflexión** — rating + preguntas → se guarda en el **Diario** (con racha 🔥
+   y, si tienes varias reseñas, el **hilo musical** que conecta tus escuchas).
 7. **La madriguera** — cada dossier sugiere saltos verificados a otros discos
    (rivalidades, colaboraciones, influencias).
+8. **Extras** — rebobinada mensual (`/rebobinada`), chat con el dossier,
+   modo dueto semanal (`/dueto`), recordatorio push (Perfil), pick de regreso
+   con cariño si llevas días sin pasar.
 
 ## IA anti-alucinación por diseño
 
@@ -127,8 +131,8 @@ src/lib/sources/      clientes: musicbrainz, wikipedia, lastfm, itunes, odesli, 
 src/lib/dossier/      pipeline IA: facts → generate → verify → save
 src/lib/recommend.ts  motor de recomendación (pick personalizado del día)
 src/lib/curator.ts    curador IA (qué álbumes generar) → GenerationQueue
-src/app/              pantallas: / (hoy) · /album/[id] · /diario · /perfil · /revision
-src/components/       DailyReveal, MoodCheckin, Narrator, ReflectionForm, ListenLinks…
+src/app/              / (hoy) · /album/[id] · /diario · /rebobinada · /dueto · /perfil · /explorar · /revision
+src/components/       DailyReveal, MoodCheckin, Narrator, AlbumChat, DuetPanel, PushToggle…
 ```
 
 ## Roadmap (resumen — detalle en [`ROADMAP.md`](./ROADMAP.md))
@@ -140,5 +144,5 @@ src/components/       DailyReveal, MoodCheckin, Narrator, ReflectionForm, Listen
   validado en producción (jun 2026)
 - ✅ **Fase 3** — Cuentas reales (Auth.js, multi-dispositivo, export/borrado de datos)
 - ✅ **Fase 4** — TTS, compartir, conductor, rutas, Stripe freemium, analytics admin
-- 🔨 **Fase 5** — Notificación ritual (Web Push) y rebobinada mensual listas;
-  conversar con el disco, hilo musical, dueto y racha con alma pendientes
+- ✅ **Fase 5** — Web Push, rebobinada mensual, chat con el disco, hilo musical
+  en el diario, modo dueto semanal y pick de regreso con alma tras ausencia

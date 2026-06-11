@@ -9,6 +9,7 @@ import {
   isProUser,
   listenerKey,
 } from "@/lib/freemium";
+import { getDuetSummary } from "@/lib/duet";
 import { getListenerIdentity, profileWhere } from "@/lib/identity";
 import { stripeConfigured } from "@/lib/stripe";
 import { ProfileForm, type ProfileAnswers } from "@/components/ProfileForm";
@@ -48,12 +49,14 @@ export default async function PerfilPage({
   const used = key ? await countDossiersThisMonth(key) : 0;
   const isPro =
     isAdmin || (session?.user?.id ? await isProUser(session.user.id) : false);
+  const duet = session?.user?.id ? await getDuetSummary(session.user.id) : null;
 
   return (
     <ProfileForm
       user={user}
       isAdmin={isAdmin}
       initialAnswers={initialAnswers}
+      duet={duet}
       subscription={{
         isPro,
         used,

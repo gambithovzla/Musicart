@@ -37,6 +37,7 @@ model Album {
   reviews      Review[]
   dailyPicks   DailyPick[]
   dossierViews DossierView[]
+  duetPicks    DuetPick[]
 }
 
 model Dossier {
@@ -108,6 +109,8 @@ model DailyPick {
   reason      String? // "por qué este disco, para ti, hoy"
   mood        String? // ánimo del check-in ("nostálgico", "enérgico"…)
   regenerated Boolean @default(false) // ya se regeneró por cambio de mood (máx. 1)
+  returnPick  Boolean @default(false) // Fase 5.6: regreso tras ausencia del ritual
+  absenceDays Int? // días sin pick antes de este regreso
 
   album Album @relation(fields: [albumId], references: [id])
   user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -148,6 +151,8 @@ model User {
   dailyPicks        DailyPick[]
   dossierViews      DossierView[]
   pushSubscriptions PushSubscription[]
+  duetAsInviter     DuetPair[] @relation("DuetInviter")
+  duetAsPartner     DuetPair[] @relation("DuetPartner")
 
   stripeCustomerId   String?   @unique
   subscriptionStatus String? // active | trialing | canceled | past_due
@@ -190,6 +195,45 @@ model Rewind {
   createdAt   DateTime @default(now())
 
   @@unique([listenerKey, monthKey])
+}
+
+// Fase 5.5 — modo dueto: dos cuentas, un disco compartido a la semana
+model DuetPair {
+  id          String    @id @default(cuid())
+  inviteCode  String    @unique
+  userAId     String
+  userBId     String?
+  status      String    @default("pending") // pending | active
+  createdAt   DateTime  @default(now())
+  activatedAt DateTime?
+
+  userA User       @relation("DuetInviter", fields: [userAId], references: [id], onDelete: Cascade)
+  userB User?      @relation("DuetPartner", fields: [userBId], references: [id], onDelete: Cascade)
+  picks DuetPick[]
+}
+
+model DuetPick {
+  id        String   @id @default(cuid())
+  pairId    String
+  weekKey   String // YYYY-MM-DD del lunes de esa semana
+  albumId   String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  pair  DuetPair @relation(fields: [pairId], references: [id], onDelete: Cascade)
+  album Album    @relation(fields: [albumId], references: [id])
+
+  @@unique([pairId, weekKey])
+}
+
+// Fase 5.4 — hilo musical: la IA conecta reseñas del diario entre sí
+model MusicalThread {
+  id          String   @id @default(cuid())
+  listenerKey String   @unique // u:<userId> o d:<deviceId>
+  content     String
+  fingerprint String // invalida caché si cambian reseñas
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Account {

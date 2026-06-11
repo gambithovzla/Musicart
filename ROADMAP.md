@@ -226,7 +226,7 @@ dispositivo.
 
 ---
 
-## 🔨 Fase 5 — La magia que retiene (EN CURSO)
+## ✅ Fase 5 — La magia que retiene (completa)
 
 **Objetivo:** convertir el ritual en hábito y el hábito en suscripción. Cada
 feature usa los datos que ya guardamos y respeta el pipeline anti-alucinación.
@@ -239,12 +239,27 @@ feature usa los datos que ya guardamos y respeta el pipeline anti-alucinación.
   (cacheada) o resumen vivo del mes en curso; enlace desde el diario
 - [x] **5.3 Conversar con el disco** — chat en el dossier con FactsPayload,
   límites diarios (3/día gratis, 15 Pro), filtro anti-abuso sin LLM
-- [ ] **5.4 El hilo de tu vida musical** — la IA conecta tus reseñas entre sí
+- [x] **5.4 El hilo de tu vida musical** — la IA conecta tus reseñas entre sí
   en el diario ("este disco nace de la misma ruptura que aquel")
-- [ ] **5.5 Modo dueto** — cuenta vinculada con otra persona: un disco
+- [x] **5.5 Modo dueto** — cuenta vinculada con otra persona: un disco
   compartido a la semana elegido por la intersección de gustos
-- [ ] **5.6 Racha con alma** — si te alejas, el pick del regreso llega con
+- [x] **5.6 Racha con alma** — si te alejas, el pick del regreso llega con
   cariño ("te guardé algo especial"); sin gamificación vacía
+
+### Criterios de aceptación
+
+- [x] El diario muestra un hilo narrativo cuando hay ≥2 reseñas (cacheado; solo
+  regenera si cambia el diario).
+- [x] Dos cuentas pueden vincularse por código y ver un disco semanal en `/dueto`.
+- [x] Tras ≥4 días sin pick (con ritual previo), la home saluda el regreso sin
+  culpa ni gamificación vacía.
+
+---
+
+## Estado actual (junio 2026)
+
+**Fases 0–5 completas.** No hay fase marcada EN CURSO. Antes de abrir una Fase 6,
+confirmar con el dueño del producto qué entra en el roadmap.
 
 ---
 

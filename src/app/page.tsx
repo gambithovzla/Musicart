@@ -80,6 +80,7 @@ export default async function Home() {
             reason: personal?.reason ?? null,
             personalized: Boolean(personal),
             showProfileInvite: !tienePerfil,
+            returnWelcome: personal?.returnPick ?? false,
           }}
         />
       </div>

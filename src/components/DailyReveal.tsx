@@ -22,6 +22,7 @@ export type DailyAlbum = {
   reason: string | null; // "por qué este disco, para ti, hoy" (pick personalizado)
   personalized: boolean;
   showProfileInvite: boolean; // sin perfil aún: invitar a contarnos quién escucha
+  returnWelcome?: boolean; // Fase 5.6: regreso tras ausencia del ritual
 };
 
 export function DailyReveal({ album }: { album: DailyAlbum }) {
@@ -35,7 +36,11 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
       >
         <p className="text-xs uppercase tracking-[0.3em] text-dim">{album.dateLabel}</p>
         <h1 className="font-serif mt-2 text-lg italic text-album-light">
-          {album.personalized ? "Tu álbum de hoy" : "El álbum de hoy"}
+          {album.returnWelcome
+            ? "Bienvenido de vuelta"
+            : album.personalized
+              ? "Tu álbum de hoy"
+              : "El álbum de hoy"}
         </h1>
       </motion.header>
 
@@ -88,7 +93,7 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
         {album.reason ? (
           <div className="mx-auto mt-6 max-w-sm rounded-2xl border border-album/30 bg-album/10 px-5 py-4">
             <p className="text-[0.65rem] uppercase tracking-[0.25em] text-album-light">
-              Para ti, hoy
+              {album.returnWelcome ? "Te guardé algo especial" : "Para ti, hoy"}
             </p>
             <p className="font-serif mt-2 text-base italic leading-relaxed text-foreground/90">
               {album.reason}

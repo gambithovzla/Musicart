@@ -113,3 +113,7 @@ npm run worker -- --batch 2                      # corrida del worker de catálo
   esperando revisión en `/revision?clave=ADMIN_SECRET`.
 - El worker corre con `tsx` (devDependency): en Railway instala con
   devDependencies incluidas (no definas `NODE_ENV=production` en el build).
+- En Railway NO debe correr `npm run build` (la red interna a Postgres no
+  existe en la fase de build → P1001 en `migrate deploy`; además el worker no
+  necesita Next). `railway.json` lo evita — no lo borres. Las migraciones las
+  aplica el build de Vercel.

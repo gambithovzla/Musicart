@@ -60,12 +60,12 @@ alimentan la cola: la madriguera se excava sola.
 - **Revisión humana:** `/revision?clave=ADMIN_SECRET` lista los drafts (publicar
   / descartar) y el estado de la cola con sus errores.
 - **Dónde corre el worker:** servicio cron en **Railway** (mismo proyecto que el
-  Postgres). Alta una sola vez, desde el dashboard:
+  Postgres). El archivo `railway.json` del repo ya trae toda la configuración
+  (build sin Next, comando `npm run worker`, cron `0 6 * * *`). Alta una sola
+  vez, desde el dashboard:
   1. *New service* → *GitHub repo* → este repositorio.
   2. Variables: `DATABASE_URL` (la URL **interna** `postgres.railway.internal`)
-     y `OPENAI_API_KEY`.
-  3. *Settings* → *Cron Schedule*: `0 6 * * *` (cada madrugada) · *Custom Start
-     Command*: `npm run worker`.
+     y `OPENAI_API_KEY`. Nada más: el resto lo dicta `railway.json`.
 
 ## Correr en local
 

@@ -1,6 +1,7 @@
 // Perfil: onboarding + estado de cuenta. Los datos alimentan el motor de recomendación.
 
 import { auth } from "@/auth";
+import { isAdminEmail } from "@/lib/admin";
 import { prisma } from "@/lib/db";
 import { getListenerIdentity, profileWhere } from "@/lib/identity";
 import { ProfileForm, type ProfileAnswers } from "@/components/ProfileForm";
@@ -30,5 +31,9 @@ export default async function PerfilPage() {
       }
     : null;
 
-  return <ProfileForm user={user} initialAnswers={initialAnswers} />;
+  const isAdmin = isAdminEmail(session?.user?.email);
+
+  return (
+    <ProfileForm user={user} isAdmin={isAdmin} initialAnswers={initialAnswers} />
+  );
 }

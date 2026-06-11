@@ -55,8 +55,9 @@ export function Narrator({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const stoppedRef = useRef(false);
   const statusRef = useRef<Status>("idle");
+  const onSectionDoneRef = useRef<(() => void) | null>(null);
 
-  const hasAudioFiles = sections.every((s) => s.audioUrl);
+  const hasPodcastAudio = sections.some((s) => s.audioUrl);
 
   useEffect(() => {
     statusRef.current = status;
@@ -99,9 +100,18 @@ export function Narrator({
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      setSupported(false);
-      return;
+    if (typeof window === "undefined") return;
+    const hasSpeech = "speechSynthesis" in window;
+    setSupported(hasPodcastAudio || hasSpeech);
+    bindMediaHandlers();
+    if (!hasSpeech) {
+      return () => {
+        audioRef.current?.pause();
+        if ("mediaSession" in navigator) {
+          navigator.mediaSession.playbackState = "none";
+          navigator.mediaSession.metadata = null;
+        }
+      };
     }
     const pickVoice = () => {
       const voices = window.speechSynthesis.getVoices();
@@ -112,7 +122,6 @@ export function Narrator({
     };
     pickVoice();
     window.speechSynthesis.addEventListener("voiceschanged", pickVoice);
-    bindMediaHandlers();
     return () => {
       window.speechSynthesis.removeEventListener("voiceschanged", pickVoice);
       window.speechSynthesis.cancel();
@@ -122,16 +131,13 @@ export function Narrator({
         navigator.mediaSession.metadata = null;
       }
     };
-  }, [bindMediaHandlers]);
+  }, [bindMediaHandlers, hasPodcastAudio]);
 
-  const speakNext = useCallback(() => {
+  const speakNextChunk = useCallback(() => {
     if (stoppedRef.current) return;
     const item = queueRef.current[indexRef.current];
     if (!item) {
-      setStatus("idle");
-      setCurrentSection(0);
-      sectionRef.current = 0;
-      updateMediaSession(0, false);
+      onSectionDoneRef.current?.();
       return;
     }
     sectionRef.current = item.section;
@@ -144,76 +150,85 @@ export function Narrator({
     utterance.rate = 0.97;
     utterance.onend = () => {
       indexRef.current += 1;
-      speakNext();
+      speakNextChunk();
     };
     utterance.onerror = () => {
       indexRef.current += 1;
-      speakNext();
+      speakNextChunk();
     };
     window.speechSynthesis.speak(utterance);
   }, [updateMediaSession]);
 
-  const playWebSpeech = useCallback(
+  const playFromSection = useCallback(
     (fromSection: number) => {
-      window.speechSynthesis.cancel();
-      stoppedRef.current = false;
-      queueRef.current = sections.flatMap((s, si) =>
-        si < fromSection
-          ? []
-          : chunkText(`${s.label}. ${s.text}`).map((text) => ({ section: si, text })),
-      );
-      indexRef.current = 0;
-      sectionRef.current = fromSection;
-      setCurrentSection(fromSection);
-      setStatus("playing");
-      updateMediaSession(fromSection, true);
-      speakNext();
-    },
-    [sections, speakNext, updateMediaSession],
-  );
+      if (stoppedRef.current) return;
+      if (fromSection >= sections.length) {
+        setStatus("idle");
+        setCurrentSection(0);
+        sectionRef.current = 0;
+        setDriverMode(false);
+        updateMediaSession(0, false);
+        return;
+      }
 
-  const playAudioFiles = useCallback(
-    (fromSection: number) => {
-      audioRef.current?.pause();
-      const audio = new Audio(sections[fromSection].audioUrl);
-      audioRef.current = audio;
+      const section = sections[fromSection];
       sectionRef.current = fromSection;
       setCurrentSection(fromSection);
       setStatus("playing");
       updateMediaSession(fromSection, true);
-      audio.onended = () => {
-        if (fromSection + 1 < sections.length) playAudioFiles(fromSection + 1);
-        else {
-          setStatus("idle");
-          updateMediaSession(0, false);
-        }
-      };
-      void audio.play();
+
+      if (section.audioUrl) {
+        window.speechSynthesis.cancel();
+        audioRef.current?.pause();
+        const audio = new Audio(section.audioUrl);
+        audioRef.current = audio;
+        audio.onended = () => playFromSection(fromSection + 1);
+        audio.onerror = () => playFromSection(fromSection + 1);
+        void audio.play().catch(() => playFromSection(fromSection + 1));
+      } else if ("speechSynthesis" in window) {
+        audioRef.current?.pause();
+        audioRef.current = null;
+        queueRef.current = chunkText(`${section.label}. ${section.text}`).map(
+          (text) => ({ section: fromSection, text }),
+        );
+        indexRef.current = 0;
+        onSectionDoneRef.current = () => playFromSection(fromSection + 1);
+        speakNextChunk();
+      } else {
+        playFromSection(fromSection + 1);
+      }
     },
-    [sections, updateMediaSession],
+    [sections, speakNextChunk, updateMediaSession],
   );
 
   const play = useCallback(
     (fromSection = 0) => {
+      stoppedRef.current = false;
       setDriverMode(true);
-      return hasAudioFiles ? playAudioFiles(fromSection) : playWebSpeech(fromSection);
+      playFromSection(fromSection);
     },
-    [hasAudioFiles, playAudioFiles, playWebSpeech],
+    [playFromSection],
   );
 
   const pause = useCallback(() => {
-    if (hasAudioFiles) audioRef.current?.pause();
-    else window.speechSynthesis.pause();
+    if (audioRef.current && !audioRef.current.paused) {
+      audioRef.current.pause();
+    } else if ("speechSynthesis" in window) {
+      window.speechSynthesis.pause();
+    }
     setStatus("paused");
     updateMediaSession(sectionRef.current, false);
-  }, [hasAudioFiles, updateMediaSession]);
+  }, [updateMediaSession]);
 
   const resume = useCallback(() => {
-    if (hasAudioFiles) void audioRef.current?.play();
-    else window.speechSynthesis.resume();
+    if (audioRef.current) {
+      void audioRef.current.play();
+    } else if ("speechSynthesis" in window) {
+      window.speechSynthesis.resume();
+    }
     setStatus("playing");
     updateMediaSession(sectionRef.current, true);
-  }, [hasAudioFiles, updateMediaSession]);
+  }, [updateMediaSession]);
 
   const pauseRef = useRef(pause);
   const resumeRef = useRef(resume);
@@ -245,11 +260,11 @@ export function Narrator({
       stoppedRef.current = true;
       window.speechSynthesis.cancel();
       audioRef.current?.pause();
+      audioRef.current = null;
       stoppedRef.current = false;
-      if (hasAudioFiles) playAudioFiles(next);
-      else playWebSpeech(next);
+      playFromSection(next);
     },
-    [sections.length, hasAudioFiles, playAudioFiles, playWebSpeech, stop],
+    [sections.length, playFromSection, stop],
   );
 
   const skipSectionRef = useRef(skipSection);
@@ -266,10 +281,14 @@ export function Narrator({
             className="flex w-full items-center justify-center gap-3 rounded-2xl border border-album/40 bg-album/10 px-5 py-4 text-base font-medium text-album-light transition-transform active:scale-[0.98]"
           >
             <PlayIcon className="h-5 w-5" />
-            Modo conductor — escuchar el dossier
+            {hasPodcastAudio
+              ? "Modo conductor — voz podcast"
+              : "Modo conductor — escuchar el dossier"}
           </button>
           <p className="text-center text-xs text-dim">
-            Narración continua con controles en pantalla de bloqueo
+            {hasPodcastAudio
+              ? "Narración en alta calidad · controles en pantalla de bloqueo"
+              : "Narración continua con controles en pantalla de bloqueo"}
           </p>
         </div>
       )}

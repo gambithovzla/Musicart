@@ -4,9 +4,16 @@ import { signInWithEmail, signInWithGoogle } from "./actions";
 
 export const metadata = { title: "Entrar · Musicart" };
 
-export default async function EntrarPage() {
+export default async function EntrarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const { next } = await searchParams;
   const session = await auth();
   const configured = authConfigured();
+  const afterLogin =
+    next?.startsWith("/") && !next.startsWith("//") ? next : "/entrar/completado";
   const google =
     Boolean(process.env.GOOGLE_CLIENT_ID) &&
     Boolean(process.env.GOOGLE_CLIENT_SECRET);
@@ -59,6 +66,7 @@ export default async function EntrarPage() {
 
       {google && (
         <form action={signInWithGoogle} className="mt-10">
+          <input type="hidden" name="next" value={afterLogin} />
           <button
             type="submit"
             className="w-full rounded-2xl border border-white/15 bg-surface px-6 py-4 text-base font-semibold transition-transform active:scale-[0.98]"
@@ -70,6 +78,7 @@ export default async function EntrarPage() {
 
       {email && (
         <form action={signInWithEmail} className="mt-6 space-y-3">
+          <input type="hidden" name="next" value={afterLogin} />
           <label className="block text-sm text-dim" htmlFor="email">
             O recibe un enlace por email
           </label>

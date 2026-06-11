@@ -60,7 +60,7 @@ export type DossierContent = {
 
 // MP3s de narración pre-renderizados por sección (TTS). Si falta, la UI usa Web Speech API.
 export type DossierAudio = Partial<
-  Record<"intro" | "artistStory" | "whyItMatters", string>
+  Record<"intro" | "artistStory" | "whyItMatters" | "tracks", string>
 >;
 
 export function parseJson<T>(raw: string | null | undefined, fallback: T): T {

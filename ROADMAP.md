@@ -200,7 +200,8 @@ dispositivo.
 
 ### Tareas
 
-- [ ] **4.1 TTS calidad podcast** — pre-renderizar MP3s (`audioJson`) vía script CLI
+- [x] **4.1 TTS calidad podcast** — `npm run tts` genera MP3s (OpenAI `tts-1-hd`)
+  en `public/audio/` y actualiza `audioJson`; narrador híbrido MP3 + Web Speech
 - [x] **4.2 Modo conductor** — narración continua + Media Session API (controles en
   pantalla de bloqueo, saltar secciones)
 - [x] **4.3 Tarjetas compartibles** — botón compartir en home y dossier; OG image
@@ -216,6 +217,8 @@ dispositivo.
   se ve bien en redes (OG image).
 - [x] La narración funciona en modo conductor con controles del sistema.
 - [x] Hay al menos 3 rutas temáticas navegables con discos del catálogo.
+- [x] Los dossiers publicados pueden narrarse con voz podcast (MP3 pre-renderizado)
+  cuando existe `audioJson`; si no, cae a Web Speech del navegador.
 
 ---
 

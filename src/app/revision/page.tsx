@@ -1,37 +1,42 @@
-// Panel de revisión (Fase 2.3): drafts que no pasaron la verificación
-// automática + estado de la cola de generación. Solo para el dueño:
-//   /revision?clave=ADMIN_SECRET
+// Panel de revisión (Fase 2.3): drafts, cola y TTS. Solo admins (ADMIN_EMAILS).
 
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { isAdminEmail } from "@/lib/admin";
 import { prisma } from "@/lib/db";
+import { dossierHasAudio } from "@/lib/dossier/render-audio";
 import { publishDossier, discardDossier } from "./actions";
+import { TtsControls } from "./TtsControls";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export const metadata = { title: "Revisión · Musicart" };
 
-export default async function RevisionPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ clave?: string }>;
-}) {
-  const { clave } = await searchParams;
-  const secret = process.env.ADMIN_SECRET;
+export default async function RevisionPage() {
+  const session = await auth();
 
-  if (!secret || clave !== secret) {
+  if (!session?.user) {
+    redirect("/entrar?next=/revision");
+  }
+
+  if (!isAdminEmail(session.user.email)) {
     return (
       <main className="flex min-h-[80dvh] flex-col items-center justify-center gap-3 px-8 text-center">
         <h1 className="font-serif text-2xl">Revisión</h1>
         <p className="text-sm text-dim">
-          {secret
-            ? "Acceso restringido. Entra con /revision?clave=…"
-            : "Configura la variable ADMIN_SECRET (en Vercel) para usar este panel."}
+          Esta sección es solo para administradores. Entraste como{" "}
+          <span className="text-foreground/80">{session.user.email}</span>.
         </p>
+        <Link href="/perfil" className="text-sm text-album underline underline-offset-2">
+          Volver al perfil
+        </Link>
       </main>
     );
   }
 
-  const [drafts, cola] = await Promise.all([
+  const [drafts, cola, publicados] = await Promise.all([
     prisma.dossier.findMany({
       where: { status: "draft", locale: "es" },
       include: { album: { include: { artist: true } } },
@@ -41,16 +46,30 @@ export default async function RevisionPage({
       orderBy: { updatedAt: "desc" },
       take: 30,
     }),
+    prisma.dossier.findMany({
+      where: { status: "published", locale: "es" },
+      include: { album: { include: { artist: true } } },
+      orderBy: { album: { title: "asc" } },
+    }),
   ]);
+
+  const ttsRows = publicados.map((d) => ({
+    id: d.id,
+    albumId: d.albumId,
+    title: d.album.title,
+    artist: d.album.artist.name,
+    hasAudio: dossierHasAudio(d.audioJson),
+  }));
+  const missingTts = ttsRows.filter((d) => !d.hasAudio).length;
 
   return (
     <main className="px-6 pb-16 pt-12">
       <header>
-        <p className="text-xs uppercase tracking-[0.3em] text-dim">Solo para ti</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-dim">Admin</p>
         <h1 className="font-serif mt-2 text-3xl font-semibold">Revisión</h1>
+        <p className="mt-1 text-sm text-dim">{session.user.email}</p>
       </header>
 
-      {/* — Drafts esperando ojo humano — */}
       <section className="mt-10">
         <h2 className="font-serif text-xl">
           Drafts pendientes{" "}
@@ -86,12 +105,12 @@ export default async function RevisionPage({
                   >
                     Leer completo
                   </Link>
-                  <form action={publishDossier.bind(null, d.id, clave!)}>
+                  <form action={publishDossier.bind(null, d.id)}>
                     <button className="rounded-full bg-album px-4 py-2 font-semibold text-black">
                       Publicar
                     </button>
                   </form>
-                  <form action={discardDossier.bind(null, d.id, clave!)}>
+                  <form action={discardDossier.bind(null, d.id)}>
                     <button className="rounded-full border border-red-400/40 px-4 py-2 text-red-300">
                       Descartar
                     </button>
@@ -103,7 +122,19 @@ export default async function RevisionPage({
         )}
       </section>
 
-      {/* — La cola de generación, tal cual la dejó el worker — */}
+      <section className="mt-12">
+        <h2 className="font-serif text-xl">
+          Audio podcast{" "}
+          <span className="text-base text-dim">
+            ({ttsRows.filter((d) => d.hasAudio).length}/{ttsRows.length} con audio)
+          </span>
+        </h2>
+        <p className="mt-1 text-sm text-dim">
+          Genera la voz narrada de cada dossier publicado.
+        </p>
+        <TtsControls dossiers={ttsRows} missingCount={missingTts} />
+      </section>
+
       <section className="mt-12">
         <h2 className="font-serif text-xl">
           Cola de generación{" "}

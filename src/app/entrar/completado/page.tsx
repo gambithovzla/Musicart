@@ -4,7 +4,12 @@ import { redirect } from "next/navigation";
 import { DEVICE_COOKIE } from "@/lib/device";
 import { mergeDeviceToUser } from "@/lib/merge-device";
 
-export default async function EntrarCompletadoPage() {
+export default async function EntrarCompletadoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const { next } = await searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect("/entrar");
 
@@ -13,5 +18,6 @@ export default async function EntrarCompletadoPage() {
     await mergeDeviceToUser(session.user.id, deviceId);
   }
 
-  redirect("/perfil");
+  const dest = next?.startsWith("/") && !next.startsWith("//") ? next : "/perfil";
+  redirect(dest);
 }

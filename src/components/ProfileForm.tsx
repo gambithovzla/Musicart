@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { saveProfile } from "@/app/actions";
@@ -31,9 +32,11 @@ type UserInfo = {
 
 export function ProfileForm({
   user,
+  isAdmin = false,
   initialAnswers,
 }: {
   user: UserInfo | null;
+  isAdmin?: boolean;
   initialAnswers: Partial<ProfileAnswers> | null;
 }) {
   const [answers, setAnswers] = useState<ProfileAnswers>(EMPTY);
@@ -147,6 +150,21 @@ export function ProfileForm({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {isAdmin && (
+        <Link
+          href="/revision"
+          className="mt-4 flex items-center justify-between rounded-2xl border border-white/10 bg-surface px-4 py-3 text-sm transition-colors hover:border-album/40"
+        >
+          <span>
+            <span className="font-medium">Panel de revisión</span>
+            <span className="mt-0.5 block text-xs text-dim">
+              Drafts, cola y audio TTS
+            </span>
+          </span>
+          <span className="text-dim">→</span>
+        </Link>
+      )}
 
       <SaveIndicator status={status} />
 

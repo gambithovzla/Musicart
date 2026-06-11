@@ -48,6 +48,20 @@ Generar un dossier (CLI, requiere `OPENAI_API_KEY` o `ANTHROPIC_API_KEY` en `.en
 npm run dossier -- "The Dark Side of the Moon" "Pink Floyd" --publish
 ```
 
+Generar audio podcast (CLI, requiere `OPENAI_API_KEY` o `TTS_API_KEY`):
+
+```bash
+# Un álbum concreto
+npm run tts -- "Abbey Road" "The Beatles"
+
+# Todos los publicados sin audio (máx. 3 por corrida)
+npm run tts -- --missing --limit 3
+```
+
+Los MP3 quedan en `public/audio/{dossierId}/` (local/CLI) o en **Vercel Blob**
+(si `BLOB_READ_WRITE_TOKEN` está configurado). También puedes generarlos desde
+`/revision` (solo admins; ver `ADMIN_EMAILS`) con el botón «Generar audio».
+
 ## El catálogo crece solo
 
 Un **curador IA** decide qué álbumes faltan (clásicos imprescindibles, huecos de
@@ -58,8 +72,8 @@ pasa queda en `draft`. Si el curador IA falla, un **bootstrap de clásicos**
 llena la cola automáticamente. Los **saltos** de cada dossier publicado también
 alimentan la cola: la madriguera se excava sola.
 
-- **Revisión humana:** `/revision?clave=ADMIN_SECRET` lista los drafts (publicar
-  / descartar) y el estado de la cola con sus errores.
+- **Revisión humana:** `/revision` (cuenta admin en `ADMIN_EMAILS`) lista drafts,
+  cola y botones TTS. Enlace visible en Perfil si eres admin.
 - **Correr el worker a mano** (p. ej. para acelerar el catálogo): pon en `.env`
   la URL **pública** de Postgres (`…proxy.rlwy.net`) y `OPENAI_API_KEY`, luego
   `npm run worker -- --batch 2`.
@@ -92,7 +106,7 @@ npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
   cada deploy. (El seed ya no corre en el build; para un entorno nuevo:
   `npm run db:seed`.)
 - Variables en Vercel: `DATABASE_URL`, `OPENAI_API_KEY` (recomendaciones en
-  runtime), `ADMIN_SECRET` (panel `/revision`) y, para la Fase 3, `AUTH_SECRET`,
+  runtime), `ADMIN_EMAILS` (panel `/revision`) y, para la Fase 3, `AUTH_SECRET`,
   `AUTH_URL` (p. ej. `https://musicart-three.vercel.app`), `GOOGLE_CLIENT_ID`,
   `GOOGLE_CLIENT_SECRET`. Email opcional: `AUTH_RESEND_KEY`, `EMAIL_FROM`.
 

@@ -116,6 +116,7 @@ export default async function AlbumPage({
             text: notedTracks
               .map((t) => `Canción ${t.position}: ${t.title}. ${t.note}`)
               .join(" "),
+            audioUrl: audio?.tracks,
           },
         ]
       : []),

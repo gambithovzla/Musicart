@@ -3,6 +3,7 @@
 // Server actions del loop diario: reflexiones, perfil y diario del melómano.
 
 import { prisma } from "@/lib/db";
+import { applyMood } from "@/lib/recommend";
 
 export async function saveReview(input: {
   deviceId: string;
@@ -47,6 +48,13 @@ export async function saveProfile(deviceId: string, answers: Record<string, unkn
     create: { deviceId, answersJson: JSON.stringify(answers) },
   });
   return { ok: true };
+}
+
+// Check-in de ánimo del día: registra el mood y (máx. una vez) regenera el
+// pick personalizado. Nunca lanza: si la IA falla, el ánimo queda guardado igual.
+export async function checkInMood(deviceId: string, mood: string) {
+  if (!deviceId || !mood.trim()) return { ok: false };
+  return applyMood(deviceId, mood.trim().slice(0, 40));
 }
 
 export async function getJournal(deviceId: string) {

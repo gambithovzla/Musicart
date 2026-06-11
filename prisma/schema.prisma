@@ -1,12 +1,12 @@
 // Musicart — schema MVP
-// Dev: SQLite. Prod: cambiar provider a "postgresql" (los campos *Json son String para portabilidad total).
+// Postgres (Railway/Vercel). Los campos *Json son String para portabilidad total.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -47,12 +47,31 @@ model Dossier {
   artistStory   String // historia del artista
   whyItMatters  String // por qué fue importante
   questionsJson String  @default("[]") // preguntas de reflexión
+  jumpsJson     String  @default("[]") // saltos de descubrimiento [{title, artist, connection}]
   audioJson     String? // { intro: url, artistStory: url, ... } MP3s TTS pre-renderizados
 
   album      Album       @relation(fields: [albumId], references: [id])
   trackNotes TrackNote[]
 
   @@unique([albumId, locale])
+}
+
+// Cola de generación del catálogo (Fase 2): el curador IA propone álbumes,
+// el worker los genera con el pipeline anti-alucinación y deja registro aquí.
+model GenerationQueue {
+  id        String   @id @default(cuid())
+  key       String   @unique // "artista|título" normalizado (anti-duplicados)
+  title     String
+  artist    String
+  priority  Int      @default(100) // menor = se genera antes
+  status    String   @default("pending") // pending | running | done | failed
+  source    String   @default("curator") // curator | jump | manual
+  reason    String? // por qué el curador lo propuso
+  result    String? // cómo quedó el dossier: published | draft
+  error     String? // último error si falló
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model TrackNote {
@@ -77,11 +96,13 @@ model Profile {
 }
 
 model DailyPick {
-  id       String  @id @default(cuid())
-  deviceId String
-  date     String // YYYY-MM-DD
-  albumId  String
-  reason   String? // "por qué este disco, para ti, hoy"
+  id          String  @id @default(cuid())
+  deviceId    String
+  date        String // YYYY-MM-DD
+  albumId     String
+  reason      String? // "por qué este disco, para ti, hoy"
+  mood        String? // ánimo del check-in ("nostálgico", "enérgico"…)
+  regenerated Boolean @default(false) // ya se regeneró por cambio de mood (máx. 1)
 
   album Album @relation(fields: [albumId], references: [id])
 

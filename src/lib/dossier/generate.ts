@@ -20,11 +20,13 @@ FORMATO DE SALIDA — SOLO un objeto JSON válido, sin texto extra:
   "whyItMatters": "Por qué este disco importa, ~100-150 palabras. Esta sección es 100% editorial: tu opinión como curador sobre por qué vale la pena escucharlo hoy. No pongas datos ni fechas aquí.",
   "questions": ["3 preguntas de reflexión post-escucha, personales, sin respuesta correcta"],
   "trackNotes": [{ "position": 4, "title": "título EXACTO del tracklist", "note": "1-2 frases" }],
+  "jumps": [{ "title": "álbum destino", "artist": "artista destino", "connection": "1 frase: la relación real que une este disco con aquel" }],
   "difficulty": 2,
   "impact": 4
 }
 
 trackNotes: elige las 3 a 6 canciones más significativas. position y title deben coincidir EXACTAMENTE con el tracklist del payload.
+jumps: 0 a 3 saltos de descubrimiento ("de aquí puedes saltar a…"): rivalidades, colaboraciones, influencias, mismo productor. La "connection" SOLO puede afirmar relaciones que aparezcan en el FACTS PAYLOAD (menciona la relación, no inventes datos del álbum destino). El álbum destino es tu recomendación curatorial de melómano. Si el payload no respalda ninguna conexión, devuelve [].
 difficulty (1-5): qué tan exigente es para un oído casual. impact (1-5): peso histórico/cultural.`;
 
 export type GeneratedDossier = DossierContent & {
@@ -51,6 +53,9 @@ export async function generateDossier(
   }
   parsed.questions = (parsed.questions ?? []).slice(0, 4);
   parsed.trackNotes = parsed.trackNotes ?? [];
+  parsed.jumps = (parsed.jumps ?? [])
+    .filter((j) => j?.title && j?.artist && j?.connection)
+    .slice(0, 3);
   parsed.difficulty = Math.min(5, Math.max(1, Math.round(parsed.difficulty ?? 2)));
   parsed.impact = Math.min(5, Math.max(1, Math.round(parsed.impact ?? 3)));
   return parsed;

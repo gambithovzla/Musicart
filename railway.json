@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "echo 'worker del catálogo: nada que construir (las dependencias ya se instalaron)'"
+  },
+  "deploy": {
+    "startCommand": "npm run worker",
+    "cronSchedule": "0 6 * * *",
+    "restartPolicyType": "NEVER"
+  }
+}

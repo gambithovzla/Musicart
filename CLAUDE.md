@@ -55,7 +55,8 @@ src/lib/daily.ts         Rotación global determinista: el fallback eterno del
                          pick personalizado (usuarios sin señales o IA caída).
 src/lib/recommend.ts     Motor de recomendación (Fase 1 + 3.3): pick por perfil+diario+
                          mood; con sesión comparte pick por userId entre dispositivos.
-src/lib/identity.ts      Fase 3.3: resuelve userId + deviceId y filtros de consulta.
+src/lib/identity.ts      Fase 3.3: userId + deviceId y filtros de consulta.
+src/lib/user-data.ts     Fase 3.4: exportación y borrado de datos del oyente.
 src/lib/curator.ts       Curador IA (Fase 2): propone álbumes → GenerationQueue;
                          bootstrapCatalogQueue si el curador falla.
 src/lib/db.ts            Singleton de PrismaClient.

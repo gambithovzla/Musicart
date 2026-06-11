@@ -118,5 +118,5 @@ src/components/       DailyReveal, MoodCheckin, Narrator, ReflectionForm, Listen
   + mood, con el "por qué este disco, para ti, hoy"
 - ✅ **Fase 2** — Catálogo que crece solo (curador IA + worker + madriguera);
   validado en producción (jun 2026)
-- 🔨 **Fase 3** — Cuentas reales (Auth.js) y sincronización multi-dispositivo
+- ✅ **Fase 3** — Cuentas reales (Auth.js, multi-dispositivo, export/borrado de datos)
 - 💎 **Fase 4** — TTS calidad podcast, modo conductor, compartibles, freemium

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { saveProfile } from "@/app/actions";
 import { signOutAction } from "@/app/entrar/actions";
+import { PrivacyPanel } from "@/components/PrivacyPanel";
 import { getDeviceId } from "@/lib/device";
 
 const MOMENTS = ["Manejando", "Trabajando", "En casa", "Entrenando", "Antes de dormir"];
@@ -214,6 +215,8 @@ export function ProfileForm({
           Entrar para llevar tu diario a otro dispositivo →
         </motion.a>
       )}
+
+      <PrivacyPanel hasAccount={Boolean(user)} />
     </main>
   );
 }

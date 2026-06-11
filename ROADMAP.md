@@ -164,7 +164,7 @@ verifica; solo lo verificado se publica.
 
 ---
 
-## 🔨 Fase 3 — Cuentas reales (EN CURSO)
+## ✅ Fase 3 — Cuentas reales (COMPLETADA · junio 2026)
 
 **Objetivo:** el usuario inicia sesión y su historia lo sigue en cualquier
 dispositivo.
@@ -183,14 +183,16 @@ dispositivo.
   - El motor de recomendación y el diario leen por `userId` cuando hay sesión;
     `deviceId` sigue como fallback anónimo. Mismo pick del día en todos los
     dispositivos de la cuenta.
-- [ ] **3.4 Privacidad**
-  - Export y borrado de datos del usuario.
+- [x] **3.4 Privacidad**
+  - Export (JSON descargable) y borrado de datos desde `/perfil` — cuenta o
+    dispositivo anónimo.
 
 ### Criterios de aceptación
 
-- Iniciar sesión en el móvil y en el desktop muestra el mismo diario y pick coherente.
-- Usuario anónimo sigue funcionando igual si no entra.
-- Tras login, el perfil y las reseñas del device actual quedan ligados a la cuenta.
+- [x] Iniciar sesión en el móvil y en el desktop muestra el mismo diario y pick coherente.
+- [x] Usuario anónimo sigue funcionando igual si no entra.
+- [x] Tras login, el perfil y las reseñas del device actual quedan ligados a la cuenta.
+- [x] El usuario puede descargar y borrar sus datos desde el perfil.
 
 ---
 

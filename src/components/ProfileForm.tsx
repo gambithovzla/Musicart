@@ -20,12 +20,20 @@ const GENRES = [
   "Clásica", "Folk", "R&B / Soul", "Reggae", "Punk", "Blues", "Cumbia",
   "Bolero", "Funk", "Reguetón", "Trap", "Bossa nova",
 ];
+const INTERESTS = [
+  "Fútbol", "Deportes", "Literatura", "Cine", "Filosofía", "Arte",
+  "Tecnología", "Viajes", "Cocina", "Gaming", "Teatro", "Fotografía",
+];
+const LANGUAGES = ["Español", "English", "Italiano", "Français", "Português"];
 
 export type ProfileAnswers = {
   moments: string[];
   seeks: string[];
   genres: string[];
   artists: string[];
+  languages: string[];    // idiomas en que disfruta música
+  interests: string[];    // quién eres más allá de la música
+  bio?: string;           // línea libre opcional: trabajo, rutina, contexto
   artistImages?: Record<string, string>; // nombre → foto (solo para mostrar)
   anchors?: string; // libre, opcional (perfiles antiguos); ya no se muestra
   listenTime: string;
@@ -34,7 +42,7 @@ export type ProfileAnswers = {
 type ArtistSuggestion = { name: string; image: string | null };
 
 const EMPTY: ProfileAnswers = {
-  moments: [], seeks: [], genres: [], artists: [], listenTime: "",
+  moments: [], seeks: [], genres: [], artists: [], languages: [], interests: [], listenTime: "",
 };
 const STORAGE_KEY = "musicart:profile";
 
@@ -92,6 +100,8 @@ export function ProfileForm({
       seeks: Array.isArray(merged.seeks) ? merged.seeks : [],
       genres: Array.isArray(merged.genres) ? merged.genres : [],
       artists: Array.isArray(merged.artists) ? merged.artists : [],
+      languages: Array.isArray(merged.languages) ? merged.languages : [],
+      interests: Array.isArray(merged.interests) ? merged.interests : [],
     });
     setHydrated(true);
   }, [initialAnswers]);
@@ -128,7 +138,7 @@ export function ProfileForm({
     setAnswers((a) => ({ ...a, ...patch }));
   }
 
-  function toggle(list: "moments" | "seeks" | "genres", value: string) {
+  function toggle(list: "moments" | "seeks" | "genres" | "interests" | "languages", value: string) {
     setAnswers((a) => ({
       ...a,
       [list]: a[list].includes(value)
@@ -289,6 +299,23 @@ export function ProfileForm({
       </section>
 
       <section className="mt-8">
+        <h2 className="font-serif text-lg">¿En qué idiomas disfrutas música?</h2>
+        <p className="mt-1 text-xs text-dim">
+          Te recomendaremos discos en los que te sientas cómodo/a
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {LANGUAGES.map((l) => (
+            <Chip
+              key={l}
+              label={l}
+              active={answers.languages.includes(l)}
+              onClick={() => toggle("languages", l)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-8">
         <h2 className="font-serif text-lg">Artistas que amas</h2>
         <p className="mt-1 text-xs text-dim">
           Escribe un nombre y elígelo de la lista (con su foto). Cuantos más,
@@ -396,6 +423,36 @@ export function ProfileForm({
             )}
           </AnimatePresence>
         </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="font-serif text-lg">¿Qué más eres tú?</h2>
+        <p className="mt-1 text-xs text-dim">
+          Aparte de la música — con esto el curador conecta el disco con tu mundo,
+          no solo con tus artistas
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {INTERESTS.map((i) => (
+            <Chip
+              key={i}
+              label={i}
+              active={answers.interests.includes(i)}
+              onClick={() => toggle("interests", i)}
+            />
+          ))}
+        </div>
+        <textarea
+          value={answers.bio ?? ""}
+          onChange={(e) => update({ bio: e.target.value.slice(0, 200) })}
+          placeholder="Algo más opcional… (p. ej. «trabajo de noche», «leo mucho a Borges», «entreno todos los días»)"
+          rows={2}
+          className="mt-3 w-full resize-none rounded-2xl border border-white/10 bg-surface px-4 py-3 text-sm leading-relaxed text-foreground/90 placeholder:text-white/25 focus:border-album/50 focus:outline-none focus:ring-2 focus:ring-album/20"
+        />
+        {(answers.bio?.length ?? 0) > 0 && (
+          <p className="mt-1 text-right text-[0.65rem] text-dim">
+            {answers.bio!.length}/200
+          </p>
+        )}
       </section>
 
       <section className="mt-8">

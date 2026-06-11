@@ -17,6 +17,7 @@ import {
   type ReturnRitual,
 } from "./return-ritual";
 import { parseJson, type FactsPayload } from "./types";
+import { formatCuriosities, type CuriosityAnswer } from "./curiosities";
 
 const MAX_REVIEWS = 10;
 const MAX_RECENT_PICKS = 7;
@@ -101,6 +102,7 @@ export async function getPersonalizedPick(
   deviceId: string,
   userId?: string | null,
   tz?: string | null,
+  lang?: string | null, // idioma elegido hoy ("Español", "Italiano", "any", …)
 ): Promise<PickPersonal | null> {
   const ctx: PickCtx = { deviceId, userId: userId ?? null };
   if (!ctx.deviceId && !ctx.userId) return null;
@@ -120,7 +122,7 @@ export async function getPersonalizedPick(
         };
       }
     }
-    return await recomendarYGuardar(ctx, { mood: null }, tz);
+    return await recomendarYGuardar(ctx, { mood: null, lang: lang ?? null }, tz);
   } catch (err) {
     console.error("[recommend] pick personalizado falló, va rotación global:", err);
     return null;
@@ -179,7 +181,7 @@ async function dossierDelAlbum(albumId: string): Promise<DossierConAlbum | null>
 
 async function recomendarYGuardar(
   ctx: PickCtx,
-  opts: { mood: string | null; albumPrevio?: string; regenerated?: boolean },
+  opts: { mood: string | null; lang?: string | null; albumPrevio?: string; regenerated?: boolean },
   tz?: string | null,
 ): Promise<PickPersonal | null> {
   try {
@@ -237,6 +239,7 @@ async function recomendarYGuardar(
         profile: parsedProfile,
         reviews,
         mood: opts.mood,
+        lang: opts.lang && opts.lang !== "Cualquiera" ? opts.lang : null,
         catalogo,
         picksRecientes,
         albumPrevio: opts.albumPrevio
@@ -317,6 +320,7 @@ async function elegirConLlm(input: {
     include: { album: { include: { artist: true } } };
   }>[];
   mood: string | null;
+  lang: string | null;  // idioma elegido hoy (null = cualquiera)
   catalogo: DossierConAlbum[];
   picksRecientes: Prisma.DailyPickGetPayload<{
     include: { album: { include: { artist: true } } };
@@ -386,7 +390,7 @@ Reglas estrictas:
 4. Sobre el disco solo puedes mencionar lo que aparece en el catálogo (título, artista, año, duración, etiquetas). PROHIBIDO inventar datos del álbum o del usuario.
 5. Evita repetir discos recomendados en días recientes, salvo que no haya alternativa razonable.
 6. Si el usuario indicó su ánimo de hoy, dale prioridad como señal.
-7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.`;
+7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.${input.lang ? `\n8. IDIOMA DE HOY: el usuario quiere escuchar en "${input.lang}" hoy. Prioriza artistas que cantan en ese idioma. Si no hay ninguno en el catálogo, elige el más cercano y mencionalo en la "reason".` : ""}`;
 
   const user = `CATÁLOGO DISPONIBLE (elige uno por su albumId):
 ${catalogoTexto}
@@ -446,17 +450,27 @@ function comoLista(valor: unknown): string[] {
 function formatPerfil(profile: Record<string, unknown>): string {
   const generos = comoLista(profile.genres);
   const artistas = comoLista(profile.artists);
+  const idiomas = comoLista(profile.languages);
   const momentos = comoLista(profile.moments);
   const busca = comoLista(profile.seeks);
+  const intereses = comoLista(profile.interests);
+  const bio = typeof profile.bio === "string" ? profile.bio.trim() : "";
   const tiempo = typeof profile.listenTime === "string" ? profile.listenTime : "";
   const anchors = typeof profile.anchors === "string" ? profile.anchors : "";
+  const curiosities = Array.isArray(profile.curiosities)
+    ? formatCuriosities(profile.curiosities as CuriosityAnswer[])
+    : "";
   const lineas = [
     generos.length ? `Géneros favoritos: ${generos.join(", ")}` : null,
     artistas.length ? `Artistas que ama: ${artistas.join(", ")}` : null,
+    idiomas.length ? `Idiomas en los que disfruta música: ${idiomas.join(", ")}` : null,
     busca.length ? `Busca en un disco: ${busca.join(", ")}` : null,
     momentos.length ? `Escucha: ${momentos.join(", ")}` : null,
     tiempo ? `Tiempo por sesión: ${tiempo}` : null,
+    intereses.length ? `Intereses fuera de la música: ${intereses.join(", ")}` : null,
+    bio ? `Contexto personal: "${bio}"` : null,
     anchors ? `Otros que lo marcaron: ${anchors}` : null,
+    curiosities ? `Lo que me ha contado (preguntas del día):\n${curiosities}` : null,
   ].filter(Boolean);
   return lineas.length ? lineas.join("\n") : "(perfil vacío)";
 }

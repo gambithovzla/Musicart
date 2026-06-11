@@ -130,7 +130,7 @@ export async function enqueueAlbum(input: {
 export async function proposeNextAlbums(
   count = 5,
   log: (msg: string) => void = () => {},
-  perfilAdmin?: { genres: string[]; artists: string[] } | null,
+  perfilAdmin?: { genres: string[]; artists: string[]; languages?: string[] } | null,
 ): Promise<number> {
   const cuantos = Math.min(MAX_PROPOSALS, Math.max(1, count));
 
@@ -175,13 +175,19 @@ export async function proposeNextAlbums(
       : "(aún no hay reseñas altas)";
 
   const gustaAdmin =
-    perfilAdmin && (perfilAdmin.genres.length > 0 || perfilAdmin.artists.length > 0)
+    perfilAdmin &&
+    (perfilAdmin.genres.length > 0 ||
+      perfilAdmin.artists.length > 0 ||
+      (perfilAdmin.languages?.length ?? 0) > 0)
       ? [
           perfilAdmin.genres.length
             ? `Géneros favoritos del dueño: ${perfilAdmin.genres.join(", ")}`
             : null,
           perfilAdmin.artists.length
             ? `Artistas favoritos del dueño: ${perfilAdmin.artists.join(", ")}`
+            : null,
+          perfilAdmin.languages?.length
+            ? `Idiomas preferidos: ${perfilAdmin.languages.join(", ")}`
             : null,
         ]
           .filter(Boolean)

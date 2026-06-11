@@ -270,10 +270,36 @@ feature usa los datos que ya guardamos y respeta el pipeline anti-alucinación.
 
 ---
 
+## 🚧 Fase 6 — Que se sienta "un amigo que te conoce" (EN CURSO)
+
+**Objetivo:** matar la sensación de "precargado". Que desde el primer momento el
+disco se sienta elegido para ti, no una rotación genérica.
+
+### Tareas
+
+- [x] **6.1 Onboarding de gustos** — el perfil pregunta géneros (chips) y
+  artistas favoritos (chips que escribes). El motor los pondera con fuerza
+  (regla 7 del prompt) y, si la IA se cae, `elegirPorGusto` elige por afinidad
+  (géneros + artistas + diario 4★) en vez de la rotación global: un rockero ya
+  no recibe una balada.
+- [ ] **6.2 Conectar Spotify** — login con Spotify (Auth.js ya guarda tokens en
+  Account) + leer top artists/tracks/géneros para alimentar el motor con gustos
+  reales. Requiere app de Spotify del dueño (modo dev limitado a 25 usuarios
+  hasta aprobación). YouTube Music no tiene API de historial; Apple Music
+  posible después.
+- [ ] **6.3 Dossier más rico** — la IA siempre escribe nota canción-por-canción
+  + un bloque de curiosidades verificadas contra el FactsPayload.
+
+### Criterios de aceptación
+
+- [x] El perfil captura géneros y artistas favoritos, y el primer disco tras
+  el onboarding ya es personalizado (no la rotación global).
+
+---
+
 ## Estado actual (junio 2026)
 
-**Fases 0–5 completas.** No hay fase marcada EN CURSO. Antes de abrir una Fase 6,
-confirmar con el dueño del producto qué entra en el roadmap.
+**Fases 0–5 completas. Fase 6 EN CURSO** (6.1 hecha; 6.2 y 6.3 pendientes).
 
 ---
 

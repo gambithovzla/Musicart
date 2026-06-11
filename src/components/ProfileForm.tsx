@@ -15,15 +15,24 @@ import { getDeviceId } from "@/lib/device";
 const MOMENTS = ["Manejando", "Trabajando", "En casa", "Entrenando", "Antes de dormir"];
 const SEEKS = ["La historia", "La emoción", "La técnica", "Descubrir lo nuevo"];
 const TIMES = ["20 min", "45 min", "1 hora o más"];
+const GENRES = [
+  "Rock", "Pop", "Jazz", "Salsa", "Hip-hop", "Electrónica", "Indie", "Metal",
+  "Clásica", "Folk", "R&B / Soul", "Reggae", "Punk", "Blues", "Cumbia",
+  "Bolero", "Funk", "Reguetón", "Trap", "Bossa nova",
+];
 
 export type ProfileAnswers = {
   moments: string[];
   seeks: string[];
-  anchors: string;
+  genres: string[];
+  artists: string[];
+  anchors?: string; // libre, opcional (perfiles antiguos); ya no se muestra
   listenTime: string;
 };
 
-const EMPTY: ProfileAnswers = { moments: [], seeks: [], anchors: "", listenTime: "" };
+const EMPTY: ProfileAnswers = {
+  moments: [], seeks: [], genres: [], artists: [], listenTime: "",
+};
 const STORAGE_KEY = "musicart:profile";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -56,6 +65,7 @@ export function ProfileForm({
   subscription?: SubscriptionInfo;
 }) {
   const [answers, setAnswers] = useState<ProfileAnswers>(EMPTY);
+  const [artistInput, setArtistInput] = useState("");
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [hydrated, setHydrated] = useState(false);
   const [signingOut, startSignOut] = useTransition();
@@ -71,7 +81,14 @@ export function ProfileForm({
     } catch {
       // perfil local corrupto
     }
-    setAnswers(merged);
+    // Perfiles antiguos no traen genres/artists: garantizamos arrays.
+    setAnswers({
+      ...merged,
+      moments: Array.isArray(merged.moments) ? merged.moments : [],
+      seeks: Array.isArray(merged.seeks) ? merged.seeks : [],
+      genres: Array.isArray(merged.genres) ? merged.genres : [],
+      artists: Array.isArray(merged.artists) ? merged.artists : [],
+    });
     setHydrated(true);
   }, [initialAnswers]);
 
@@ -107,13 +124,28 @@ export function ProfileForm({
     setAnswers((a) => ({ ...a, ...patch }));
   }
 
-  function toggle(list: "moments" | "seeks", value: string) {
+  function toggle(list: "moments" | "seeks" | "genres", value: string) {
     setAnswers((a) => ({
       ...a,
       [list]: a[list].includes(value)
         ? a[list].filter((v) => v !== value)
         : [...a[list], value],
     }));
+  }
+
+  function addArtist(name: string) {
+    const value = name.trim();
+    if (!value) return;
+    setAnswers((a) =>
+      a.artists.some((x) => x.toLowerCase() === value.toLowerCase())
+        ? a
+        : { ...a, artists: [...a.artists, value] },
+    );
+    setArtistInput("");
+  }
+
+  function removeArtist(name: string) {
+    setAnswers((a) => ({ ...a, artists: a.artists.filter((x) => x !== name) }));
   }
 
   const displayName = user?.name?.split(" ")[0] ?? user?.email?.split("@")[0];
@@ -200,6 +232,66 @@ export function ProfileForm({
       {user && duet && <DuetPanel duet={duet} />}
 
       <section className="mt-8">
+        <h2 className="font-serif text-lg">¿Qué géneros te mueven?</h2>
+        <p className="mt-1 text-xs text-dim">
+          Los que quieras — con esto tu primer disco ya va por tu lado
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {GENRES.map((g) => (
+            <Chip
+              key={g}
+              label={g}
+              active={answers.genres.includes(g)}
+              onClick={() => toggle("genres", g)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="font-serif text-lg">Artistas que amas</h2>
+        <p className="mt-1 text-xs text-dim">
+          Escribe un nombre y pulsa Enter. Cuantos más, mejor te conocemos.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {answers.artists.map((a) => (
+            <motion.span
+              key={a}
+              layout
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="flex items-center gap-1.5 rounded-full border border-album bg-album px-3 py-2 text-sm font-medium text-black"
+            >
+              {a}
+              <button
+                type="button"
+                onClick={() => removeArtist(a)}
+                aria-label={`Quitar ${a}`}
+                className="text-black/60 transition-colors hover:text-black"
+              >
+                ✕
+              </button>
+            </motion.span>
+          ))}
+          <input
+            value={artistInput}
+            onChange={(e) => setArtistInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault();
+                addArtist(artistInput);
+              } else if (e.key === "Backspace" && !artistInput && answers.artists.length) {
+                removeArtist(answers.artists[answers.artists.length - 1]);
+              }
+            }}
+            onBlur={() => addArtist(artistInput)}
+            placeholder={answers.artists.length ? "Añadir otro…" : "Ej.: Soda Stereo, Radiohead…"}
+            className="min-w-[10rem] flex-1 rounded-full border border-white/15 bg-surface px-4 py-2 text-sm transition-colors placeholder:text-white/25 focus:border-album focus:outline-none focus:ring-2 focus:ring-album/25"
+          />
+        </div>
+      </section>
+
+      <section className="mt-8">
         <h2 className="font-serif text-lg">¿Cuándo escuchas música?</h2>
         <p className="mt-1 text-xs text-dim">Puedes elegir varios</p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -241,17 +333,6 @@ export function ProfileForm({
             />
           ))}
         </div>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="font-serif text-lg">Tres discos o artistas que te marcaron</h2>
-        <textarea
-          value={answers.anchors}
-          onChange={(e) => update({ anchors: e.target.value })}
-          rows={3}
-          placeholder="Ej.: Continuum, Héctor Lavoe, AC/DC…"
-          className="mt-3 w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-sm transition-colors placeholder:text-white/25 focus:border-album focus:outline-none focus:ring-2 focus:ring-album/25"
-        />
       </section>
 
       {!user && (

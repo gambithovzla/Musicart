@@ -22,6 +22,8 @@ import {
   type Palette,
 } from "@/lib/types";
 import { Stars } from "@/components/Stars";
+import { EscalaEstrellas } from "@/components/EscalaEstrellas";
+import { DossierSection } from "@/components/DossierSection";
 import { ListenLinks } from "@/components/ListenLinks";
 import { ReflectionForm } from "@/components/ReflectionForm";
 import { ShareAlbum } from "@/components/ShareAlbum";
@@ -171,21 +173,32 @@ export default async function AlbumPage({
       <div className="relative px-6 pt-10">
         {/* — Hero — */}
         <header className="flex flex-col items-center text-center">
-          <div className="relative aspect-square w-48 overflow-hidden rounded-xl shadow-2xl">
-            {album.coverUrl ? (
-              <Image
-                src={album.coverUrl}
-                alt={`Portada de ${album.title}`}
-                fill
-                sizes="192px"
-                priority
-                className="object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center bg-album-dark">
-                <span className="font-serif text-4xl text-album-light">♪</span>
-              </div>
-            )}
+          <div className="relative">
+            {/* Resplandor cálido con el color del disco */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -inset-8 -z-10 rounded-full opacity-50 blur-3xl"
+              style={{
+                background:
+                  "radial-gradient(circle, var(--album-vibrant), transparent 70%)",
+              }}
+            />
+            <div className="relative aspect-square w-48 overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/10">
+              {album.coverUrl ? (
+                <Image
+                  src={album.coverUrl}
+                  alt={`Portada de ${album.title}`}
+                  fill
+                  sizes="192px"
+                  priority
+                  className="object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-album-dark">
+                  <span className="font-serif text-4xl text-album-light">♪</span>
+                </div>
+              )}
+            </div>
           </div>
           <h1 className="font-serif mt-6 text-3xl font-semibold leading-tight">
             {album.title}
@@ -202,6 +215,7 @@ export default async function AlbumPage({
               Impacto <Stars value={album.impact} />
             </span>
           </div>
+          <EscalaEstrellas className="mt-3 max-w-md" />
         </header>
 
         <section className="mt-4">
@@ -241,150 +255,144 @@ export default async function AlbumPage({
               />
             </section>
 
-            <section className="mt-12">
-              <SectionTitle n="01" title="La historia detrás del disco" />
-              <div className="prose-dossier mt-4">
-                {dossier.intro.split("\n\n").map((p, i) => (
-                  <p key={i}>{p}</p>
-                ))}
-              </div>
-            </section>
-
-            <AlbumChat
-              albumId={album.id}
-              albumTitle={album.title}
-              suggestedQuestions={questions.slice(0, 3)}
-              initialQuota={chatQuota}
-            />
-
-        <section className="mt-12">
-          <SectionTitle n="02" title={`Quién era ${album.artist.name}`} />
-          <div className="prose-dossier mt-4">
-            {dossier.artistStory.split("\n\n").map((p, i) => (
-              <p key={i}>{p}</p>
-            ))}
-          </div>
-        </section>
-
-        {/* — Durante la escucha — */}
-        <section className="mt-12">
-          <SectionTitle n="03" title="Las canciones" />
-          <p className="mt-2 text-sm text-dim">
-            Dale play y vuelve aquí cuando llegues a las marcadas.
-          </p>
-          <ol className="mt-5 flex flex-col gap-1.5">
-            {dossier.trackNotes.map((t) => (
-              <li
-                key={t.id}
-                className={
-                  t.note
-                    ? "rounded-xl border-l-2 border-album bg-surface px-4 py-3"
-                    : "px-4 py-1.5"
-                }
-              >
-                <div className="flex items-baseline gap-3">
-                  <span className="w-5 shrink-0 text-right text-sm tabular-nums text-dim">
-                    {t.position}
-                  </span>
-                  <span className={t.note ? "font-medium" : "text-foreground/80"}>
-                    {t.title}
-                  </span>
-                </div>
-                {t.note && (
-                  <p className="font-serif mt-1.5 pl-8 text-[15px] italic leading-relaxed text-foreground/85">
-                    {t.note}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        {/* — Escuchar — */}
-        <section className="mt-12">
-          <SectionTitle n="04" title="Escúchalo completo" />
-          <p className="mt-2 text-sm text-dim">
-            {album.durationMin
-              ? `Reserva ${album.durationMin} minutos. Vale la pena de principio a fin.`
-              : "Vale la pena de principio a fin."}
-          </p>
-          <div className="mt-5">
-            <ListenLinks links={links} />
-          </div>
-        </section>
-
-        {/* — Por qué importa — */}
-        <section className="mt-12">
-          <SectionTitle n="05" title="Por qué importa" />
-          <div className="prose-dossier mt-4">
-            {dossier.whyItMatters.split("\n\n").map((p, i) => (
-              <p key={i}>{p}</p>
-            ))}
-          </div>
-        </section>
-
-        {/* — Después de escuchar — */}
-        <section className="mb-16 mt-12">
-          <SectionTitle n="06" title="Después de escuchar" />
-          <div className="mt-5">
-            <ReflectionForm albumId={album.id} questions={questions} />
-          </div>
-        </section>
-
-        {saltos.length > 0 && (
-          <section className="mb-16">
-            <SectionTitle n="07" title="Sigue la madriguera" />
-            <p className="mt-2 text-sm text-dim">
-              De este disco puedes saltar a…
+            <p className="mt-10 text-center text-xs uppercase tracking-[0.3em] text-dim">
+              Toca para abrir cada parte
             </p>
-            <div className="mt-5 flex flex-col gap-3">
-              {saltos.map(({ jump, albumId, coverUrl }) => {
-                const tarjeta = (
-                  <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-surface p-4">
-                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg">
-                      {coverUrl ? (
-                        <Image
-                          src={coverUrl}
-                          alt={`Portada de ${jump.title}`}
-                          fill
-                          sizes="56px"
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-album-dark">
-                          <span className="font-serif text-xl text-album-light">♪</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">
-                        {jump.title}{" "}
-                        <span className="font-normal text-dim">· {jump.artist}</span>
-                      </p>
-                      <p className="font-serif mt-1 text-sm italic leading-snug text-foreground/80">
-                        {jump.connection}
-                      </p>
-                      <p className="mt-1.5 text-xs text-dim">
-                        {albumId ? "Léelo en Musicart →" : "La IA lo está preparando…"}
-                      </p>
-                    </div>
-                  </div>
-                );
-                return albumId ? (
-                  <Link
-                    key={`${jump.artist}-${jump.title}`}
-                    href={`/album/${albumId}`}
-                    className="transition-transform active:scale-[0.99]"
-                  >
-                    {tarjeta}
-                  </Link>
-                ) : (
-                  <div key={`${jump.artist}-${jump.title}`}>{tarjeta}</div>
-                );
-              })}
+            <div className="mt-4 flex flex-col gap-3">
+              <DossierSection n="01" title="La historia detrás del disco" defaultOpen>
+                <div className="prose-dossier">
+                  {dossier.intro.split("\n\n").map((p, i) => (
+                    <p key={i}>{p}</p>
+                  ))}
+                </div>
+              </DossierSection>
             </div>
-          </section>
-        )}
+
+            <div className="mt-3">
+              <AlbumChat
+                albumId={album.id}
+                albumTitle={album.title}
+                suggestedQuestions={questions.slice(0, 3)}
+                initialQuota={chatQuota}
+              />
+            </div>
+
+            <div className="mb-4 mt-3 flex flex-col gap-3">
+              <DossierSection n="02" title={`Quién era ${album.artist.name}`}>
+                <div className="prose-dossier">
+                  {dossier.artistStory.split("\n\n").map((p, i) => (
+                    <p key={i}>{p}</p>
+                  ))}
+                </div>
+              </DossierSection>
+
+              <DossierSection n="03" title="Las canciones">
+                <p className="text-sm text-dim">
+                  Dale play y vuelve aquí cuando llegues a las marcadas.
+                </p>
+                <ol className="mt-4 flex flex-col gap-1.5">
+                  {dossier.trackNotes.map((t) => (
+                    <li
+                      key={t.id}
+                      className={
+                        t.note
+                          ? "rounded-xl border-l-2 border-album bg-black/20 px-4 py-3"
+                          : "px-4 py-1.5"
+                      }
+                    >
+                      <div className="flex items-baseline gap-3">
+                        <span className="w-5 shrink-0 text-right text-sm tabular-nums text-dim">
+                          {t.position}
+                        </span>
+                        <span className={t.note ? "font-medium" : "text-foreground/80"}>
+                          {t.title}
+                        </span>
+                      </div>
+                      {t.note && (
+                        <p className="font-serif mt-1.5 pl-8 text-[15px] italic leading-relaxed text-foreground/85">
+                          {t.note}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </DossierSection>
+
+              <DossierSection n="04" title="Escúchalo completo" accent defaultOpen>
+                <p className="text-sm text-dim">
+                  {album.durationMin
+                    ? `Reserva ${album.durationMin} minutos. Vale la pena de principio a fin.`
+                    : "Vale la pena de principio a fin."}
+                </p>
+                <div className="mt-4">
+                  <ListenLinks links={links} />
+                </div>
+              </DossierSection>
+
+              <DossierSection n="05" title="Por qué importa">
+                <div className="prose-dossier">
+                  {dossier.whyItMatters.split("\n\n").map((p, i) => (
+                    <p key={i}>{p}</p>
+                  ))}
+                </div>
+              </DossierSection>
+
+              <DossierSection n="06" title="Después de escuchar">
+                <ReflectionForm albumId={album.id} questions={questions} />
+              </DossierSection>
+
+              {saltos.length > 0 && (
+                <DossierSection n="07" title="Sigue la madriguera">
+                  <p className="text-sm text-dim">De este disco puedes saltar a…</p>
+                  <div className="mt-4 flex flex-col gap-3">
+                    {saltos.map(({ jump, albumId, coverUrl }) => {
+                      const tarjeta = (
+                        <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg">
+                            {coverUrl ? (
+                              <Image
+                                src={coverUrl}
+                                alt={`Portada de ${jump.title}`}
+                                fill
+                                sizes="56px"
+                                className="object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-album-dark">
+                                <span className="font-serif text-xl text-album-light">♪</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">
+                              {jump.title}{" "}
+                              <span className="font-normal text-dim">· {jump.artist}</span>
+                            </p>
+                            <p className="font-serif mt-1 text-sm italic leading-snug text-foreground/80">
+                              {jump.connection}
+                            </p>
+                            <p className="mt-1.5 text-xs text-dim">
+                              {albumId ? "Léelo en Musicart →" : "La IA lo está preparando…"}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                      return albumId ? (
+                        <Link
+                          key={`${jump.artist}-${jump.title}`}
+                          href={`/album/${albumId}`}
+                          className="transition-transform active:scale-[0.99]"
+                        >
+                          {tarjeta}
+                        </Link>
+                      ) : (
+                        <div key={`${jump.artist}-${jump.title}`}>{tarjeta}</div>
+                      );
+                    })}
+                  </div>
+                </DossierSection>
+              )}
+            </div>
           </>
         )}
       </div>

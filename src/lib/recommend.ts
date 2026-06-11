@@ -1,21 +1,21 @@
-// Motor de recomendación personalizada (Fase 1).
-// Elige un disco del catálogo publicado según el perfil del dispositivo,
-// su diario de escuchas y el ánimo de hoy, y escribe el
-// "por qué este disco, para ti, hoy".
-//
-// Regla de oro: si la IA falla por lo que sea (sin API key, timeout, JSON
-// roto…), estas funciones devuelven null y la home cae a la rotación global.
-// La app nunca se rompe por culpa del LLM.
+// Motor de recomendación personalizada (Fase 1 + 3.3).
+// Con sesión lee/escribe por userId; sin sesión, por deviceId.
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { todayKey } from "./daily";
 import { llm, extractJson } from "./dossier/llm";
+import {
+  type ListenerIdentity,
+  pastPicksWhere,
+  profileWhere,
+  reviewsWhere,
+} from "./identity";
 import { parseJson, type FactsPayload } from "./types";
 
-const MAX_REVIEWS = 10; // últimas reseñas que entran como señal
-const MAX_RECENT_PICKS = 7; // días recientes a evitar repetir
-const LLM_TIMEOUT_MS = 4_000; // el criterio de la fase: pick en frío < 5 s
+const MAX_REVIEWS = 10;
+const MAX_RECENT_PICKS = 7;
+const LLM_TIMEOUT_MS = 4_000;
 
 type DossierConAlbum = Prisma.DossierGetPayload<{
   include: { album: { include: { artist: true } } };
@@ -28,21 +28,71 @@ export type PickPersonal = {
   regenerated: boolean;
 };
 
+type PickCtx = { deviceId: string; userId: string | null };
+
+async function findTodaysPick(ctx: PickCtx, date: string) {
+  if (ctx.userId) {
+    const byUser = await prisma.dailyPick.findFirst({
+      where: { userId: ctx.userId, date },
+      orderBy: { id: "desc" },
+    });
+    if (byUser) return byUser;
+  }
+  if (!ctx.deviceId) return null;
+  return prisma.dailyPick.findUnique({
+    where: { deviceId_date: { deviceId: ctx.deviceId, date } },
+  });
+}
+
+async function saveTodaysPick(
+  ctx: PickCtx,
+  date: string,
+  data: {
+    albumId: string;
+    reason: string | null;
+    mood: string | null;
+    regenerated: boolean;
+  },
+) {
+  const existing = await findTodaysPick(ctx, date);
+  if (existing) {
+    return prisma.dailyPick.update({
+      where: { id: existing.id },
+      data: {
+        albumId: data.albumId,
+        reason: data.reason,
+        mood: data.mood,
+        regenerated: data.regenerated,
+        ...(ctx.userId ? { userId: ctx.userId } : {}),
+      },
+    });
+  }
+  if (!ctx.deviceId) return null;
+  return prisma.dailyPick.create({
+    data: {
+      deviceId: ctx.deviceId,
+      userId: ctx.userId,
+      date,
+      albumId: data.albumId,
+      reason: data.reason,
+      mood: data.mood,
+      regenerated: data.regenerated,
+    },
+  });
+}
+
 /**
- * El pick del día para este dispositivo. Cache: una recomendación por device
- * por día (si ya existe en DailyPick se devuelve al instante, sin LLM).
- * Devuelve null si no hay señales del usuario o si la IA falla: el caller
- * debe caer a la rotación global (`getTodayPick`).
+ * Pick del día. Con sesión, comparte el mismo disco entre dispositivos.
  */
 export async function getPersonalizedPick(
   deviceId: string,
+  userId?: string | null,
 ): Promise<PickPersonal | null> {
-  if (!deviceId) return null;
+  const ctx: PickCtx = { deviceId, userId: userId ?? null };
+  if (!ctx.deviceId && !ctx.userId) return null;
   try {
     const date = todayKey();
-    const guardado = await prisma.dailyPick.findUnique({
-      where: { deviceId_date: { deviceId, date } },
-    });
+    const guardado = await findTodaysPick(ctx, date);
     if (guardado) {
       const dossier = await dossierDelAlbum(guardado.albumId);
       if (dossier) {
@@ -53,33 +103,27 @@ export async function getPersonalizedPick(
           regenerated: guardado.regenerated,
         };
       }
-      // El álbum guardado ya no está publicado: se recalcula abajo.
     }
-    return await recomendarYGuardar(deviceId, { mood: null });
+    return await recomendarYGuardar(ctx, { mood: null });
   } catch (err) {
     console.error("[recommend] pick personalizado falló, va rotación global:", err);
     return null;
   }
 }
 
-/**
- * Check-in de ánimo. Si aún no hay pick hoy, lo genera con el mood como señal.
- * Si ya hay pick y todavía no se regeneró, se regenera UNA vez (control de
- * costo). Si ya se regeneró, solo se guarda el mood. Nunca lanza hacia la UI.
- */
 export async function applyMood(
   deviceId: string,
   mood: string,
+  userId?: string | null,
 ): Promise<{ ok: boolean }> {
-  if (!deviceId || !mood) return { ok: false };
+  const ctx: PickCtx = { deviceId, userId: userId ?? null };
+  if ((!ctx.deviceId && !ctx.userId) || !mood) return { ok: false };
   try {
     const date = todayKey();
-    const guardado = await prisma.dailyPick.findUnique({
-      where: { deviceId_date: { deviceId, date } },
-    });
+    const guardado = await findTodaysPick(ctx, date);
 
     if (!guardado) {
-      const pick = await recomendarYGuardar(deviceId, { mood });
+      const pick = await recomendarYGuardar(ctx, { mood });
       return { ok: pick !== null };
     }
 
@@ -91,13 +135,12 @@ export async function applyMood(
       return { ok: true };
     }
 
-    const pick = await recomendarYGuardar(deviceId, {
+    const pick = await recomendarYGuardar(ctx, {
       mood,
       albumPrevio: guardado.albumId,
       regenerated: true,
     });
     if (!pick) {
-      // La IA falló: al menos queda registrado el ánimo (sin gastar la regeneración).
       await prisma.dailyPick.update({
         where: { id: guardado.id },
         data: { mood },
@@ -118,33 +161,46 @@ async function dossierDelAlbum(albumId: string): Promise<DossierConAlbum | null>
 }
 
 async function recomendarYGuardar(
-  deviceId: string,
+  ctx: PickCtx,
   opts: { mood: string | null; albumPrevio?: string; regenerated?: boolean },
 ): Promise<PickPersonal | null> {
   try {
     const date = todayKey();
+    const identity: ListenerIdentity = {
+      deviceId: ctx.deviceId,
+      userId: ctx.userId,
+    };
+    const profileFilter = profileWhere(identity);
+    const reviewFilter = reviewsWhere(identity);
+    const pastFilter = pastPicksWhere(identity, date);
+
     const [profile, reviews, catalogo, picksRecientes] = await Promise.all([
-      prisma.profile.findUnique({ where: { deviceId } }),
-      prisma.review.findMany({
-        where: { deviceId },
-        include: { album: { include: { artist: true } } },
-        orderBy: { createdAt: "desc" },
-        take: MAX_REVIEWS,
-      }),
+      profileFilter
+        ? prisma.profile.findFirst({ where: profileFilter })
+        : Promise.resolve(null),
+      reviewFilter
+        ? prisma.review.findMany({
+            where: reviewFilter,
+            include: { album: { include: { artist: true } } },
+            orderBy: { createdAt: "desc" },
+            take: MAX_REVIEWS,
+          })
+        : Promise.resolve([]),
       prisma.dossier.findMany({
         where: { status: "published", locale: "es" },
         include: { album: { include: { artist: true } } },
         orderBy: { id: "asc" },
       }),
-      prisma.dailyPick.findMany({
-        where: { deviceId, date: { lt: date } },
-        include: { album: { include: { artist: true } } },
-        orderBy: { date: "desc" },
-        take: MAX_RECENT_PICKS,
-      }),
+      pastFilter
+        ? prisma.dailyPick.findMany({
+            where: pastFilter,
+            include: { album: { include: { artist: true } } },
+            orderBy: { date: "desc" },
+            take: MAX_RECENT_PICKS,
+          })
+        : Promise.resolve([]),
     ]);
 
-    // Sin ninguna señal no hay nada que personalizar: rotación global.
     if (!profile && reviews.length === 0 && !opts.mood) return null;
     if (catalogo.length === 0) return null;
 
@@ -165,22 +221,11 @@ async function recomendarYGuardar(
     }
     const reason = eleccion.reason?.trim().slice(0, 600) || null;
 
-    await prisma.dailyPick.upsert({
-      where: { deviceId_date: { deviceId, date } },
-      update: {
-        albumId: dossier.album.id,
-        reason,
-        mood: opts.mood,
-        regenerated: opts.regenerated ?? false,
-      },
-      create: {
-        deviceId,
-        date,
-        albumId: dossier.album.id,
-        reason,
-        mood: opts.mood,
-        regenerated: opts.regenerated ?? false,
-      },
+    await saveTodaysPick(ctx, date, {
+      albumId: dossier.album.id,
+      reason,
+      mood: opts.mood,
+      regenerated: opts.regenerated ?? false,
     });
 
     return {

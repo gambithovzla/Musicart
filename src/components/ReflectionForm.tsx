@@ -22,8 +22,7 @@ export function ReflectionForm({
   );
 
   useEffect(() => {
-    const deviceId = getDeviceId();
-    getReview(deviceId, albumId)
+    getReview(albumId)
       .then((existing) => {
         if (existing) {
           setRating(existing.rating);

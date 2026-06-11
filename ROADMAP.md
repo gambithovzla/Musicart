@@ -179,9 +179,10 @@ dispositivo.
 - [x] **3.2 Fusión de identidad** al iniciar sesión
   - Fusionar `Profile`, `Review` y `DailyPick` del `deviceId` actual con el
     `User` (sin perder diario ni racha) — `/entrar/completado`.
-- [ ] **3.3 Sesión multi-dispositivo**
+- [x] **3.3 Sesión multi-dispositivo**
   - El motor de recomendación y el diario leen por `userId` cuando hay sesión;
-    `deviceId` sigue como fallback anónimo.
+    `deviceId` sigue como fallback anónimo. Mismo pick del día en todos los
+    dispositivos de la cuenta.
 - [ ] **3.4 Privacidad**
   - Export y borrado de datos del usuario.
 

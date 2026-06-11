@@ -1,12 +1,13 @@
-"use client";
+// El diario del melómano: historial de viajes con racha de descubrimiento.
+// Fase 3.3: con sesión muestra todas las reseñas de la cuenta.
 
-// El diario del melómano: tu historial de viajes, con racha de descubrimiento.
-
-import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { getJournal } from "@/app/actions";
-import { getDeviceId } from "@/lib/device";
+
+export const dynamic = "force-dynamic";
+
+export const metadata = { title: "Diario · Musicart" };
 
 type Entry = Awaited<ReturnType<typeof getJournal>>[number];
 
@@ -22,7 +23,6 @@ function computeStreak(entries: Entry[]): number {
   const days = new Set(entries.map((e) => localDay(e.date)));
   let streak = 0;
   const cursor = new Date();
-  // La racha cuenta desde hoy (o desde ayer, si hoy aún no has escuchado).
   if (!days.has(localDay(cursor.toISOString()))) {
     cursor.setDate(cursor.getDate() - 1);
   }
@@ -33,16 +33,9 @@ function computeStreak(entries: Entry[]): number {
   return streak;
 }
 
-export default function DiarioPage() {
-  const [entries, setEntries] = useState<Entry[] | null>(null);
-
-  useEffect(() => {
-    getJournal(getDeviceId())
-      .then(setEntries)
-      .catch(() => setEntries([]));
-  }, []);
-
-  const streak = entries ? computeStreak(entries) : 0;
+export default async function DiarioPage() {
+  const entries = await getJournal();
+  const streak = computeStreak(entries);
 
   return (
     <main className="px-6 pt-12">
@@ -51,7 +44,7 @@ export default function DiarioPage() {
         <h1 className="font-serif mt-2 text-3xl font-semibold">
           Discos que ya viajaste
         </h1>
-        {entries && entries.length > 0 && (
+        {entries.length > 0 && (
           <p className="mt-3 text-sm text-dim">
             {entries.length} {entries.length === 1 ? "disco" : "discos"} en tu diario
             {streak > 1 && (
@@ -63,15 +56,7 @@ export default function DiarioPage() {
         )}
       </header>
 
-      {entries === null && (
-        <div className="mt-8 flex flex-col gap-4">
-          {[0, 1].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-2xl bg-surface" />
-          ))}
-        </div>
-      )}
-
-      {entries?.length === 0 && (
+      {entries.length === 0 && (
         <div className="mt-16 text-center">
           <p className="font-serif text-xl italic text-dim">
             Tu diario está esperando su primera entrada.
@@ -86,7 +71,7 @@ export default function DiarioPage() {
       )}
 
       <div className="mt-8 flex flex-col gap-4 pb-10">
-        {entries?.map((e) => {
+        {entries.map((e) => {
           const reflection = Object.values(e.answers).find((a) => a.trim());
           return (
             <Link

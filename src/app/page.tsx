@@ -3,9 +3,10 @@
 // motor de recomendación; si no (o si la IA falla), va la rotación global.
 
 import { cookies } from "next/headers";
+import { auth } from "@/auth";
 import { getTodayPick, formatDateEs } from "@/lib/daily";
 import { getPersonalizedPick } from "@/lib/recommend";
-import { prisma } from "@/lib/db";
+import { hasProfile } from "@/app/actions";
 import { DEVICE_COOKIE } from "@/lib/device";
 import { albumThemeStyle } from "@/lib/theme";
 import { parseJson, type Palette } from "@/lib/types";
@@ -21,9 +22,16 @@ function firstSentence(text: string, maxLen = 160): string {
 }
 
 export default async function Home() {
-  const deviceId = (await cookies()).get(DEVICE_COOKIE)?.value ?? "";
+  const [session, deviceId] = await Promise.all([
+    auth(),
+    cookies().then((c) => c.get(DEVICE_COOKIE)?.value ?? ""),
+  ]);
+  const userId = session?.user?.id ?? null;
 
-  const personal = deviceId ? await getPersonalizedPick(deviceId) : null;
+  const personal =
+    deviceId || userId
+      ? await getPersonalizedPick(deviceId, userId)
+      : null;
   const pick = personal?.dossier ?? (await getTodayPick());
 
   if (!pick) {
@@ -39,20 +47,11 @@ export default async function Home() {
     );
   }
 
-  const tienePerfil = deviceId
-    ? Boolean(
-        await prisma.profile.findUnique({
-          where: { deviceId },
-          select: { id: true },
-        }),
-      )
-    : false;
-
+  const tienePerfil = await hasProfile();
   const palette = parseJson<Palette | null>(pick.album.paletteJson, null);
 
   return (
     <main style={albumThemeStyle(palette)}>
-      {/* Glow superior con el color del disco del día */}
       <div
         className="pointer-events-none fixed inset-x-0 top-0 h-[45dvh]"
         style={{

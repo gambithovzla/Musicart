@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 
 const ITEMS = [
   {
@@ -11,6 +12,16 @@ const ITEMS = [
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
         <circle cx="12" cy="12" r="9" />
         <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+  },
+  {
+    href: "/explorar",
+    label: "Explorar",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.8-3.8" />
       </svg>
     ),
   },
@@ -37,6 +48,12 @@ const ITEMS = [
   },
 ];
 
+function haptic() {
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    navigator.vibrate(8);
+  }
+}
+
 export function BottomNav() {
   const pathname = usePathname();
   return (
@@ -49,11 +66,19 @@ export function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-1 flex-col items-center gap-1 py-3 text-[11px] tracking-wide transition-colors ${
+              onClick={haptic}
+              className={`relative flex flex-1 flex-col items-center gap-1 py-3 text-[11px] tracking-wide transition-colors ${
                 active ? "text-album" : "text-dim hover:text-foreground"
               }`}
             >
-              {item.icon}
+              {active && (
+                <motion.span
+                  layoutId="nav-indicator"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  className="absolute -top-px h-0.5 w-10 rounded-full bg-album"
+                />
+              )}
+              <motion.span whileTap={{ scale: 0.85 }}>{item.icon}</motion.span>
               {item.label}
             </Link>
           );

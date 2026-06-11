@@ -74,3 +74,66 @@ body::before {
   background: var(--album-muted);
   border-radius: 3px;
 }
+
+/* Sensación nativa: sin flash azul al tocar, sin rebote lateral */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+html {
+  overscroll-behavior-y: contain;
+}
+
+/* Shimmer de los skeletons de carga */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(243, 238, 230, 0.05),
+    transparent
+  );
+  animation: shimmer 1.6s infinite;
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Entrada suave de cada página (se aplica desde template.tsx) */
+.page-enter {
+  animation: page-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Accesibilidad: si el sistema pide menos movimiento, lo respetamos */
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none;
+  }
+  .skeleton-shimmer::after {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

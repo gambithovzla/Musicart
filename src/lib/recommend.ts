@@ -21,6 +21,7 @@ import { formatCuriosities, type CuriosityAnswer } from "./curiosities";
 import { proponerDiscoDescubrimiento } from "./discover";
 import { runDossierPipeline } from "./dossier/pipeline";
 import { LOVED_THRESHOLD, RATING_MAX } from "./review";
+import { hayPresupuestoHoy, registrarGeneracion } from "./budget";
 
 const MAX_REVIEWS = 10;
 const MAX_RECENT_PICKS = 7;
@@ -277,6 +278,14 @@ export async function generarPickDelDia(
       : null;
     const returnRitual = await detectReturnRitual(identity, date);
 
+    // Tope de gasto: si ya fabricamos el máximo de discos nuevos hoy, no gastamos
+    // más IA — el oyente recibe un disco del catálogo existente (igual personal,
+    // sin costo de generación nueva). Así abrir la app a testers no se dispara.
+    if (!(await hayPresupuestoHoy(date))) {
+      console.warn("[recommend] tope de generación diario alcanzado; voy al catálogo.");
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick);
+    }
+
     // Lo que ya conoce (a evitar al proponer): reseñados + mostrados recientes.
     const yaConoce = [
       ...reviews.map((r) => `"${r.album.title}" de ${r.album.artist.name}`),
@@ -298,6 +307,9 @@ export async function generarPickDelDia(
     const result = await runDossierPipeline(propuesta.title, propuesta.artist, {
       publish: true,
     });
+
+    // Solo consume presupuesto un disco fabricado de verdad; reutilizar es gratis.
+    if (!result.reused) await registrarGeneracion(date);
 
     // Solo mostramos lo verificado. Si quedó en borrador, caemos al catálogo.
     if (result.status !== "published") {

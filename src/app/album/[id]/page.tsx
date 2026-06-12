@@ -22,6 +22,7 @@ import {
   type Palette,
 } from "@/lib/types";
 import { Stars } from "@/components/Stars";
+import { ImpactoCultural } from "@/components/ImpactoCultural";
 import { EscalaEstrellas } from "@/components/EscalaEstrellas";
 import { DossierSection } from "@/components/DossierSection";
 import { ListenLinks } from "@/components/ListenLinks";
@@ -212,7 +213,7 @@ export default async function AlbumPage({
               Dificultad <Stars value={album.difficulty} />
             </span>
             <span>
-              Impacto <Stars value={album.impact} />
+              Impacto <ImpactoCultural value={album.impact} />
             </span>
           </div>
           <EscalaEstrellas className="mt-3 max-w-md" />

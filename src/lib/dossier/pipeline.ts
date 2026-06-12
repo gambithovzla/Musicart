@@ -13,6 +13,7 @@ export type PipelineResult = {
   dossierId: string;
   status: "draft" | "published";
   report: VerificationReport;
+  reused: boolean; // true si ya existía (cache, sin costo de IA); false si se fabricó
 };
 
 export async function runDossierPipeline(
@@ -50,6 +51,7 @@ export async function runDossierPipeline(
       dossierId: dossier.id,
       status: dossier.status as "draft" | "published",
       report: { ok: true, hardErrors: [], unsupportedClaims: [] },
+      reused: true,
     };
   }
 
@@ -148,5 +150,5 @@ export async function runDossierPipeline(
     }
   }
 
-  return { albumId: album.id, dossierId: saved.id, status, report };
+  return { albumId: album.id, dossierId: saved.id, status, report, reused: false };
 }

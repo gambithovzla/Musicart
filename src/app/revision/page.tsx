@@ -6,6 +6,8 @@ import { auth } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
 import { prisma } from "@/lib/db";
 import { getProductMetrics } from "@/lib/analytics";
+import { todayKey } from "@/lib/daily";
+import { generacionesHoy, dailyGenerationBudget } from "@/lib/budget";
 import { dossierHasAudio } from "@/lib/dossier/render-audio";
 import { publishDossier, discardDossier } from "./actions";
 import { AnalyticsPanel } from "./AnalyticsPanel";
@@ -57,6 +59,9 @@ export default async function RevisionPage() {
     }),
   ]);
 
+  const generadosHoy = await generacionesHoy(todayKey());
+  const topeDiario = dailyGenerationBudget();
+
   const ttsRows = publicados.map((d) => ({
     id: d.id,
     albumId: d.albumId,
@@ -81,6 +86,27 @@ export default async function RevisionPage() {
         <p className="mt-1 text-sm text-dim">
           Toca el botón y la IA elige y crea un disco nuevo para el catálogo —las
           veces que quieras, cuando quieras. El robot diario sigue funcionando aparte.
+        </p>
+        <p className="mt-3 rounded-xl border border-white/10 bg-surface px-4 py-3 text-sm text-dim">
+          Tope de gasto · discos nuevos fabricados a oyentes hoy:{" "}
+          <span
+            className={
+              generadosHoy >= topeDiario ? "text-red-300" : "text-album-light"
+            }
+          >
+            {generadosHoy}/{topeDiario}
+          </span>
+          {generadosHoy >= topeDiario && (
+            <span className="text-red-300/90">
+              {" "}
+              — tope alcanzado: hoy los oyentes reciben discos del catálogo
+              (sin costo de IA nueva).
+            </span>
+          )}
+          <span className="block text-xs text-dim/70">
+            Lo que creas aquí y el robot del catálogo no cuentan en este tope. Se
+            ajusta con la variable DAILY_GENERATION_BUDGET.
+          </span>
         </p>
         <GenerarDiscoForm />
       </section>

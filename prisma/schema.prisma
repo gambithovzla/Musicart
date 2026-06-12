@@ -77,6 +77,15 @@ model GenerationQueue {
   updatedAt DateTime @updatedAt
 }
 
+// Tope de gasto (Fase 6): cuántos discos NUEVOS se le fabricaron a los oyentes
+// hoy. Cuando llega al límite (DAILY_GENERATION_BUDGET), el pick del día cae al
+// catálogo existente en vez de generar uno nuevo. No cuenta lo que crea el admin
+// ni el worker del catálogo.
+model GenerationBudget {
+  date  String @id // YYYY-MM-DD
+  count Int    @default(0)
+}
+
 model TrackNote {
   id          String  @id @default(cuid())
   dossierId   String

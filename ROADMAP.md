@@ -317,6 +317,14 @@ disco se sienta elegido para ti, no una rotación genérica.
   qué* de ese disco —generado y **verificado** contra el FactsPayload, citando
   premios/certificaciones/listas reales (`Dossier.impactNote`)— y la Dificultad
   explica que mide cuánta atención pide el disco, no su calidad.
+- [x] **6.6 Tope de gasto de IA** — límite diario de discos NUEVOS fabricados a
+  los oyentes (`DAILY_GENERATION_BUDGET`, default 15). Al alcanzarlo, el pick del
+  día cae al catálogo existente (sin costo de generación), sin romper la
+  experiencia. Reutilizar un disco ya existente no consume presupuesto (el
+  pipeline devuelve `reused`). No afecta lo que crea el admin ni el worker.
+  Contador `GenerationBudget` por día; el panel `/revision` muestra "X/tope".
+  Pensado para abrir la app a testers sin sustos (con gpt-4o-mini, ~$1-3/mes
+  para 5 personas).
 
 ### Criterios de aceptación
 
@@ -329,7 +337,7 @@ disco se sienta elegido para ti, no una rotación genérica.
 
 ## Estado actual (junio 2026)
 
-**Fases 0–5 completas. Fase 6 EN CURSO** (6.1, 6.4 y 6.5 hechas; 6.2 y 6.3 pendientes).
+**Fases 0–5 completas. Fase 6 EN CURSO** (6.1, 6.4, 6.5 y 6.6 hechas; 6.2 y 6.3 pendientes).
 
 ---
 

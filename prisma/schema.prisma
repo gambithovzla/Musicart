@@ -50,6 +50,7 @@ model Dossier {
   whyItMatters  String // por qué fue importante
   questionsJson String  @default("[]") // preguntas de reflexión
   jumpsJson     String  @default("[]") // saltos de descubrimiento [{title, artist, connection}]
+  impactNote    String? // por qué este impacto cultural, sobre hechos verificados (clicleable)
   audioJson     String? // { intro: url, artistStory: url, ... } MP3s TTS pre-renderizados
 
   album      Album       @relation(fields: [albumId], references: [id])

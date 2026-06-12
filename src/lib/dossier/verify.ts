@@ -67,6 +67,8 @@ export function hardValidate(
   const narrative = [
     dossier.intro,
     dossier.artistStory,
+    // impactNote es factual (premios, listas, cifras): se valida como la narrativa.
+    dossier.impactNote ?? "",
     ...dossier.trackNotes.map((t) => t.note ?? ""),
   ].join("\n");
 
@@ -136,6 +138,7 @@ export async function llmVerify(
   const text = [
     `INTRO: ${dossier.intro}`,
     `ARTISTA: ${dossier.artistStory}`,
+    ...(dossier.impactNote ? [`IMPACTO: ${dossier.impactNote}`] : []),
     ...dossier.trackNotes.map((t) => `NOTA (${t.title}): ${t.note}`),
     // De los saltos solo se verifica la conexión afirmada (el álbum destino
     // es recomendación curatorial, no una afirmación factual).

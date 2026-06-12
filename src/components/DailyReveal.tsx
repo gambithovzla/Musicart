@@ -5,9 +5,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Stars } from "./Stars";
 import { ImpactoCultural } from "./ImpactoCultural";
-import { EscalaEstrellas } from "./EscalaEstrellas";
+import { DificultadEscucha } from "./DificultadEscucha";
 import { ShareAlbum } from "./ShareAlbum";
 import type { MadrigueraAlbum } from "@/lib/madriguera";
 
@@ -20,6 +19,7 @@ export type DailyAlbum = {
   durationMin: number | null;
   difficulty: number;
   impact: number;
+  impactNote?: string | null; // por qué este impacto (clic), sobre hechos verificados
   hook: string;
   dateLabel: string;
   reason: string | null; // "por qué este disco, para ti, hoy" (pick personalizado)
@@ -84,17 +84,11 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
           {album.artist} · {album.year}
         </p>
 
-        <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-dim">
-          {album.durationMin && <span>{album.durationMin} min</span>}
-          <span>
-            Dificultad <Stars value={album.difficulty} />
-          </span>
-          <span>
-            Impacto <ImpactoCultural value={album.impact} />
-          </span>
+        <div className="mt-5 flex flex-wrap items-start justify-center gap-x-5 gap-y-2 text-sm text-dim">
+          {album.durationMin && <span className="pt-px">{album.durationMin} min</span>}
+          <DificultadEscucha value={album.difficulty} />
+          <ImpactoCultural value={album.impact} note={album.impactNote} />
         </div>
-
-        <EscalaEstrellas className="mx-auto mt-3 max-w-xs text-center" />
 
         {album.reason ? (
           <div className="mx-auto mt-6 max-w-sm rounded-2xl border border-album/30 bg-album/10 px-5 py-4">

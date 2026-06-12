@@ -21,9 +21,8 @@ import {
   type DossierAudio,
   type Palette,
 } from "@/lib/types";
-import { Stars } from "@/components/Stars";
 import { ImpactoCultural } from "@/components/ImpactoCultural";
-import { EscalaEstrellas } from "@/components/EscalaEstrellas";
+import { DificultadEscucha } from "@/components/DificultadEscucha";
 import { DossierSection } from "@/components/DossierSection";
 import { ListenLinks } from "@/components/ListenLinks";
 import { ReflectionForm } from "@/components/ReflectionForm";
@@ -207,16 +206,11 @@ export default async function AlbumPage({
           <p className="mt-1 text-lg text-dim">
             {album.artist.name} · {album.year}
           </p>
-          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-dim">
-            {album.durationMin && <span>{album.durationMin} min</span>}
-            <span>
-              Dificultad <Stars value={album.difficulty} />
-            </span>
-            <span>
-              Impacto <ImpactoCultural value={album.impact} />
-            </span>
+          <div className="mt-4 flex flex-wrap items-start gap-x-5 gap-y-2 text-sm text-dim">
+            {album.durationMin && <span className="pt-px">{album.durationMin} min</span>}
+            <DificultadEscucha value={album.difficulty} />
+            <ImpactoCultural value={album.impact} note={dossier.impactNote} />
           </div>
-          <EscalaEstrellas className="mt-3 max-w-md" />
         </header>
 
         <section className="mt-4">

@@ -312,7 +312,11 @@ disco se sienta elegido para ti, no una rotación genérica.
   muestra su **leyenda** junto al número (90+ hito, 75+ clásico mayor, 60+ muy
   influyente, 40+ notable, <40 de nicho) tras pasar de estrellas 1-5 a 1-100
   honesto. Migraciones que reescalan datos existentes (reseñas ×2; impacto a
-  1-100) para que nada se vea con la escala vieja.
+  1-100) para que nada se vea con la escala vieja. Además, **Impacto y Dificultad
+  son clicleables** (`<details>` nativo, sin estorbar): el Impacto abre el *por
+  qué* de ese disco —generado y **verificado** contra el FactsPayload, citando
+  premios/certificaciones/listas reales (`Dossier.impactNote`)— y la Dificultad
+  explica que mide cuánta atención pide el disco, no su calidad.
 
 ### Criterios de aceptación
 

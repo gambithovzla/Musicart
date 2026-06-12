@@ -21,6 +21,7 @@ export type SeedFixture = {
     artistStory: string;
     whyItMatters: string;
     questions: string[];
+    impactNote?: string; // por qué este impacto, sobre los facts de arriba
   };
   tracks: { position: number; title: string; note?: string }[];
 };
@@ -58,6 +59,8 @@ export const FIXTURES: SeedFixture[] = [
         "El disco habla del miedo a que el tiempo pase demasiado rápido. ¿En qué momento de tu vida te alcanzó esa sensación?",
         "¿Lo volverías a escuchar entero, o te quedas con canciones sueltas?",
       ],
+      impactNote:
+        "Ganó el Grammy a Mejor Álbum Pop Vocal en 2007 y su sencillo 'Waiting on the World to Change' se llevó el de Mejor Interpretación Pop Vocal Masculina ese mismo año. Es un disco premiado y muy querido que consolidó a Mayer como guitarrista serio; su huella es más la de un clásico moderno que la de un punto de quiebre en la historia del rock.",
     },
     tracks: [
       { position: 1, title: "Waiting on the World to Change", note: "La apertura: apatía generacional convertida en soul. Ganó el Grammy a Mejor Interpretación Pop Vocal Masculina en 2007." },
@@ -106,6 +109,8 @@ export const FIXTURES: SeedFixture[] = [
         "¿Se nota el dolor detrás de melodías tan luminosas, o el pop lo disimula todo?",
         "¿Hay algo en tu vida que hiciste mejor precisamente porque estabas roto?",
       ],
+      impactNote:
+        "Ganó el Grammy al Álbum del Año en 1978 y es uno de los discos más vendidos de la historia, con más de 40 millones de copias; 'Dreams' fue el único número 1 de la banda en Estados Unidos. Un pilar del pop-rock cuyo eco sigue presente generaciones después.",
     },
     tracks: [
       { position: 1, title: "Second Hand News" },
@@ -154,6 +159,8 @@ export const FIXTURES: SeedFixture[] = [
         "¿Qué te provocó el choque entre lo ancestral (las palmas, el cante) y lo moderno (los beats, el autotune)?",
         "¿Conoces otra obra que reinvente una tradición sin destruirla?",
       ],
+      impactNote:
+        "Ganó el Latin Grammy al Álbum del Año en 2019 y un Grammy a Mejor Álbum de Rock, Urbano o Alternativo Latino en 2020; su sencillo 'Malamente' se llevó dos Latin Grammys en 2018. Reinventó el flamenco con producción pop y catapultó a Rosalía a escala global — un disco que movió el mapa de la música en español.",
     },
     tracks: [
       { position: 1, title: "Malamente (Cap.1: Augurio)", note: "La premonición: algo malo viene y ella lo sabe. Ganó dos Latin Grammys en 2018 y fue la puerta de entrada del mundo a Rosalía." },

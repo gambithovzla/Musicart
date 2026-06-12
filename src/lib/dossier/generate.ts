@@ -22,7 +22,8 @@ FORMATO DE SALIDA — SOLO un objeto JSON válido, sin texto extra:
   "trackNotes": [{ "position": 4, "title": "título EXACTO del tracklist", "note": "1-2 frases" }],
   "jumps": [{ "title": "álbum destino", "artist": "artista destino", "connection": "1 frase: la relación real que une este disco con aquel" }],
   "difficulty": 2,
-  "impact": 72
+  "impact": 72,
+  "impactNote": "Por qué este nivel de impacto, en 2-3 frases, SOLO con hechos del payload (premios, certificaciones/ventas, posiciones en listas, reconocimiento de Rolling Stone u otras publicaciones, influencia documentada). Menciona la evidencia concreta. Si el payload trae poca evidencia, dilo con honestidad y baja el tono. PROHIBIDO inventar premios, cifras o rankings."
 }
 
 trackNotes: elige las 3 a 6 canciones más significativas. position y title deben coincidir EXACTAMENTE con el tracklist del payload.
@@ -37,7 +38,9 @@ impact (1-100): IMPACTO CULTURAL HONESTO — cuánto movió este disco la histor
   · 40-59: disco notable, querido o exitoso, pero de impacto histórico modesto.
   · 20-39: sólido, con repercusión local o de nicho.
   · 1-19: impacto cultural mínimo o sin evidencia.
-Dos discos de distinto calibre NO deben quedar con la misma nota: úsala para diferenciar.`;
+Dos discos de distinto calibre NO deben quedar con la misma nota: úsala para diferenciar.
+
+impactNote: la justificación del impacto que el usuario puede abrir con un clic. Es FACTUAL: se verifica contra el payload igual que la narrativa. Cita la evidencia real (un premio con su nombre, una certificación, una posición en lista, una mención de Rolling Stone/prensa si aparece en passages). No la adornes ni inventes; si no hay evidencia fuerte, sé honesto ("no destacó en premios ni listas; su huella es más de nicho").`;
 
 export type GeneratedDossier = DossierContent & {
   difficulty: number;
@@ -68,5 +71,6 @@ export async function generateDossier(
     .slice(0, 3);
   parsed.difficulty = Math.min(5, Math.max(1, Math.round(parsed.difficulty ?? 2)));
   parsed.impact = Math.min(100, Math.max(1, Math.round(parsed.impact ?? 45)));
+  parsed.impactNote = parsed.impactNote?.toString().trim().slice(0, 600) || undefined;
   return parsed;
 }

@@ -4,13 +4,18 @@
 
 Curaduría musical narrativa, **hecha enteramente por IA**. Un disco al día con
 su historia verificada, personalizado por perfil + diario + ánimo del usuario.
-El usuario nunca sube contenido: la IA cura el catálogo, recomienda y explica
-**por qué ese disco, para ti, hoy**. La escucha ocurre en Spotify/Apple
+Cada día la IA **fabrica un disco fresco a la medida de cada usuario** (propone
+un disco real de toda la música según su gusto y lo genera al momento con el
+pipeline anti-alucinación) — no lo saca de un catálogo cerrado de discos
+sembrados. El usuario nunca sube contenido: la IA cura el catálogo, recomienda y
+explica **por qué ese disco, para ti, hoy**. La escucha ocurre en Spotify/Apple
 Music/YouTube Music; Musicart es el guía.
 
 **Antes de escribir código, lee `ROADMAP.md`**: ahí están la visión completa,
-las fases con checkbox y los criterios de aceptación. **Fases 0–5 completas**
-(jun 2026); no hay fase EN CURSO hasta que el dueño defina la siguiente.
+las fases con checkbox y los criterios de aceptación. **Fases 0–5 completas;
+Fase 6 EN CURSO** (jun 2026): 6.1, 6.4, 6.5, 6.6 y 6.7 hechas; pendientes 6.2
+(Spotify), 6.3 (dossier más rico) y el plan de profundidad + curiosidades
+(6.8/6.9, ver ROADMAP).
 
 ## Reglas de trabajo para la IA
 
@@ -39,26 +44,46 @@ LLM por fetch directo (OpenAI o Anthropic, sin SDKs).
 ## Mapa del código
 
 ```
-prisma/schema.prisma     Modelos: Artist, Album, Dossier (jumpsJson), TrackNote,
-                         Profile, DailyPick (reason, mood, returnPick), Review,
-                         GenerationQueue, PushSubscription, Rewind, MusicalThread,
-                         DuetPair/DuetPick, DossierChat. Campos *Json son String.
-prisma/seed.ts           Seed idempotente con 3 discos demo (manual: npm run db:seed).
-src/app/page.tsx         Home: el ritual diario, personalizado por device (cookie).
-src/app/album/[id]/      Dossier completo del disco + saltos de descubrimiento.
+prisma/schema.prisma     Modelos: Artist, Album (difficulty 1-5, impact 1-100),
+                         Dossier (jumpsJson, impactNote = por qué del impacto),
+                         TrackNote, Profile, DailyPick (reason, mood, returnPick),
+                         Review (rating 1-10; answersJson trae comentario libre +
+                         canción favorita), GenerationQueue, GenerationBudget
+                         (tope de gasto diario 6.6), PushSubscription, Rewind,
+                         MusicalThread, DuetPair/DuetPick, DossierChat, DossierView.
+                         Campos *Json son String.
+prisma/seed.ts|fixtures.ts  Seed idempotente con 3 discos demo (con impactNote).
+src/app/page.tsx         Home: gate de onboarding (sin perfil → Onboarding, NO se
+                         muestra disco) → gate de idioma (solo si no hay pick hoy)
+                         → pick guardado / fabricar disco fresco / rotación.
+src/app/api/pick-hoy/    Route (maxDuration 300) que fabrica el disco fresco del
+                         día (generarPickDelDia); con {rehacer:true} y admin lo
+                         rehace. La home la dispara con pantalla de carga.
+src/app/album/[id]/      Dossier completo: métricas clicleables (impacto/dificultad),
+                         reseña (1-10 + comentario + canción favorita) y saltos.
 src/app/diario/          Historial de escuchas con racha + hilo musical (5.4).
 src/app/rebobinada/      Carta mensual del mes musical (5.2).
 src/app/dueto/           Disco compartido semanal entre dos cuentas (5.5).
-src/app/perfil/          Onboarding, push, dueto, Stripe (client + server actions).
+src/app/perfil/          Edición de perfil, push, dueto, Stripe, privacidad.
 src/app/entrar/          Inicio de sesión (Google + email) y fusión del device.
-src/app/revision/        Panel del dueño: drafts + cola (/revision?clave=ADMIN_SECRET).
+src/app/revision/        Panel del dueño: drafts + cola + crear disco + tope de
+                         gasto + TTS (admin por ADMIN_EMAILS).
 src/auth.ts              Auth.js: providers, Prisma adapter, sesión en DB.
+src/lib/admin.ts         isAdminEmail / requireAdmin (env ADMIN_EMAILS).
 src/app/actions.ts       Server actions: saveReview, getReview, saveProfile,
-                         getJournal, checkInMood.
+                         getJournal, checkInMood, hasProfile.
 src/lib/daily.ts         Rotación global determinista: el fallback eterno del
                          pick personalizado (usuarios sin señales o IA caída).
-src/lib/recommend.ts     Motor de recomendación (Fase 1 + 3.3 + 5.6): pick por perfil+
-                         diario+mood; pick de regreso tras ausencia (return-ritual).
+src/lib/recommend.ts     Motor (Fase 1 + 3.3 + 5.6 + 6.4): getPersonalizedPick (lee
+                         el pick guardado), generarPickDelDia (FABRICA el disco
+                         fresco del día), puedeGenerarPickFresco, borrarPickDeHoy,
+                         applyMood, elegirCon/PorGusto (fallback de catálogo),
+                         formatPerfil (incluye disco que te marcó + canción fav).
+src/lib/discover.ts      Fase 6.4: la IA PROPONE un disco real de toda la música
+                         para descubrir hoy (title+artist+reason) → pipeline.
+src/lib/budget.ts        Fase 6.6: tope de discos nuevos/día (DAILY_GENERATION_BUDGET).
+src/lib/review.ts        Claves del comentario libre y canción favorita; escala
+                         1-10 (RATING_MAX, LOVED_THRESHOLD, splitAnswers).
 src/lib/musical-thread.ts Fase 5.4: conecta reseñas del diario entre sí (cacheada).
 src/lib/duet.ts          Fase 5.5: invitación, pick semanal por intersección de gustos.
 src/lib/rewind.ts        Fase 5.2: rebobinada mensual cacheada.
@@ -71,18 +96,24 @@ src/lib/curator.ts       Curador IA (Fase 2): propone álbumes → GenerationQue
 src/lib/db.ts            Singleton de PrismaClient.
 src/lib/dossier/         Pipeline anti-alucinación:
   facts.ts                 reúne hechos (MusicBrainz, Wikipedia, Last.fm, iTunes, Odesli)
-  generate.ts              LLM narra SOLO sobre el FactsPayload
+  generate.ts              LLM narra SOLO sobre el FactsPayload (intro, artista,
+                           whyItMatters, trackNotes, jumps, impactNote, difficulty, impact)
   verify.ts                LLM verificador caza inventos + validadores duros
-  pipeline.ts              orquesta: facts → generate → verify → save (draft|published)
-  llm.ts                   adapter OpenAI/Anthropic (env: LLM_PROVIDER, LLM_MODEL)
+  pipeline.ts              orquesta: facts → generate → verify → save (reused?)
+  llm.ts                   adapter OpenAI/Anthropic + hayClaveIA() (env LLM_PROVIDER,
+                           LLM_MODEL; plan 6.8: GENERATION_MODEL premium solo para escribir)
 src/lib/sources/         Clientes de las APIs externas.
 src/lib/types.ts         Tipos de dominio (FactsPayload, DossierContent, Palette…).
 src/lib/merge-device.ts  Fusión Profile/Reviews/DailyPicks al iniciar sesión.
 src/lib/device.ts        Identidad anónima por dispositivo (localStorage + cookie
                          musicart_device para personalizar en el servidor).
 src/lib/theme.ts|palette.ts  Theming de la UI con la paleta de la portada.
-src/components/          DailyReveal, MoodCheckin, ShareAlbum, DeviceSync, Narrator (voz),
-                         ReflectionForm, AlbumChat, DuetPanel, PushToggle, InstallPrompt…
+src/components/          Onboarding (entrada por pasos, 6.7), CreandoDiscoHoy (carga
+                         del disco fresco), RehacerDiscoAdmin, DailyReveal,
+                         ImpactoCultural + DificultadEscucha (clicleables),
+                         ReflectionForm (1-10 + comentario + canción favorita),
+                         MoodCheckin, ShareAlbum, DeviceSync, Narrator, AlbumChat,
+                         DuetPanel, PushToggle, ProfileForm, InstallPrompt…
 src/app/explorar/        Rutas temáticas (Fase 4.4).
 scripts/dossier.ts       CLI: npm run dossier -- "Álbum" "Artista" --publish
 scripts/worker.ts        Worker del catálogo (cron Railway): npm run worker
@@ -111,7 +142,15 @@ npm run push                                     # envío Web Push del disco del
 - **El build ya NO siembra la base** (tarea 1.5 hecha): para un entorno nuevo
   corre `npm run db:seed` a mano (sigue siendo idempotente).
 - **Variables en Vercel:** `DATABASE_URL`, `OPENAI_API_KEY` (la usa el motor de
-  recomendación en runtime), `ADMIN_SECRET` (protege el panel `/revision`).
+  recomendación Y la fabricación del disco fresco en runtime), `ADMIN_EMAILS`
+  (correos admin separados por coma; gatean `/revision` y el botón "Rehacer mi
+  disco de hoy"). Opcional `DAILY_GENERATION_BUDGET` (tope de discos nuevos/día
+  para oyentes, default 15; ver `src/lib/budget.ts`). LLM: `LLM_PROVIDER`,
+  `LLM_MODEL` (default `gpt-4o-mini`). Resto de variables: ver README.
+- **Disco fresco del día (Fase 6.4):** la home no fabrica en SSR (tarda 1-3 min).
+  Si no hay pick guardado y el oyente tiene perfil, muestra `CreandoDiscoHoy` que
+  hace POST a `/api/pick-hoy` (`maxDuration=300`); al terminar refresca. Si la IA
+  falla o se acaba el tope → cae a catálogo/rotación (la app nunca se cae).
 - **Worker del catálogo (Fase 2):** servicio cron en Railway (ya dado de alta
   y "Ready") que corre `npm run worker` cada día a las 06:00 UTC. Toda su
   configuración vive en `railway.json` (build no-op, start, cron). Sus
@@ -123,6 +162,16 @@ npm run push                                     # envío Web Push del disco del
 ## Gotchas conocidos
 
 - SQLite NO funciona en Vercel (ya se migró; no volver atrás).
+- **Preview y Producción comparten `DATABASE_URL`** (misma base de Railway): el
+  build del Preview de cada PR ya corre `prisma migrate deploy` sobre la base
+  real, así que las migraciones se aplican al abrir el PR (Producción las salta
+  por idempotencia). Tenlo en cuenta con migraciones que reescalan datos.
+- **Escalas:** dificultad del álbum 1-5 (estrellas); impacto cultural 1-100
+  (honesto, con leyenda + `impactNote` clicleable); puntaje del usuario 1-10
+  (umbral "loved" = 8). Migraciones ya reescalaron datos viejos.
+- **Entrada = onboarding (6.7):** sin perfil NO se muestra ningún disco; la home
+  redirige a `Onboarding`. Si tocas ese gate, recuerda que `DeviceSync` refresca
+  una vez al inicio (no rompe el onboarding porque ocurre antes de interactuar).
 - `package.json#prisma` está deprecado (warning en builds; migrar a
   `prisma.config.ts` cuando toque, no es urgente).
 - `next/font` descarga Google Fonts en build: los sandboxes sin red fallan ahí

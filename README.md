@@ -17,20 +17,33 @@ de descubrimiento — verificado, narrado y personalizado.
 
 ## El loop diario
 
-1. **Hoy** — *tu* álbum del día: la IA lo elige según tu perfil, tu diario y tu
-   ánimo, y te dice **por qué este disco, para ti, hoy**. (Sin señales tuyas
-   aún, va la rotación global — la app nunca depende de que la IA responda.)
-2. **Mood** — "¿cómo te sientes hoy?": cambiar el ánimo puede re-elegir el disco.
+0. **Entrada = onboarding** — quien entra sin perfil no ve un disco genérico: va
+   directo a un onboarding por pasos (géneros, artistas favoritos con foto, un
+   disco que te marcó, tu canción favorita, idiomas, qué buscas). Solo al
+   terminarlo se le fabrica su primer disco.
+1. **Hoy** — la IA **fabrica un disco fresco a tu medida**: propone un disco real
+   de toda la música según tu perfil + diario + ánimo y lo genera al momento (con
+   pantalla "Estamos creando tu disco de hoy"), explicando **por qué este disco,
+   para ti, hoy**. No lo saca de un catálogo sembrado. Si la IA falla o se acaba
+   el tope diario, cae a catálogo/rotación — la app nunca depende de la IA.
+2. **Mood** — "¿cómo te sientes hoy?": se guarda como señal para mañana (no tira
+   el disco fresco de hoy para rehacerlo).
 3. **Dossier** — la historia, el artista, las canciones con notas, por qué importa.
+   Dificultad (1-5) e **impacto cultural (1-100)** son **clicleables**: explican
+   por qué, sobre hechos verificados (premios, listas…).
 4. **Narración por voz** — todo el dossier se puede escuchar.
 5. **Escuchar** — deep links a Spotify / Apple Music / YouTube Music.
-6. **Reflexión** — rating + preguntas → se guarda en el **Diario** (con racha 🔥
-   y, si tienes varias reseñas, el **hilo musical** que conecta tus escuchas).
+6. **Reflexión** — **puntaje 1-10 + comentario libre + canción favorita** →
+   alimentan la memoria del curador y el **Diario** (con racha 🔥 e **hilo
+   musical** que conecta tus escuchas).
 7. **La madriguera** — cada dossier sugiere saltos verificados a otros discos
    (rivalidades, colaboraciones, influencias).
 8. **Extras** — rebobinada mensual (`/rebobinada`), chat con el dossier,
    modo dueto semanal (`/dueto`), recordatorio push (Perfil), pick de regreso
    con cariño si llevas días sin pasar.
+
+**Admin** (correos en `ADMIN_EMAILS`): panel `/revision` (drafts, cola, crear
+disco, tope de gasto, TTS, métricas) y botón "Rehacer mi disco de hoy" en la home.
 
 ## IA anti-alucinación por diseño
 
@@ -115,7 +128,10 @@ npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
   `GOOGLE_CLIENT_SECRET`. Email opcional: `AUTH_RESEND_KEY`, `EMAIL_FROM`.
   Stripe (Fase 4.5): `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`
   (endpoint `https://tu-dominio/api/stripe/webhook`). Opcional: `FREEMIUM_DOSSIER_LIMIT`
-  (default 5). Blob TTS: `BLOB_READ_WRITE_TOKEN`. Web Push (Fase 5.1):
+  (default 5), `DAILY_GENERATION_BUDGET` (tope de discos nuevos/día para oyentes,
+  default 15; Fase 6.6), `LLM_PROVIDER`/`LLM_MODEL` (default `gpt-4o-mini`; plan
+  6.8: `GENERATION_MODEL` premium solo para escribir el dossier).
+  Blob TTS: `BLOB_READ_WRITE_TOKEN`. Web Push (Fase 5.1):
   `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
   (genera las claves con `npx web-push generate-vapid-keys`); el envío diario
   es `npm run push` (cron en Railway con las mismas variables + `DATABASE_URL`).
@@ -146,3 +162,8 @@ src/components/       DailyReveal, MoodCheckin, Narrator, AlbumChat, DuetPanel, 
 - ✅ **Fase 4** — TTS, compartir, conductor, rutas, Stripe freemium, analytics admin
 - ✅ **Fase 5** — Web Push, rebobinada mensual, chat con el disco, hilo musical
   en el diario, modo dueto semanal y pick de regreso con alma tras ausencia
+- 🚧 **Fase 6** — "un amigo que te conoce" (EN CURSO): onboarding como entrada
+  (6.7), **disco fresco fabricado cada día** por usuario (6.4), impacto 1-100 +
+  reseña 1-10 con comentario y canción favorita + rankings clicleables (6.5),
+  tope de gasto de IA (6.6). Pendientes: Spotify (6.2), profundidad narrativa con
+  modelo premium (6.8) y curiosidades/madriguera viva (6.3/6.9).

@@ -3,8 +3,8 @@
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { todayKey } from "./daily";
-import { llm, extractJson } from "./dossier/llm";
+import { todayKey, getTodayPick } from "./daily";
+import { llm, extractJson, hayClaveIA } from "./dossier/llm";
 import {
   type ListenerIdentity,
   pastPicksWhere,
@@ -18,6 +18,8 @@ import {
 } from "./return-ritual";
 import { parseJson, type FactsPayload } from "./types";
 import { formatCuriosities, type CuriosityAnswer } from "./curiosities";
+import { proponerDiscoDescubrimiento } from "./discover";
+import { runDossierPipeline } from "./dossier/pipeline";
 
 const MAX_REVIEWS = 10;
 const MAX_RECENT_PICKS = 7;
@@ -96,18 +98,131 @@ async function saveTodaysPick(
 }
 
 /**
- * Pick del día. Con sesión, comparte el mismo disco entre dispositivos.
+ * Devuelve el pick del día YA guardado (no genera nada). Con sesión, comparte el
+ * mismo disco entre dispositivos. La fabricación del disco fresco vive en
+ * `generarPickDelDia` (flujo con pantalla de carga), para no colgar la home.
  */
 export async function getPersonalizedPick(
   deviceId: string,
   userId?: string | null,
   tz?: string | null,
-  lang?: string | null, // idioma elegido hoy ("Español", "Italiano", "any", …)
 ): Promise<PickPersonal | null> {
   const ctx: PickCtx = { deviceId, userId: userId ?? null };
   if (!ctx.deviceId && !ctx.userId) return null;
   try {
     const date = todayKey(tz);
+    const guardado = await findTodaysPick(ctx, date);
+    if (!guardado) return null;
+    const dossier = await dossierDelAlbum(guardado.albumId);
+    if (!dossier) return null;
+    return {
+      dossier,
+      reason: guardado.reason,
+      mood: guardado.mood,
+      regenerated: guardado.regenerated,
+      returnPick: guardado.returnPick,
+      absenceDays: guardado.absenceDays,
+    };
+  } catch (err) {
+    console.error("[recommend] no pude leer el pick guardado:", err);
+    return null;
+  }
+}
+
+/**
+ * ¿Podemos fabricarle un disco fresco a este oyente hoy? Sí cuando tiene señales
+ * de gusto (perfil o diario) y hay clave de IA. Si no, va la rotación global.
+ */
+export async function puedeGenerarPickFresco(
+  deviceId: string,
+  userId?: string | null,
+): Promise<boolean> {
+  if (!hayClaveIA()) return false;
+  const identity: ListenerIdentity = { deviceId, userId: userId ?? null };
+  const profileFilter = profileWhere(identity);
+  const reviewFilter = reviewsWhere(identity);
+  const [perfil, reseñas] = await Promise.all([
+    profileFilter ? prisma.profile.count({ where: profileFilter }) : Promise.resolve(0),
+    reviewFilter ? prisma.review.count({ where: reviewFilter }) : Promise.resolve(0),
+  ]);
+  return perfil > 0 || reseñas > 0;
+}
+
+/**
+ * Borra el disco de hoy de este oyente (para rehacerlo). Devuelve cuántos borró.
+ */
+export async function borrarPickDeHoy(
+  deviceId: string,
+  userId?: string | null,
+  tz?: string | null,
+): Promise<number> {
+  const date = todayKey(tz);
+  const filtros: Prisma.DailyPickWhereInput[] = [];
+  if (userId) filtros.push({ userId, date });
+  if (deviceId) filtros.push({ deviceId, date });
+  if (filtros.length === 0) return 0;
+  const { count } = await prisma.dailyPick.deleteMany({ where: { OR: filtros } });
+  return count;
+}
+
+/**
+ * Caída segura del disco fresco: primero intenta elegir del catálogo publicado
+ * (por gusto); si ni eso da, guarda la rotación global como pick. Así, mientras
+ * haya un disco en el catálogo, SIEMPRE queda un pick guardado — la home no se
+ * queda reintentando en bucle.
+ */
+async function caerAlCatalogo(
+  ctx: PickCtx,
+  date: string,
+  tz: string | null | undefined,
+  mood: string | null,
+  lang: string | null,
+): Promise<PickPersonal | null> {
+  const delCatalogo = await recomendarYGuardar(ctx, { mood, lang }, tz);
+  if (delCatalogo) return delCatalogo;
+
+  const rotacion = await getTodayPick(tz);
+  if (!rotacion) return null;
+  await saveTodaysPick(ctx, date, {
+    albumId: rotacion.album.id,
+    reason: null,
+    mood,
+    regenerated: false,
+  });
+  return {
+    dossier: rotacion,
+    reason: null,
+    mood,
+    regenerated: false,
+    returnPick: false,
+    absenceDays: null,
+  };
+}
+
+/**
+ * Fabrica el disco fresco del día: la IA propone un disco real de toda la música
+ * (según gusto + diario + ánimo) y el pipeline lo investiga, narra, verifica y
+ * publica. Ese disco recién hecho es el del día. Tarda 1-3 min, por eso corre en
+ * un flujo aparte (route /api/pick-hoy) con pantalla de carga, no en la home.
+ *
+ * Red de seguridad en cada paso: si la propuesta o la generación fallan (o el
+ * disco no pasa la verificación), cae a elegir del catálogo ya publicado, y de
+ * ahí a la rotación global. La app nunca se queda sin disco del día.
+ */
+export async function generarPickDelDia(
+  deviceId: string,
+  userId?: string | null,
+  tz?: string | null,
+  lang?: string | null,
+  mood?: string | null,
+): Promise<PickPersonal | null> {
+  const ctx: PickCtx = { deviceId, userId: userId ?? null };
+  if (!ctx.deviceId && !ctx.userId) return null;
+  const date = todayKey(tz);
+  const langPick = lang && lang !== "Cualquiera" ? lang : null;
+
+  try {
+    // Idempotencia: si ya hay disco de hoy (otra pestaña lo hizo), devolverlo.
     const guardado = await findTodaysPick(ctx, date);
     if (guardado) {
       const dossier = await dossierDelAlbum(guardado.albumId);
@@ -122,10 +237,113 @@ export async function getPersonalizedPick(
         };
       }
     }
-    return await recomendarYGuardar(ctx, { mood: null, lang: lang ?? null }, tz);
+
+    const identity: ListenerIdentity = { deviceId: ctx.deviceId, userId: ctx.userId };
+    const profileFilter = profileWhere(identity);
+    const reviewFilter = reviewsWhere(identity);
+    const pastFilter = pastPicksWhere(identity, date);
+
+    const [profile, reviews, picksRecientes] = await Promise.all([
+      profileFilter
+        ? prisma.profile.findFirst({ where: profileFilter })
+        : Promise.resolve(null),
+      reviewFilter
+        ? prisma.review.findMany({
+            where: reviewFilter,
+            include: { album: { include: { artist: true } } },
+            orderBy: { createdAt: "desc" },
+            take: MAX_REVIEWS,
+          })
+        : Promise.resolve([]),
+      pastFilter
+        ? prisma.dailyPick.findMany({
+            where: pastFilter,
+            include: { album: { include: { artist: true } } },
+            orderBy: { date: "desc" },
+            take: MAX_RECENT_PICKS,
+          })
+        : Promise.resolve([]),
+    ]);
+
+    // Sin señales de gusto no fabricamos (sería un disco al azar): que decida la
+    // rotación global. (Normalmente no llegamos aquí: la home filtra antes.)
+    if (!profile && reviews.length === 0) {
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick);
+    }
+
+    const parsedProfile = profile
+      ? parseJson<Record<string, unknown>>(profile.answersJson, {})
+      : null;
+    const returnRitual = await detectReturnRitual(identity, date);
+
+    // Lo que ya conoce (a evitar al proponer): reseñados + mostrados recientes.
+    const yaConoce = [
+      ...reviews.map((r) => `"${r.album.title}" de ${r.album.artist.name}`),
+      ...picksRecientes.map((p) => `"${p.album.title}" de ${p.album.artist.name}`),
+    ];
+
+    const propuesta = await proponerDiscoDescubrimiento({
+      perfilTexto: perfilATexto(parsedProfile),
+      diarioTexto: diarioATexto(reviews),
+      recientesTexto: recientesATexto(picksRecientes),
+      yaConoce,
+      mood: mood ?? null,
+      lang: langPick,
+      esRegreso: Boolean(returnRitual),
+      diasAusente: returnRitual?.absenceDays ?? null,
+    });
+
+    // El pipeline investiga, narra, verifica y publica (o reutiliza si ya existe).
+    const result = await runDossierPipeline(propuesta.title, propuesta.artist, {
+      publish: true,
+    });
+
+    // Solo mostramos lo verificado. Si quedó en borrador, caemos al catálogo.
+    if (result.status !== "published") {
+      console.warn(
+        `[recommend] "${propuesta.title}" de ${propuesta.artist} no pasó verificación; voy al catálogo.`,
+      );
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick);
+    }
+
+    const dossier = await dossierDelAlbum(result.albumId);
+    if (!dossier) {
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick);
+    }
+
+    let reason = propuesta.reason?.trim().slice(0, 600) || null;
+    if (returnRitual && (!reason || reason.length < 40)) {
+      reason = fallbackReturnReason(
+        returnRitual.absenceDays,
+        dossier.album.title,
+        dossier.album.artist.name,
+      );
+    }
+
+    await saveTodaysPick(ctx, date, {
+      albumId: dossier.album.id,
+      reason,
+      mood: mood ?? null,
+      regenerated: false,
+      returnPick: Boolean(returnRitual),
+      absenceDays: returnRitual?.absenceDays ?? null,
+    });
+
+    return {
+      dossier,
+      reason,
+      mood: mood ?? null,
+      regenerated: false,
+      returnPick: Boolean(returnRitual),
+      absenceDays: returnRitual?.absenceDays ?? null,
+    };
   } catch (err) {
-    console.error("[recommend] pick personalizado falló, va rotación global:", err);
-    return null;
+    console.error("[recommend] disco fresco falló, voy al catálogo:", err);
+    try {
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick);
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -146,25 +364,13 @@ export async function applyMood(
       return { ok: pick !== null };
     }
 
-    if (guardado.regenerated) {
-      await prisma.dailyPick.update({
-        where: { id: guardado.id },
-        data: { mood },
-      });
-      return { ok: true };
-    }
-
-    const pick = await recomendarYGuardar(ctx, {
-      mood,
-      albumPrevio: guardado.albumId,
-      regenerated: true,
-    }, tz);
-    if (!pick) {
-      await prisma.dailyPick.update({
-        where: { id: guardado.id },
-        data: { mood },
-      });
-    }
+    // El disco de hoy ya está hecho (muchas veces fabricado a tu medida): no lo
+    // tiramos para rehacerlo. Guardamos tu ánimo como señal —cuenta para la
+    // recomendación de mañana— y dejamos el disco de hoy en pie.
+    await prisma.dailyPick.update({
+      where: { id: guardado.id },
+      data: { mood },
+    });
     return { ok: true };
   } catch (err) {
     console.error("[recommend] check-in de mood falló:", err);
@@ -343,34 +549,9 @@ async function elegirConLlm(input: {
     })
     .join("\n");
 
-  const perfilTexto = input.profile
-    ? formatPerfil(input.profile)
-    : "(sin perfil todavía)";
-
-  const diarioTexto =
-    input.reviews.length > 0
-      ? input.reviews
-          .map((r) => {
-            const respuestas = Object.entries(
-              parseJson<Record<string, string>>(r.answersJson, {}),
-            )
-              .filter(([, v]) => v.trim())
-              .map(([q, v]) => `    · ${q} → "${v.slice(0, 140)}"`)
-              .join("\n");
-            return (
-              `- "${r.album.title}" de ${r.album.artist.name}: ${r.rating}★` +
-              (respuestas ? `\n${respuestas}` : "")
-            );
-          })
-          .join("\n")
-      : "(aún no ha reseñado ningún disco)";
-
-  const recientesTexto =
-    input.picksRecientes.length > 0
-      ? input.picksRecientes
-          .map((p) => `- ${p.date}: "${p.album.title}" de ${p.album.artist.name}`)
-          .join("\n")
-      : "(ninguno)";
+  const perfilTexto = perfilATexto(input.profile);
+  const diarioTexto = diarioATexto(input.reviews);
+  const recientesTexto = recientesATexto(input.picksRecientes);
 
   const regeneracionTexto = input.albumPrevio
     ? `\nHOY YA SE LE HABÍA RECOMENDADO: "${input.albumPrevio.album.title}" de ${input.albumPrevio.album.artist.name}, pero acaba de contarnos su ánimo. Puedes mantener ese disco si encaja con el ánimo (escribiendo una razón nueva que lo conecte) o elegir otro que encaje mejor.\n`
@@ -473,6 +654,38 @@ function formatPerfil(profile: Record<string, unknown>): string {
     curiosities ? `Lo que me ha contado (preguntas del día):\n${curiosities}` : null,
   ].filter(Boolean);
   return lineas.length ? lineas.join("\n") : "(perfil vacío)";
+}
+
+// Bloques de texto reutilizables (los usan el selector de catálogo y el
+// proponedor de disco fresco) para que el prompt cite solo señales reales.
+
+function perfilATexto(profile: Record<string, unknown> | null): string {
+  return profile ? formatPerfil(profile) : "(sin perfil todavía)";
+}
+
+function diarioATexto(reviews: ReviewConAlbum[]): string {
+  if (reviews.length === 0) return "(aún no ha reseñado ningún disco)";
+  return reviews
+    .map((r) => {
+      const respuestas = Object.entries(
+        parseJson<Record<string, string>>(r.answersJson, {}),
+      )
+        .filter(([, v]) => v.trim())
+        .map(([q, v]) => `    · ${q} → "${v.slice(0, 140)}"`)
+        .join("\n");
+      return (
+        `- "${r.album.title}" de ${r.album.artist.name}: ${r.rating}★` +
+        (respuestas ? `\n${respuestas}` : "")
+      );
+    })
+    .join("\n");
+}
+
+function recientesATexto(picks: PickConAlbum[]): string {
+  if (picks.length === 0) return "(ninguno)";
+  return picks
+    .map((p) => `- ${p.date}: "${p.album.title}" de ${p.album.artist.name}`)
+    .join("\n");
 }
 
 // ─── Fallback por gusto, sin IA ──────────────────────────────────────────────

@@ -5,13 +5,16 @@
 import { cookies } from "next/headers";
 import { auth } from "@/auth";
 import { getTodayPick, formatDateEs, todayKey } from "@/lib/daily";
-import { getPersonalizedPick } from "@/lib/recommend";
+import { getPersonalizedPick, puedeGenerarPickFresco } from "@/lib/recommend";
 import { getMadriguera } from "@/lib/madriguera";
 import { hasProfile } from "@/app/actions";
 import { DEVICE_COOKIE, TZ_COOKIE, LANG_COOKIE, parseTodayLang } from "@/lib/device";
 import { albumThemeStyle } from "@/lib/theme";
 import { parseJson, type Palette } from "@/lib/types";
+import { isAdminEmail } from "@/lib/admin";
 import { DailyReveal } from "@/components/DailyReveal";
+import { CreandoDiscoHoy } from "@/components/CreandoDiscoHoy";
+import { RehacerDiscoAdmin } from "@/components/RehacerDiscoAdmin";
 import { MoodCheckin } from "@/components/MoodCheckin";
 import { CuriosityCard } from "@/components/CuriosityCard";
 import { LanguageGate } from "@/components/LanguageGate";
@@ -45,8 +48,19 @@ export default async function Home() {
 
   const personal =
     deviceId || userId
-      ? await getPersonalizedPick(deviceId, userId, tz, todayLang)
+      ? await getPersonalizedPick(deviceId, userId, tz)
       : null;
+
+  // Sin disco guardado todavía: si el oyente tiene señales de gusto, fabricamos
+  // hoy un disco fresco a su medida (tarda 1-3 min) mostrando una pantalla de
+  // carga; cuando termina, se refresca y aparece. Si no tiene señales (o no hay
+  // IA), seguimos con la rotación global de siempre, sin esperas.
+  if (!personal && (deviceId || userId)) {
+    if (await puedeGenerarPickFresco(deviceId, userId)) {
+      return <CreandoDiscoHoy />;
+    }
+  }
+
   const pick = personal?.dossier ?? (await getTodayPick(tz));
 
   if (!pick) {
@@ -109,6 +123,7 @@ export default async function Home() {
         }}
       />
       <div className="relative">
+        {isAdminEmail(session?.user?.email) && <RehacerDiscoAdmin />}
         <MoodCheckin
           mood={personal?.mood ?? null}
           canChange={!personal?.regenerated}

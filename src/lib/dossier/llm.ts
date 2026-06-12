@@ -21,6 +21,11 @@ function getProvider(): "openai" | "anthropic" {
   );
 }
 
+/** ¿Hay una clave de IA configurada? Para decidir si podemos fabricar discos en vivo. */
+export function hayClaveIA(): boolean {
+  return Boolean(process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);
+}
+
 async function callOpenAI(opts: LlmOptions): Promise<string> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("Falta OPENAI_API_KEY en .env");

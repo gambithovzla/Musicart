@@ -290,17 +290,32 @@ disco se sienta elegido para ti, no una rotación genérica.
   posible después.
 - [ ] **6.3 Dossier más rico** — la IA siempre escribe nota canción-por-canción
   + un bloque de curiosidades verificadas contra el FactsPayload.
+- [x] **6.4 Disco fresco cada día (no de los sembrados)** — el disco del día se
+  FABRICA al momento para cada usuario: la IA propone un disco real de toda la
+  música grabada (según gusto + diario + ánimo, evitando lo ya mostrado/reseñado)
+  y el pipeline lo investiga, narra, verifica y publica —en vez de elegir de un
+  catálogo cerrado de discos sembrados (`src/lib/discover.ts`,
+  `generarPickDelDia` en `src/lib/recommend.ts`). Como tarda 1-3 min, corre en su
+  propia route (`/api/pick-hoy`, `maxDuration=300`) con pantalla "Estamos creando
+  tu disco de hoy" (`CreandoDiscoHoy`); al terminar, la home se refresca y lo
+  muestra. Cae a catálogo/rotación si la IA falla (la app nunca se cae) y el
+  disco recién hecho queda cacheado (el catálogo crece con discos personalizados).
+  Solo se fabrica a quien tiene señales de gusto (perfil o diario); sin señales,
+  rotación global. Botón solo-admin "Rehacer mi disco de hoy" (`RehacerDiscoAdmin`)
+  para regenerar a voluntad — el control del dueño sobre el disco de cada día.
 
 ### Criterios de aceptación
 
 - [x] El perfil captura géneros y artistas favoritos, y el primer disco tras
   el onboarding ya es personalizado (no la rotación global).
+- [x] El disco del día se genera fresco por usuario (no se saca de un catálogo
+  sembrado); si la IA falla, cae a catálogo/rotación sin romper la app.
 
 ---
 
 ## Estado actual (junio 2026)
 
-**Fases 0–5 completas. Fase 6 EN CURSO** (6.1 hecha; 6.2 y 6.3 pendientes).
+**Fases 0–5 completas. Fase 6 EN CURSO** (6.1 y 6.4 hechas; 6.2 y 6.3 pendientes).
 
 ---
 

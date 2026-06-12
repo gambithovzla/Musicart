@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { DEVICE_COOKIE } from "@/lib/device";
 import { mergeDeviceToUser } from "@/lib/merge-device";
+import { syncSpotifyTasteForUser, userHasSpotifyAccount } from "@/lib/spotify-sync";
+import { spotifyPublicEnabled } from "@/lib/spotify-api";
 
 export default async function EntrarCompletadoPage({
   searchParams,
@@ -16,6 +18,10 @@ export default async function EntrarCompletadoPage({
   const deviceId = (await cookies()).get(DEVICE_COOKIE)?.value ?? "";
   if (deviceId) {
     await mergeDeviceToUser(session.user.id, deviceId);
+  }
+
+  if (spotifyPublicEnabled() && (await userHasSpotifyAccount(session.user.id))) {
+    await syncSpotifyTasteForUser(session.user.id, deviceId);
   }
 
   const dest = next?.startsWith("/") && !next.startsWith("//") ? next : "/perfil";

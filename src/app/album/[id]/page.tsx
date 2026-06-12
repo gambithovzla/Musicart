@@ -23,6 +23,7 @@ import {
 } from "@/lib/types";
 import { ImpactoCultural } from "@/components/ImpactoCultural";
 import { DificultadEscucha } from "@/components/DificultadEscucha";
+import { DidYouKnowSection } from "@/components/DidYouKnowSection";
 import { DossierSection } from "@/components/DossierSection";
 import { ListenLinks } from "@/components/ListenLinks";
 import { ReflectionForm } from "@/components/ReflectionForm";
@@ -97,6 +98,7 @@ export default async function AlbumPage({
   const stripeReady = stripeConfigured();
   const links = parseJson<AlbumLinks>(album.linksJson, {});
   const questions = parseJson<string[]>(dossier.questionsJson, []);
+  const wowFacts = parseJson<string[]>(dossier.wowFactsJson, []);
   const audio = parseJson<DossierAudio | null>(dossier.audioJson, null);
   const chatQuota = access.allowed
     ? await getChatQuota(identity, album.id, session?.user?.email)
@@ -142,7 +144,7 @@ export default async function AlbumPage({
       ? [
           {
             id: "tracks",
-            label: "Las canciones clave",
+            label: "Canción por canción",
             text: notedTracks
               .map((t) => `Canción ${t.position}: ${t.title}. ${t.note}`)
               .join(" "),
@@ -281,31 +283,30 @@ export default async function AlbumPage({
                 </div>
               </DossierSection>
 
-              <DossierSection n="03" title="Las canciones">
+              <DossierSection n="03" title="Canción por canción">
                 <p className="text-sm text-dim">
-                  Dale play y vuelve aquí cuando llegues a las marcadas.
+                  Dale play y vuelve aquí mientras escuchas — cada pista con su
+                  contexto.
                 </p>
                 <ol className="mt-4 flex flex-col gap-1.5">
                   {dossier.trackNotes.map((t) => (
                     <li
                       key={t.id}
-                      className={
-                        t.note
-                          ? "rounded-xl border-l-2 border-album bg-black/20 px-4 py-3"
-                          : "px-4 py-1.5"
-                      }
+                      className="rounded-xl border-l-2 border-album/60 bg-black/20 px-4 py-3"
                     >
                       <div className="flex items-baseline gap-3">
                         <span className="w-5 shrink-0 text-right text-sm tabular-nums text-dim">
                           {t.position}
                         </span>
-                        <span className={t.note ? "font-medium" : "text-foreground/80"}>
-                          {t.title}
-                        </span>
+                        <span className="font-medium">{t.title}</span>
                       </div>
-                      {t.note && (
+                      {t.note ? (
                         <p className="font-serif mt-1.5 pl-8 text-[15px] italic leading-relaxed text-foreground/85">
                           {t.note}
+                        </p>
+                      ) : (
+                        <p className="mt-1.5 pl-8 text-xs text-dim italic">
+                          (Nota pendiente de regenerar este dossier)
                         </p>
                       )}
                     </li>
@@ -313,7 +314,9 @@ export default async function AlbumPage({
                 </ol>
               </DossierSection>
 
-              <DossierSection n="04" title="Escúchalo completo" accent defaultOpen>
+              <DidYouKnowSection facts={wowFacts} sectionNumber="04" />
+
+              <DossierSection n="05" title="Escúchalo completo" accent defaultOpen>
                 <p className="text-sm text-dim">
                   {album.durationMin
                     ? `Reserva ${album.durationMin} minutos. Vale la pena de principio a fin.`
@@ -324,7 +327,7 @@ export default async function AlbumPage({
                 </div>
               </DossierSection>
 
-              <DossierSection n="05" title="Por qué importa">
+              <DossierSection n="06" title="Por qué importa">
                 <div className="prose-dossier">
                   {dossier.whyItMatters.split("\n\n").map((p, i) => (
                     <p key={i}>{p}</p>
@@ -332,7 +335,7 @@ export default async function AlbumPage({
                 </div>
               </DossierSection>
 
-              <DossierSection n="06" title="Después de escuchar">
+              <DossierSection n="07" title="Después de escuchar">
                 <ReflectionForm
                   albumId={album.id}
                   questions={questions}
@@ -341,7 +344,7 @@ export default async function AlbumPage({
               </DossierSection>
 
               {saltos.length > 0 && (
-                <DossierSection n="07" title="Sigue la madriguera">
+                <DossierSection n="08" title="Sigue la madriguera">
                   <p className="text-sm text-dim">De este disco puedes saltar a…</p>
                   <div className="mt-4 flex flex-col gap-3">
                     {saltos.map(({ jump, albumId, coverUrl }) => {

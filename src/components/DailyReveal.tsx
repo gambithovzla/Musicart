@@ -27,6 +27,7 @@ export type DailyAlbum = {
   showProfileInvite: boolean; // sin perfil aún: invitar a contarnos quién escucha
   returnWelcome?: boolean; // Fase 5.6: regreso tras ausencia del ritual
   madriguera: MadrigueraAlbum[]; // discos para seguir explorando al terminar
+  wowHook?: string | null; // Fase 6.9: curiosidad verificada tras escuchar el disco
 };
 
 export function DailyReveal({ album }: { album: DailyAlbum }) {
@@ -175,6 +176,28 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
               ))}
             </div>
           </section>
+        )}
+
+        {album.wowHook && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="mx-auto mt-8 max-w-sm rounded-2xl border border-album/25 bg-album/8 px-5 py-4 text-left"
+          >
+            <p className="text-[0.65rem] uppercase tracking-[0.25em] text-album-light">
+              Lo que no sabías
+            </p>
+            <p className="font-serif mt-2 text-sm leading-relaxed text-foreground/90">
+              {album.wowHook}
+            </p>
+            <Link
+              href={`/album/${album.albumId}`}
+              className="mt-3 inline-block text-xs text-album-light underline underline-offset-4"
+            >
+              Ver más curiosidades del dossier →
+            </Link>
+          </motion.div>
         )}
 
         <Link

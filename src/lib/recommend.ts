@@ -9,6 +9,7 @@ import {
   type ListenerIdentity,
   pastPicksWhere,
   profileWhere,
+  findProfileRecord,
   reviewsWhere,
 } from "./identity";
 import {
@@ -41,6 +42,48 @@ export type PickPersonal = {
 };
 
 type PickCtx = { deviceId: string; userId: string | null };
+
+export type GenerarPickOpts = {
+  /** AlbumIds que no pueden volver a salir (p. ej. el disco de hoy antes de rehacer). */
+  excluirAlbumIds?: string[];
+};
+
+/** AlbumId del pick guardado hoy, si existe. */
+export async function albumIdPickDeHoy(
+  deviceId: string,
+  userId?: string | null,
+  tz?: string | null,
+): Promise<string | null> {
+  const ctx: PickCtx = { deviceId, userId: userId ?? null };
+  if (!ctx.deviceId && !ctx.userId) return null;
+  const pick = await findTodaysPick(ctx, todayKey(tz));
+  return pick?.albumId ?? null;
+}
+
+async function etiquetasAlbumes(ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const albums = await prisma.album.findMany({
+    where: { id: { in: ids } },
+    include: { artist: true },
+  });
+  return albums.map((a) => `"${a.title}" de ${a.artist.name}`);
+}
+
+async function propuestaEsAlbumExcluido(
+  propuesta: { title: string; artist: string },
+  excluir: Set<string>,
+): Promise<boolean> {
+  if (excluir.size === 0) return false;
+  const match = await prisma.album.findFirst({
+    where: {
+      id: { in: [...excluir] },
+      title: { equals: propuesta.title, mode: "insensitive" },
+      artist: { name: { equals: propuesta.artist, mode: "insensitive" } },
+    },
+    select: { id: true },
+  });
+  return match !== null;
+}
 
 async function findTodaysPick(ctx: PickCtx, date: string) {
   if (ctx.userId) {
@@ -179,12 +222,45 @@ async function caerAlCatalogo(
   tz: string | null | undefined,
   mood: string | null,
   lang: string | null,
+  excluirAlbumIds?: string[],
 ): Promise<PickPersonal | null> {
-  const delCatalogo = await recomendarYGuardar(ctx, { mood, lang }, tz);
+  const delCatalogo = await recomendarYGuardar(
+    ctx,
+    { mood, lang, excluirAlbumIds, forzarDistinto: (excluirAlbumIds?.length ?? 0) > 0 },
+    tz,
+  );
   if (delCatalogo) return delCatalogo;
 
   const rotacion = await getTodayPick(tz);
   if (!rotacion) return null;
+  const excluir = new Set(excluirAlbumIds ?? []);
+  if (excluir.has(rotacion.album.id)) {
+    const otro = await prisma.dossier.findFirst({
+      where: {
+        status: "published",
+        locale: "es",
+        albumId: { notIn: [...excluir] },
+      },
+      include: { album: { include: { artist: true } } },
+      orderBy: { id: "asc" },
+    });
+    if (otro) {
+      await saveTodaysPick(ctx, date, {
+        albumId: otro.album.id,
+        reason: null,
+        mood,
+        regenerated: true,
+      });
+      return {
+        dossier: otro,
+        reason: null,
+        mood,
+        regenerated: true,
+        returnPick: false,
+        absenceDays: null,
+      };
+    }
+  }
   await saveTodaysPick(ctx, date, {
     albumId: rotacion.album.id,
     reason: null,
@@ -217,11 +293,14 @@ export async function generarPickDelDia(
   tz?: string | null,
   lang?: string | null,
   mood?: string | null,
+  opts?: GenerarPickOpts,
 ): Promise<PickPersonal | null> {
   const ctx: PickCtx = { deviceId, userId: userId ?? null };
   if (!ctx.deviceId && !ctx.userId) return null;
   const date = todayKey(tz);
   const langPick = lang && lang !== "Cualquiera" ? lang : null;
+  const excluir = new Set(opts?.excluirAlbumIds ?? []);
+  const esRehacer = excluir.size > 0;
 
   try {
     // Idempotencia: si ya hay disco de hoy (otra pestaña lo hizo), devolverlo.
@@ -241,14 +320,11 @@ export async function generarPickDelDia(
     }
 
     const identity: ListenerIdentity = { deviceId: ctx.deviceId, userId: ctx.userId };
-    const profileFilter = profileWhere(identity);
     const reviewFilter = reviewsWhere(identity);
     const pastFilter = pastPicksWhere(identity, date);
 
     const [profile, reviews, picksRecientes] = await Promise.all([
-      profileFilter
-        ? prisma.profile.findFirst({ where: profileFilter })
-        : Promise.resolve(null),
+      findProfileRecord(identity),
       reviewFilter
         ? prisma.review.findMany({
             where: reviewFilter,
@@ -270,7 +346,7 @@ export async function generarPickDelDia(
     // Sin señales de gusto no fabricamos (sería un disco al azar): que decida la
     // rotación global. (Normalmente no llegamos aquí: la home filtra antes.)
     if (!profile && reviews.length === 0) {
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick);
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
     }
 
     const parsedProfile = profile
@@ -283,16 +359,17 @@ export async function generarPickDelDia(
     // sin costo de generación nueva). Así abrir la app a testers no se dispara.
     if (!(await hayPresupuestoHoy(date))) {
       console.warn("[recommend] tope de generación diario alcanzado; voy al catálogo.");
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick);
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
     }
 
     // Lo que ya conoce (a evitar al proponer): reseñados + mostrados recientes.
     const yaConoce = [
       ...reviews.map((r) => `"${r.album.title}" de ${r.album.artist.name}`),
       ...picksRecientes.map((p) => `"${p.album.title}" de ${p.album.artist.name}`),
+      ...(await etiquetasAlbumes([...excluir])),
     ];
 
-    const propuesta = await proponerDiscoDescubrimiento({
+    let propuesta = await proponerDiscoDescubrimiento({
       perfilTexto: perfilATexto(parsedProfile),
       diarioTexto: diarioATexto(reviews),
       recientesTexto: recientesATexto(picksRecientes),
@@ -301,12 +378,36 @@ export async function generarPickDelDia(
       lang: langPick,
       esRegreso: Boolean(returnRitual),
       diasAusente: returnRitual?.absenceDays ?? null,
+      esRehacer,
     });
+
+    if (esRehacer && (await propuestaEsAlbumExcluido(propuesta, excluir))) {
+      console.warn("[recommend] rehacer repitió propuesta; pido otro disco.");
+      propuesta = await proponerDiscoDescubrimiento({
+        perfilTexto: perfilATexto(parsedProfile),
+        diarioTexto: diarioATexto(reviews),
+        recientesTexto: recientesATexto(picksRecientes),
+        yaConoce: [...yaConoce, `"${propuesta.title}" de ${propuesta.artist} (rechazado: ya fue hoy)`],
+        mood: mood ?? null,
+        lang: langPick,
+        esRegreso: false,
+        diasAusente: null,
+        esRehacer: true,
+      });
+      if (await propuestaEsAlbumExcluido(propuesta, excluir)) {
+        return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+      }
+    }
 
     // El pipeline investiga, narra, verifica y publica (o reutiliza si ya existe).
     const result = await runDossierPipeline(propuesta.title, propuesta.artist, {
       publish: true,
     });
+
+    if (excluir.has(result.albumId)) {
+      console.warn("[recommend] pipeline devolvió el mismo disco; elijo otro del catálogo.");
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+    }
 
     // Solo consume presupuesto un disco fabricado de verdad; reutilizar es gratis.
     if (!result.reused) await registrarGeneracion(date);
@@ -316,12 +417,12 @@ export async function generarPickDelDia(
       console.warn(
         `[recommend] "${propuesta.title}" de ${propuesta.artist} no pasó verificación; voy al catálogo.`,
       );
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick);
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
     }
 
     const dossier = await dossierDelAlbum(result.albumId);
     if (!dossier) {
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick);
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
     }
 
     let reason = propuesta.reason?.trim().slice(0, 600) || null;
@@ -337,7 +438,7 @@ export async function generarPickDelDia(
       albumId: dossier.album.id,
       reason,
       mood: mood ?? null,
-      regenerated: false,
+      regenerated: esRehacer,
       returnPick: Boolean(returnRitual),
       absenceDays: returnRitual?.absenceDays ?? null,
     });
@@ -346,14 +447,14 @@ export async function generarPickDelDia(
       dossier,
       reason,
       mood: mood ?? null,
-      regenerated: false,
+      regenerated: esRehacer,
       returnPick: Boolean(returnRitual),
       absenceDays: returnRitual?.absenceDays ?? null,
     };
   } catch (err) {
     console.error("[recommend] disco fresco falló, voy al catálogo:", err);
     try {
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick);
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
     } catch {
       return null;
     }
@@ -400,7 +501,14 @@ async function dossierDelAlbum(albumId: string): Promise<DossierConAlbum | null>
 
 async function recomendarYGuardar(
   ctx: PickCtx,
-  opts: { mood: string | null; lang?: string | null; albumPrevio?: string; regenerated?: boolean },
+  opts: {
+    mood: string | null;
+    lang?: string | null;
+    albumPrevio?: string;
+    regenerated?: boolean;
+    excluirAlbumIds?: string[];
+    forzarDistinto?: boolean;
+  },
   tz?: string | null,
 ): Promise<PickPersonal | null> {
   try {
@@ -409,14 +517,11 @@ async function recomendarYGuardar(
       deviceId: ctx.deviceId,
       userId: ctx.userId,
     };
-    const profileFilter = profileWhere(identity);
     const reviewFilter = reviewsWhere(identity);
     const pastFilter = pastPicksWhere(identity, date);
 
     const [profile, reviews, catalogo, picksRecientes] = await Promise.all([
-      profileFilter
-        ? prisma.profile.findFirst({ where: profileFilter })
-        : Promise.resolve(null),
+      findProfileRecord(identity),
       reviewFilter
         ? prisma.review.findMany({
             where: reviewFilter,
@@ -441,7 +546,10 @@ async function recomendarYGuardar(
     ]);
 
     if (!profile && reviews.length === 0 && !opts.mood) return null;
-    if (catalogo.length === 0) return null;
+
+    const excluir = new Set(opts.excluirAlbumIds ?? []);
+    const catalogoFiltrado = catalogo.filter((d) => !excluir.has(d.album.id));
+    if (catalogoFiltrado.length === 0) return null;
 
     const parsedProfile = profile
       ? parseJson<Record<string, unknown>>(profile.answersJson, {})
@@ -459,22 +567,23 @@ async function recomendarYGuardar(
         reviews,
         mood: opts.mood,
         lang: opts.lang && opts.lang !== "Cualquiera" ? opts.lang : null,
-        catalogo,
+        catalogo: catalogoFiltrado,
         picksRecientes,
         albumPrevio: opts.albumPrevio
-          ? catalogo.find((d) => d.album.id === opts.albumPrevio) ?? null
+          ? catalogoFiltrado.find((d) => d.album.id === opts.albumPrevio) ?? null
           : null,
         returnRitual,
+        forzarDistinto: opts.forzarDistinto ?? false,
       });
     } catch (err) {
       // La IA falló: el oyente nunca cae en la rotación global si tenemos sus
       // gustos. Elegimos por afinidad (géneros, artistas, diario) sin IA.
       if (returnRitual) {
         const recientesIds = new Set(picksRecientes.map((p) => p.albumId));
-        const pool = catalogo
+        const pool = catalogoFiltrado
           .filter((d) => !recientesIds.has(d.album.id))
           .sort((a, b) => a.album.difficulty - b.album.difficulty);
-        const dossier = pool[0] ?? catalogo[0];
+        const dossier = pool[0] ?? catalogoFiltrado[0];
         if (!dossier) throw err;
         eleccion = {
           albumId: dossier.album.id,
@@ -488,7 +597,7 @@ async function recomendarYGuardar(
         const porGusto = elegirPorGusto({
           profile: parsedProfile,
           reviews,
-          catalogo,
+          catalogo: catalogoFiltrado,
           picksRecientes,
         });
         if (!porGusto) throw err;
@@ -496,7 +605,7 @@ async function recomendarYGuardar(
       }
     }
 
-    const dossier = catalogo.find((d) => d.album.id === eleccion.albumId);
+    const dossier = catalogoFiltrado.find((d) => d.album.id === eleccion.albumId);
     if (!dossier) {
       throw new Error(`El LLM eligió un albumId fuera del catálogo: ${eleccion.albumId}`);
     }
@@ -546,6 +655,7 @@ async function elegirConLlm(input: {
   }>[];
   albumPrevio: DossierConAlbum | null;
   returnRitual: ReturnRitual | null;
+  forzarDistinto?: boolean;
 }): Promise<{ albumId: string; reason: string }> {
   const catalogoTexto = input.catalogo
     .map((d) => {
@@ -567,7 +677,9 @@ async function elegirConLlm(input: {
   const recientesTexto = recientesATexto(input.picksRecientes);
 
   const regeneracionTexto = input.albumPrevio
-    ? `\nHOY YA SE LE HABÍA RECOMENDADO: "${input.albumPrevio.album.title}" de ${input.albumPrevio.album.artist.name}, pero acaba de contarnos su ánimo. Puedes mantener ese disco si encaja con el ánimo (escribiendo una razón nueva que lo conecte) o elegir otro que encaje mejor.\n`
+    ? input.forzarDistinto
+      ? `\nREHACER HOY: ya tuvo "${input.albumPrevio.album.title}" de ${input.albumPrevio.album.artist.name} y pidió OTRO disco distinto. PROHIBIDO volver a elegir ese albumId.\n`
+      : `\nHOY YA SE LE HABÍA RECOMENDADO: "${input.albumPrevio.album.title}" de ${input.albumPrevio.album.artist.name}, pero acaba de contarnos su ánimo. Puedes mantener ese disco si encaja con el ánimo (escribiendo una razón nueva que lo conecte) o elegir otro que encaje mejor.\n`
     : "";
 
   const regresoTexto = input.returnRitual
@@ -642,6 +754,9 @@ function comoLista(valor: unknown): string[] {
 }
 
 function formatPerfil(profile: Record<string, unknown>): string {
+  const spotifyArtistas = comoLista(profile.spotifyArtists);
+  const spotifyGeneros = comoLista(profile.spotifyGenres);
+  const spotifyCanciones = comoLista(profile.spotifyTracks);
   const generos = comoLista(profile.genres);
   const artistas = comoLista(profile.artists);
   const idiomas = comoLista(profile.languages);
@@ -662,6 +777,15 @@ function formatPerfil(profile: Record<string, unknown>): string {
   const lineas = [
     generos.length ? `Géneros favoritos: ${generos.join(", ")}` : null,
     artistas.length ? `Artistas que ama: ${artistas.join(", ")}` : null,
+    spotifyArtistas.length
+      ? `Top en Spotify (últimos meses): ${spotifyArtistas.slice(0, 15).join(", ")}`
+      : null,
+    spotifyGeneros.length
+      ? `Géneros que escucha en Spotify: ${spotifyGeneros.join(", ")}`
+      : null,
+    spotifyCanciones.length
+      ? `Canciones top en Spotify: ${spotifyCanciones.slice(0, 8).join("; ")}`
+      : null,
     discoMarca
       ? `Un disco que lo marcó: "${discoMarca}"${discoMarcaArtista ? ` de ${discoMarcaArtista}` : ""}`
       : null,
@@ -738,9 +862,13 @@ function elegirPorGusto(input: {
   catalogo: DossierConAlbum[];
   picksRecientes: PickConAlbum[];
 }): { albumId: string; reason: string } | null {
-  const generos = input.profile ? comoLista(input.profile.genres).map(normalizar) : [];
+  const generos = [
+    ...(input.profile ? comoLista(input.profile.genres) : []),
+    ...(input.profile ? comoLista(input.profile.spotifyGenres) : []),
+  ].map(normalizar);
   const artistas = [
     ...(input.profile ? comoLista(input.profile.artists) : []),
+    ...(input.profile ? comoLista(input.profile.spotifyArtists) : []),
     ...input.reviews.filter((r) => r.rating >= LOVED_THRESHOLD).map((r) => r.album.artist.name),
   ].map(normalizar);
   const tagsGustados = new Set<string>();

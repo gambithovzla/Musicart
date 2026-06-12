@@ -8,6 +8,8 @@ import { signOutAction } from "@/app/entrar/actions";
 import { PrivacyPanel } from "@/components/PrivacyPanel";
 import { DuetPanel } from "@/components/DuetPanel";
 import { PushToggle } from "@/components/PushToggle";
+import { SpotifyConnectPanel } from "@/components/SpotifyConnectPanel";
+import type { SpotifyPanelState } from "@/app/perfil/spotify-actions";
 import type { DuetSummary } from "@/lib/duet";
 import { SubscriptionPanel } from "@/components/SubscriptionPanel";
 import { getDeviceId } from "@/lib/device";
@@ -71,12 +73,14 @@ export function ProfileForm({
   isAdmin = false,
   initialAnswers,
   duet,
+  spotify,
   subscription,
 }: {
   user: UserInfo | null;
   isAdmin?: boolean;
   initialAnswers: Partial<ProfileAnswers> | null;
   duet?: DuetSummary | null;
+  spotify?: SpotifyPanelState;
   subscription?: SubscriptionInfo;
 }) {
   const [answers, setAnswers] = useState<ProfileAnswers>(EMPTY);
@@ -91,11 +95,23 @@ export function ProfileForm({
 
   useEffect(() => {
     let merged = { ...EMPTY, ...initialAnswers };
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) merged = { ...merged, ...JSON.parse(raw) };
-    } catch {
-      // perfil local corrupto
+    if (user) {
+      // Con cuenta: el servidor manda; localStorage solo es caché de este dispositivo.
+      try {
+        window.localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ ...EMPTY, ...initialAnswers }),
+        );
+      } catch {
+        // almacenamiento lleno o bloqueado
+      }
+    } else {
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (raw) merged = { ...merged, ...JSON.parse(raw) };
+      } catch {
+        // perfil local corrupto
+      }
     }
     // Perfiles antiguos no traen genres/artists: garantizamos arrays.
     setAnswers({
@@ -108,7 +124,7 @@ export function ProfileForm({
       interests: Array.isArray(merged.interests) ? merged.interests : [],
     });
     setHydrated(true);
-  }, [initialAnswers]);
+  }, [initialAnswers, user]);
 
   const persist = useCallback(async (data: ProfileAnswers) => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -284,6 +300,10 @@ export function ProfileForm({
       <PushToggle />
 
       {user && duet && <DuetPanel duet={duet} />}
+
+      {spotify && (
+        <SpotifyConnectPanel {...spotify} hasAccount={Boolean(user)} />
+      )}
 
       <section className="mt-8">
         <h2 className="font-serif text-lg">¿Qué géneros te mueven?</h2>

@@ -2,6 +2,7 @@
 
 import { prisma } from "./db";
 import { dedupeReviewsByAlbum } from "./identity";
+import { parseJson } from "./types";
 
 export async function mergeDeviceToUser(
   userId: string,
@@ -14,6 +15,14 @@ export async function mergeDeviceToUser(
 
   if (deviceProfile && !deviceProfile.userId) {
     if (userProfile && userProfile.id !== deviceProfile.id) {
+      const merged = mergeProfileAnswers(
+        parseJson<Record<string, unknown>>(userProfile.answersJson, {}),
+        parseJson<Record<string, unknown>>(deviceProfile.answersJson, {}),
+      );
+      await prisma.profile.update({
+        where: { id: userProfile.id },
+        data: { answersJson: JSON.stringify(merged) },
+      });
       await prisma.profile.delete({ where: { id: deviceProfile.id } });
     } else {
       await prisma.profile.update({
@@ -65,4 +74,28 @@ export async function mergeDeviceToUser(
   if (pickDupes.length > 0) {
     await prisma.dailyPick.deleteMany({ where: { id: { in: pickDupes } } });
   }
+}
+
+/** Fusiona respuestas de perfil: conserva lo no vacío de ambos lados. */
+function mergeProfileAnswers(
+  account: Record<string, unknown>,
+  device: Record<string, unknown>,
+): Record<string, unknown> {
+  const out = { ...account };
+  for (const [key, val] of Object.entries(device)) {
+    if (Array.isArray(val) && val.length > 0) {
+      const prev = Array.isArray(out[key]) ? (out[key] as unknown[]) : [];
+      out[key] = [...new Set([...prev, ...val])];
+    } else if (typeof val === "string" && val.trim() && !String(out[key] ?? "").trim()) {
+      out[key] = val;
+    } else if (
+      val &&
+      typeof val === "object" &&
+      !Array.isArray(val) &&
+      Object.keys(val as object).length > 0
+    ) {
+      out[key] = { ...(out[key] as object), ...(val as object) };
+    }
+  }
+  return out;
 }

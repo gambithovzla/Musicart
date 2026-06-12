@@ -56,6 +56,7 @@ export type DossierContent = {
   questions: string[]; // preguntas de reflexión post-escucha
   trackNotes: { position: number; title: string; note?: string }[];
   jumps?: DiscoveryJump[]; // 0-3 saltos de descubrimiento (la madriguera)
+  wowFacts?: string[]; // 2-4 curiosidades "¿Sabías que…?" verificadas
   impactNote?: string; // por qué este impacto cultural (sobre hechos verificados)
 };
 

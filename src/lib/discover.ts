@@ -29,6 +29,8 @@ export async function proponerDiscoDescubrimiento(input: {
   lang: string | null;
   esRegreso: boolean;
   diasAusente: number | null;
+  /** Rehacer el disco de hoy: debe ser distinto al que acaba de descartar. */
+  esRehacer?: boolean;
 }): Promise<DiscoPropuesto> {
   const evitarTexto =
     input.yaConoce.length > 0
@@ -37,6 +39,10 @@ export async function proponerDiscoDescubrimiento(input: {
 
   const regresoTexto = input.esRegreso
     ? `\nREGRESO TRAS AUSENCIA: el usuario vuelve después de ${input.diasAusente ?? "varios"} días sin abrir la app. Elige un disco acogedor para reengancharlo y, en "reason", reconoce el regreso con calidez ("te guardé algo", "bienvenido de vuelta"), SIN culpa ni gamificación.\n`
+    : "";
+
+  const rehacerTexto = input.esRehacer
+    ? `\nREHACER HOY: el usuario pidió OTRO disco distinto para hoy. PROHIBIDO repetir cualquier disco de las listas "ya conoce" o "días recientes". Elige algo diferente aunque encaje igual de bien con su gusto.\n`
     : "";
 
   const idiomaRegla = input.lang
@@ -62,7 +68,7 @@ SU DIARIO (reseñas recientes, de la más nueva a la más vieja):
 ${input.diarioTexto}
 
 ÁNIMO DE HOY: ${input.mood ?? "(no indicado)"}
-${regresoTexto}
+${regresoTexto}${rehacerTexto}
 DISCOS QUE YA CONOCE O YA SE LE MOSTRARON (NO los repitas):
 ${evitarTexto}
 

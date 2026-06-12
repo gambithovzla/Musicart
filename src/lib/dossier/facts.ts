@@ -9,7 +9,7 @@
 
 import { searchReleaseGroup, getAlbumDetails } from "../sources/musicbrainz";
 import { getCoverUrl } from "../sources/coverart";
-import { getAlbumContext, getArtistContext } from "../sources/wikipedia";
+import { getAlbumDeepContext, getArtistDeepContext, firstFactSentence } from "../sources/wikipedia";
 import { getAlbumInfo } from "../sources/lastfm";
 import {
   searchAlbum as searchItunes,
@@ -149,28 +149,49 @@ export async function gatherAlbumFacts(
     ],
   };
 
-  // ── 3. Wikipedia ─────────────────────────────────────────────────────────
-  log("Buscando contexto en Wikipedia…");
+  // ── 3. Wikipedia (intro + secciones profundas, Fase 6.9) ─────────────────
+  log("Buscando contexto en Wikipedia (intro + secciones profundas)…");
   const [albumWiki, artistWiki] = await Promise.all([
-    getAlbumContext(title!, artist!).catch(() => null),
-    getArtistContext(artist!).catch(() => null),
+    getAlbumDeepContext(title!, artist!).catch(() => ({ intro: null, sections: [] })),
+    getArtistDeepContext(artist!).catch(() => ({ intro: null, sections: [] })),
   ]);
-  if (albumWiki) {
+
+  if (albumWiki.intro) {
     payload.passages!.push({
-      source: `wikipedia:${albumWiki.lang}:álbum`,
-      text: albumWiki.text,
+      source: `wikipedia:${albumWiki.intro.lang}:álbum:intro`,
+      text: albumWiki.intro.text,
     });
-    payload.sources.push(albumWiki.url);
+    payload.sources.push(albumWiki.intro.url);
   }
-  if (artistWiki) {
+  for (const sec of albumWiki.sections) {
+    payload.passages!.push({ source: sec.source, text: sec.text });
+    const nugget = firstFactSentence(sec.text);
+    if (nugget) {
+      payload.facts.push({ fact: nugget, source: sec.source });
+    }
+  }
+
+  if (artistWiki.intro) {
     payload.passages!.push({
-      source: `wikipedia:${artistWiki.lang}:artista`,
-      text: artistWiki.text,
+      source: `wikipedia:${artistWiki.intro.lang}:artista:intro`,
+      text: artistWiki.intro.text,
     });
-    payload.sources.push(artistWiki.url);
+    payload.sources.push(artistWiki.intro.url);
   }
-  if (!albumWiki && !artistWiki) {
+  for (const sec of artistWiki.sections) {
+    payload.passages!.push({ source: sec.source, text: sec.text });
+    const nugget = firstFactSentence(sec.text);
+    if (nugget) {
+      payload.facts.push({ fact: nugget, source: sec.source });
+    }
+  }
+
+  if (!albumWiki.intro && !artistWiki.intro && albumWiki.sections.length === 0) {
     log("⚠ Sin artículos de Wikipedia — el dossier tendrá menos contexto.");
+  } else if (albumWiki.sections.length + artistWiki.sections.length > 0) {
+    log(
+      `Wikipedia: ${albumWiki.sections.length + artistWiki.sections.length} secciones profundas añadidas.`,
+    );
   }
 
   // ── 4. Last.fm (opcional) ─────────────────────────────────────────────────

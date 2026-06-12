@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { signIn, signOut } from "@/auth";
+import { spotifyPublicEnabled } from "@/lib/spotify-api";
 
 function signInRedirect(next: string | null | undefined): string {
   if (next?.startsWith("/") && !next.startsWith("//")) {
@@ -20,6 +21,12 @@ export async function signInWithEmail(formData: FormData) {
   if (!email) redirect("/entrar?error=email");
   const next = String(formData.get("next") ?? "");
   await signIn("resend", { email, redirectTo: signInRedirect(next) });
+}
+
+export async function signInWithSpotify(formData: FormData) {
+  if (!spotifyPublicEnabled()) redirect("/entrar");
+  const next = String(formData.get("next") ?? "");
+  await signIn("spotify", { redirectTo: signInRedirect(next) });
 }
 
 export async function signOutAction() {

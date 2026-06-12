@@ -10,7 +10,11 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { auth } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
-import { generarPickDelDia, borrarPickDeHoy } from "@/lib/recommend";
+import {
+  generarPickDelDia,
+  borrarPickDeHoy,
+  albumIdPickDeHoy,
+} from "@/lib/recommend";
 import { todayKey } from "@/lib/daily";
 import {
   DEVICE_COOKIE,
@@ -35,16 +39,21 @@ export async function POST(req: Request) {
     const tz = tzRaw ? decodeURIComponent(tzRaw) : null;
     const lang = parseTodayLang(jar.get(LANG_COOKIE)?.value, todayKey(tz));
 
-    // ¿Pidieron rehacer? Solo admins, y solo así se borra el disco ya guardado.
+    // ¿Pidieron rehacer? Solo admins: guardamos el disco actual para no repetirlo.
     const rehacer = await pidieronRehacer(req);
+    let excluirAlbumIds: string[] = [];
     if (rehacer) {
       if (!isAdminEmail(session?.user?.email)) {
         return NextResponse.json({ ok: false, reason: "no-admin" }, { status: 403 });
       }
+      const previo = await albumIdPickDeHoy(deviceId, userId, tz);
+      if (previo) excluirAlbumIds = [previo];
       await borrarPickDeHoy(deviceId, userId, tz);
     }
 
-    const pick = await generarPickDelDia(deviceId, userId, tz, lang);
+    const pick = await generarPickDelDia(deviceId, userId, tz, lang, undefined, {
+      excluirAlbumIds,
+    });
     return NextResponse.json({ ok: pick !== null });
   } catch (err) {
     console.error("[api/pick-hoy] error fabricando el disco del día:", err);

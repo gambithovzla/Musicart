@@ -1,5 +1,6 @@
 // Adapter de LLM intercambiable: OpenAI o Anthropic vía variables de entorno.
-// LLM_PROVIDER=openai|anthropic · LLM_MODEL opcional · sin SDKs, fetch directo.
+// LLM_PROVIDER=openai|anthropic · LLM_MODEL (runtime barato) ·
+// GENERATION_MODEL (solo dossier: generate + verify, Fase 6.8)
 
 type LlmOptions = {
   system: string;
@@ -7,6 +8,8 @@ type LlmOptions = {
   temperature?: number;
   maxTokens?: number;
   timeoutMs?: number; // default 120 s (pipeline); la recomendación en runtime usa uno corto
+  /** Override explícito; si no, usa LLM_MODEL (runtime) o GENERATION_MODEL (dossier). */
+  model?: string;
 };
 
 function getProvider(): "openai" | "anthropic" {
@@ -21,12 +24,23 @@ function getProvider(): "openai" | "anthropic" {
   );
 }
 
+function runtimeModel(): string {
+  const provider = getProvider();
+  if (process.env.LLM_MODEL) return process.env.LLM_MODEL;
+  return provider === "openai" ? "gpt-4o-mini" : "claude-sonnet-4-6";
+}
+
+/** Modelo para escribir/verificar dossiers (premium si está configurado). */
+export function generationModel(): string {
+  return process.env.GENERATION_MODEL || runtimeModel();
+}
+
 /** ¿Hay una clave de IA configurada? Para decidir si podemos fabricar discos en vivo. */
 export function hayClaveIA(): boolean {
   return Boolean(process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);
 }
 
-async function callOpenAI(opts: LlmOptions): Promise<string> {
+async function callOpenAI(opts: LlmOptions, model: string): Promise<string> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("Falta OPENAI_API_KEY en .env");
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -36,7 +50,7 @@ async function callOpenAI(opts: LlmOptions): Promise<string> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.LLM_MODEL || "gpt-4o-mini",
+      model,
       temperature: opts.temperature ?? 0.7,
       max_tokens: opts.maxTokens ?? 4096,
       messages: [
@@ -55,7 +69,7 @@ async function callOpenAI(opts: LlmOptions): Promise<string> {
   return data.choices[0]?.message.content ?? "";
 }
 
-async function callAnthropic(opts: LlmOptions): Promise<string> {
+async function callAnthropic(opts: LlmOptions, model: string): Promise<string> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("Falta ANTHROPIC_API_KEY en .env");
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -66,7 +80,7 @@ async function callAnthropic(opts: LlmOptions): Promise<string> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.LLM_MODEL || "claude-sonnet-4-6",
+      model,
       max_tokens: opts.maxTokens ?? 4096,
       temperature: opts.temperature ?? 0.7,
       system: opts.system,
@@ -83,8 +97,20 @@ async function callAnthropic(opts: LlmOptions): Promise<string> {
   return data.content.find((b) => b.type === "text")?.text ?? "";
 }
 
+async function callLlm(opts: LlmOptions, model: string): Promise<string> {
+  return getProvider() === "openai"
+    ? callOpenAI(opts, model)
+    : callAnthropic(opts, model);
+}
+
+/** Runtime: recomendaciones, chat, curiosidades del día (modelo barato). */
 export async function llm(opts: LlmOptions): Promise<string> {
-  return getProvider() === "openai" ? callOpenAI(opts) : callAnthropic(opts);
+  return callLlm(opts, opts.model ?? runtimeModel());
+}
+
+/** Pipeline de dossier: redacción y verificación (GENERATION_MODEL si existe). */
+export async function llmGeneration(opts: LlmOptions): Promise<string> {
+  return callLlm(opts, opts.model ?? generationModel());
 }
 
 // Extrae el primer objeto JSON de una respuesta (tolera ```json ... ``` y texto extra).

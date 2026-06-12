@@ -10,8 +10,9 @@ import {
   listenerKey,
 } from "@/lib/freemium";
 import { getDuetSummary } from "@/lib/duet";
-import { getListenerIdentity, profileWhere } from "@/lib/identity";
+import { getListenerIdentity, findProfileRecord } from "@/lib/identity";
 import { stripeConfigured } from "@/lib/stripe";
+import { getSpotifyPanelState } from "@/app/perfil/spotify-actions";
 import { ProfileForm, type ProfileAnswers } from "@/components/ProfileForm";
 import { parseJson } from "@/lib/types";
 
@@ -25,15 +26,16 @@ export default async function PerfilPage({
   searchParams: Promise<{ subscription?: string }>;
 }) {
   const { subscription: subscriptionStatus } = await searchParams;
-  const [session, identity] = await Promise.all([auth(), getListenerIdentity()]);
+  const [session, identity, spotify] = await Promise.all([
+    auth(),
+    getListenerIdentity(),
+    getSpotifyPanelState(),
+  ]);
 
   let initialAnswers: Partial<ProfileAnswers> | null = null;
-  const profileFilter = profileWhere(identity);
-  if (profileFilter) {
-    const profile = await prisma.profile.findFirst({ where: profileFilter });
-    if (profile) {
-      initialAnswers = parseJson<Partial<ProfileAnswers>>(profile.answersJson, {});
-    }
+  const profile = await findProfileRecord(identity);
+  if (profile) {
+    initialAnswers = parseJson<Partial<ProfileAnswers>>(profile.answersJson, {});
   }
 
   const user = session?.user
@@ -57,6 +59,7 @@ export default async function PerfilPage({
       isAdmin={isAdmin}
       initialAnswers={initialAnswers}
       duet={duet}
+      spotify={spotify}
       subscription={{
         isPro,
         used,

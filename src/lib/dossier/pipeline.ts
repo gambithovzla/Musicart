@@ -118,6 +118,7 @@ export async function runDossierPipeline(
       questionsJson: JSON.stringify(dossier.questions),
       jumpsJson: JSON.stringify(dossier.jumps ?? []),
       impactNote: dossier.impactNote ?? null,
+      wowFactsJson: JSON.stringify(dossier.wowFacts ?? []),
       trackNotes: {
         create: payload.tracklist.map((t) => {
           const note = dossier.trackNotes.find((n) => n.position === t.position);

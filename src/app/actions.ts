@@ -12,7 +12,7 @@ import {
   dedupeReviewsByAlbum,
   getListenerIdentity,
   hasListener,
-  profileWhere,
+  findProfileRecord,
   reviewsWhere,
 } from "@/lib/identity";
 import { applyMood } from "@/lib/recommend";
@@ -80,15 +80,29 @@ export async function saveProfile(deviceId: string, answers: Record<string, unkn
   if (!deviceId) throw new Error("Sin deviceId");
   const session = await auth();
   const userId = session?.user?.id ?? null;
+  const answersJson = JSON.stringify(answers);
+
+  // Con cuenta: un solo perfil por userId (sincroniza móvil ↔ desktop).
+  if (userId) {
+    const account = await prisma.profile.findUnique({ where: { userId } });
+    if (account) {
+      await prisma.profile.update({
+        where: { userId },
+        data: { answersJson },
+      });
+      return { ok: true };
+    }
+  }
+
   await prisma.profile.upsert({
     where: { deviceId },
     update: {
-      answersJson: JSON.stringify(answers),
+      answersJson,
       ...(userId ? { userId } : {}),
     },
     create: {
       deviceId,
-      answersJson: JSON.stringify(answers),
+      answersJson,
       userId: userId ?? null,
     },
   });
@@ -128,9 +142,7 @@ export async function getJournal() {
 
 export async function hasProfile(): Promise<boolean> {
   const identity = await getListenerIdentity();
-  const where = profileWhere(identity);
-  if (!where) return false;
-  return Boolean(await prisma.profile.findFirst({ where, select: { id: true } }));
+  return Boolean(await findProfileRecord(identity));
 }
 
 /** Guarda una respuesta a la pregunta del día en el perfil del usuario. */
@@ -143,10 +155,7 @@ export async function answerCuriosity(
   const userId = session?.user?.id ?? null;
 
   const identity = await getListenerIdentity();
-  const where = profileWhere(identity);
-  const existing = where
-    ? await prisma.profile.findFirst({ where })
-    : null;
+  const existing = await findProfileRecord(identity);
 
   const prev = existing
     ? parseJson<Record<string, unknown>>(existing.answersJson, {})
@@ -160,16 +169,25 @@ export async function answerCuriosity(
     (a) => !(a.id === answer.id && a.date === answer.date),
   );
   const updated = { ...prev, curiosities: [...filtered, answer] };
+  const answersJson = JSON.stringify(updated);
+
+  if (userId) {
+    const account = await prisma.profile.findUnique({ where: { userId } });
+    if (account) {
+      await prisma.profile.update({ where: { userId }, data: { answersJson } });
+      return { ok: true };
+    }
+  }
 
   await prisma.profile.upsert({
     where: { deviceId },
     update: {
-      answersJson: JSON.stringify(updated),
+      answersJson,
       ...(userId ? { userId } : {}),
     },
     create: {
       deviceId,
-      answersJson: JSON.stringify(updated),
+      answersJson,
       userId: userId ?? null,
     },
   });
@@ -185,9 +203,7 @@ export async function getCuriosityQuestion(
   dateKey: string,
 ): Promise<CuriosityQuestion | null> {
   const identity = await getListenerIdentity();
-  const where = profileWhere(identity);
-  if (!where) return null;
-  const profile = await prisma.profile.findFirst({ where });
+  const profile = await findProfileRecord(identity);
   if (!profile) return null;
 
   const data = parseJson<Record<string, unknown>>(profile.answersJson, {});

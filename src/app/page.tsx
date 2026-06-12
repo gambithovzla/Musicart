@@ -21,7 +21,7 @@ import { CuriosityCard } from "@/components/CuriosityCard";
 import { LanguageGate } from "@/components/LanguageGate";
 import { todayQuestion } from "@/lib/curiosities";
 import type { CuriosityAnswer } from "@/lib/curiosities";
-import { getListenerIdentity, profileWhere } from "@/lib/identity";
+import { getListenerIdentity, findProfileRecord, reviewsWhere } from "@/lib/identity";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -95,10 +95,7 @@ export default async function Home() {
   // Pregunta del día: fallback estático; el CuriosityCard carga la IA en background.
   let initialCuriosityQuestion: ReturnType<typeof todayQuestion> = null;
   if (tienePerfil) {
-    const profileFilter = profileWhere(identity);
-    const profile = profileFilter
-      ? await prisma.profile.findFirst({ where: profileFilter })
-      : null;
+    const profile = await findProfileRecord(identity);
     const prev = profile
       ? parseJson<Record<string, unknown>>(profile.answersJson, {})
       : {};
@@ -121,6 +118,16 @@ export default async function Home() {
   }
 
   const palette = parseJson<Palette | null>(pick.album.paletteJson, null);
+
+  const reviewFilter = reviewsWhere(identity);
+  const yaResenoHoy =
+    reviewFilter &&
+    (await prisma.review.findFirst({
+      where: { ...reviewFilter, albumId: pick.album.id },
+      select: { id: true },
+    }));
+  const wowFacts = parseJson<string[]>(pick.wowFactsJson ?? "[]", []);
+  const wowHook = yaResenoHoy && wowFacts.length > 0 ? wowFacts[0] : null;
 
   return (
     <main style={albumThemeStyle(palette)}>
@@ -156,6 +163,7 @@ export default async function Home() {
             showProfileInvite: !tienePerfil,
             returnWelcome: personal?.returnPick ?? false,
             madriguera,
+            wowHook,
           }}
         />
         {initialCuriosityQuestion && (

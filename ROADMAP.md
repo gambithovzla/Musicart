@@ -270,7 +270,7 @@ feature usa los datos que ya guardamos y respeta el pipeline anti-alucinación.
 
 ---
 
-## 🚧 Fase 6 — Que se sienta "un amigo que te conoce" (EN CURSO)
+## ✅ Fase 6 — Que se sienta "un amigo que te conoce" (COMPLETADA · jun 2026)
 
 **Objetivo:** matar la sensación de "precargado". Que desde el primer momento el
 disco se sienta elegido para ti, no una rotación genérica.
@@ -283,13 +283,15 @@ disco se sienta elegido para ti, no una rotación genérica.
   (regla 7 del prompt) y, si la IA se cae, `elegirPorGusto` elige por afinidad
   (géneros + artistas + diario 8/10) en vez de la rotación global: un rockero ya
   no recibe una balada.
-- [ ] **6.2 Conectar Spotify** — login con Spotify (Auth.js ya guarda tokens en
+- [x] **6.2 Conectar Spotify** — login con Spotify (Auth.js ya guarda tokens en
   Account) + leer top artists/tracks/géneros para alimentar el motor con gustos
   reales. Requiere app de Spotify del dueño (modo dev limitado a 25 usuarios
-  hasta aprobación). YouTube Music no tiene API de historial; Apple Music
-  posible después.
-- [ ] **6.3 Dossier más rico** — la IA siempre escribe nota canción-por-canción
-  + un bloque de curiosidades verificadas contra el FactsPayload.
+  hasta aprobación). **Oculto al público** hasta `SPOTIFY_PUBLIC=true` en Vercel
+  (junto con `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`). YouTube Music no
+  tiene API de historial; Apple Music posible después.
+- [x] **6.3 Dossier más rico** — la IA siempre escribe nota canción-por-canción
+  + un bloque de curiosidades verificadas contra el FactsPayload (`wowFactsJson`,
+  sección "Lo que no sabías" en el dossier).
 - [x] **6.4 Disco fresco cada día (no de los sembrados)** — el disco del día se
   FABRICA al momento para cada usuario: la IA propone un disco real de toda la
   música grabada (según gusto + diario + ánimo, evitando lo ya mostrado/reseñado)
@@ -344,22 +346,16 @@ disco se sienta elegido para ti, no una rotación genérica.
 > de la regla anti-alucinación. Orden sugerido: 6.8 primero (valida la hipótesis
 > del modelo, rápido), luego 6.9.
 
-- [ ] **6.8 Profundidad narrativa** — separar el modelo por tarea: un
+- [x] **6.8 Profundidad narrativa** — separar el modelo por tarea: un
   `GENERATION_MODEL` premium (Claude Sonnet/Opus o GPT-4o) **solo para ESCRIBIR
-  el dossier** (`generate.ts`/`verify.ts`) — se hace una vez y queda cacheado,
-  servido a todos; el `LLM_MODEL` barato sigue para lo frecuente (recomendar,
-  chat). Subir el prompt de redacción hacia narrativa vívida y específica (menos
-  "frases cortas / evita clichés", más escena y anécdota concreta). Costo acotado
-  por el tope 6.6. Validación: regenerar 1 disco y comparar prosa.
-- [ ] **6.9 Curiosidades y la madriguera viva** (incluye 6.3) — enriquecer el
-  sourcing: traer de Wikipedia las secciones profundas (Recepción, Legado,
-  Controversias, En vivo) y datos a nivel de artista (rivalidades, momentos
-  legendarios), cada nugget con fuente + cita para que el verificador lo valide.
-  Paso nuevo que "mina" 2-4 *"¿Sabías que…?"* verificados (guardados como
-  `impactNote`). Mostrarlos sin invadir: sección desplegable "Lo que no sabías"
-  en el dossier (6.3), UN gancho de curiosidad en la home al terminar el disco, y
-  saltos (`jumps`) enriquecidos con su historia. Meta: que la gente diga "guau,
-  esto no lo sabía" y vuelva mañana.
+  el dossier** (`generate.ts`/`verify.ts` vía `llmGeneration`) — se hace una vez
+  y queda cacheado, servido a todos; el `LLM_MODEL` barato sigue para lo
+  frecuente (recomendar, chat). Prompt de redacción hacia narrativa vívida y
+  anécdota concreta del payload. Costo acotado por el tope 6.6.
+- [x] **6.9 Curiosidades y la madriguera viva** — Wikipedia profunda (secciones
+  Recepción, Legado, Controversias, En vivo…) con nuggets citados en `facts[]`;
+  sección "Lo que no sabías" (6.3); gancho en home tras reseñar el disco;
+  saltos (`jumps`) con conexión más narrativa.
 
 ### Criterios de aceptación
 
@@ -374,7 +370,8 @@ disco se sienta elegido para ti, no una rotación genérica.
 
 ## Estado actual (junio 2026)
 
-**Fases 0–5 completas. Fase 6 EN CURSO** (6.1, 6.4, 6.5, 6.6 y 6.7 hechas; 6.2 y 6.3 pendientes).
+**Fases 0–6 completas** (jun 2026). Antes de abrir Fase 7, confirmar con el
+dueño del producto qué entra en el roadmap.
 
 ---
 

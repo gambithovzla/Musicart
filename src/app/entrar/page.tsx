@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { auth, authConfigured } from "@/auth";
-import { signInWithEmail, signInWithGoogle } from "./actions";
+import { auth, authConfigured, spotifyAuthConfigured } from "@/auth";
+import { signInWithEmail, signInWithGoogle, signInWithSpotify } from "./actions";
 
 export const metadata = { title: "Entrar · Musicart" };
 
@@ -19,6 +19,7 @@ export default async function EntrarPage({
     Boolean(process.env.GOOGLE_CLIENT_SECRET);
   const email =
     Boolean(process.env.AUTH_RESEND_KEY) && Boolean(process.env.EMAIL_FROM);
+  const spotify = spotifyAuthConfigured();
 
   if (session?.user) {
     return (
@@ -72,6 +73,19 @@ export default async function EntrarPage({
             className="w-full rounded-2xl border border-white/15 bg-surface px-6 py-4 text-base font-semibold transition-transform active:scale-[0.98]"
           >
             Continuar con Google
+          </button>
+        </form>
+      )}
+
+      {spotify && (
+        <form action={signInWithSpotify} className={google ? "mt-4" : "mt-10"}>
+          <input type="hidden" name="next" value={afterLogin} />
+          <button
+            type="submit"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#1DB954]/35 bg-[#1DB954]/12 px-6 py-4 text-base font-semibold text-[#1DB954] transition-transform active:scale-[0.98]"
+          >
+            <span aria-hidden>♫</span>
+            Continuar con Spotify
           </button>
         </form>
       )}

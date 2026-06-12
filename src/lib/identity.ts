@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import type { Prisma } from "@prisma/client";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/db";
 import { DEVICE_COOKIE } from "./device";
 
 export type ListenerIdentity = {
@@ -80,4 +81,18 @@ export function dedupeReviewsByAlbum<
   return [...byAlbum.values()].sort(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   );
+}
+
+/** Perfil canónico: con sesión, el ligado a la cuenta (viaja entre dispositivos). */
+export async function findProfileRecord(identity: ListenerIdentity) {
+  if (identity.userId) {
+    const byUser = await prisma.profile.findUnique({
+      where: { userId: identity.userId },
+    });
+    if (byUser) return byUser;
+  }
+  if (identity.deviceId) {
+    return prisma.profile.findUnique({ where: { deviceId: identity.deviceId } });
+  }
+  return null;
 }

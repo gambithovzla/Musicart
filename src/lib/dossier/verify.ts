@@ -2,7 +2,7 @@
 // 1. Validadores duros en código (años, títulos de tracks) — deterministas.
 // 2. Verificador LLM: contrasta cada afirmación factual contra el payload.
 
-import { llm, extractJson } from "./llm";
+import { llmGeneration, extractJson } from "./llm";
 import type { FactsPayload } from "../types";
 import type { GeneratedDossier } from "./generate";
 
@@ -67,8 +67,8 @@ export function hardValidate(
   const narrative = [
     dossier.intro,
     dossier.artistStory,
-    // impactNote es factual (premios, listas, cifras): se valida como la narrativa.
     dossier.impactNote ?? "",
+    ...(dossier.wowFacts ?? []),
     ...dossier.trackNotes.map((t) => t.note ?? ""),
   ].join("\n");
 
@@ -92,10 +92,21 @@ export function hardValidate(
     if (!match) {
       errors.push(`Track note sobre "${note.title}": no existe en el tracklist.`);
     } else {
-      // Corrige posición y título al canónico.
       note.position = match.position;
       note.title = match.title;
     }
+  }
+
+  for (const track of payload.tracklist) {
+    const note = dossier.trackNotes.find((n) => n.position === track.position);
+    if (!note?.note?.trim()) {
+      errors.push(`Falta nota editorial para "${track.title}" (pista ${track.position}).`);
+    }
+  }
+
+  const wow = (dossier.wowFacts ?? []).filter((f) => f?.trim());
+  if (wow.length === 0) {
+    errors.push("Falta el bloque wowFacts (al menos 1 curiosidad verificable).");
   }
 
   return errors;
@@ -139,13 +150,14 @@ export async function llmVerify(
     `INTRO: ${dossier.intro}`,
     `ARTISTA: ${dossier.artistStory}`,
     ...(dossier.impactNote ? [`IMPACTO: ${dossier.impactNote}`] : []),
+    ...(dossier.wowFacts ?? []).map((f) => `CURIOSIDAD: ${f}`),
     ...dossier.trackNotes.map((t) => `NOTA (${t.title}): ${t.note}`),
     // De los saltos solo se verifica la conexión afirmada (el álbum destino
     // es recomendación curatorial, no una afirmación factual).
     ...(dossier.jumps ?? []).map((j) => `SALTO HACIA ${j.artist}: ${j.connection}`),
   ].join("\n\n");
 
-  const raw = await llm({
+  const raw = await llmGeneration({
     system: VERIFIER_SYSTEM,
     user: `FACTS PAYLOAD:\n${JSON.stringify(payload, null, 2)}\n\nTEXTO A VERIFICAR:\n${text}`,
     temperature: 0,

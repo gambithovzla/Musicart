@@ -26,7 +26,7 @@ export async function saveReview(input: {
   if (!input.deviceId || !input.albumId) throw new Error("Datos incompletos");
   const session = await auth();
   const userId = session?.user?.id ?? null;
-  const rating = Math.min(5, Math.max(1, Math.round(input.rating)));
+  const rating = Math.min(10, Math.max(1, Math.round(input.rating)));
   const answersJson = JSON.stringify(input.answers);
 
   if (userId) {

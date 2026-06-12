@@ -13,7 +13,7 @@ export type SeedFixture = {
     label: string;
     durationMin: number;
     difficulty: number; // 1-5
-    impact: number; // 1-5
+    impact: number; // 1-100 (impacto cultural honesto)
   };
   facts: Fact[];
   dossier: {
@@ -35,7 +35,7 @@ export const FIXTURES: SeedFixture[] = [
       label: "Aware / Columbia",
       durationMin: 49,
       difficulty: 2,
-      impact: 4,
+      impact: 70,
     },
     facts: [
       { fact: "Lanzado el 12 de septiembre de 2006 por Aware/Columbia.", source: "wikipedia:es" },
@@ -83,7 +83,7 @@ export const FIXTURES: SeedFixture[] = [
       label: "Warner Bros.",
       durationMin: 40,
       difficulty: 1,
-      impact: 5,
+      impact: 95,
     },
     facts: [
       { fact: "Lanzado el 4 de febrero de 1977 por Warner Bros.", source: "wikipedia:es" },
@@ -130,7 +130,7 @@ export const FIXTURES: SeedFixture[] = [
       label: "Sony",
       durationMin: 30,
       difficulty: 3,
-      impact: 5,
+      impact: 85,
     },
     facts: [
       { fact: "Lanzado el 2 de noviembre de 2018 por Sony.", source: "wikipedia:es" },

@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Stars } from "./Stars";
+import { ImpactoCultural } from "./ImpactoCultural";
 import { EscalaEstrellas } from "./EscalaEstrellas";
 import { ShareAlbum } from "./ShareAlbum";
 import type { MadrigueraAlbum } from "@/lib/madriguera";
@@ -83,13 +84,13 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
           {album.artist} · {album.year}
         </p>
 
-        <div className="mt-5 flex items-center justify-center gap-5 text-sm text-dim">
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-dim">
           {album.durationMin && <span>{album.durationMin} min</span>}
           <span>
             Dificultad <Stars value={album.difficulty} />
           </span>
           <span>
-            Impacto <Stars value={album.impact} />
+            Impacto <ImpactoCultural value={album.impact} />
           </span>
         </div>
 

@@ -22,12 +22,22 @@ FORMATO DE SALIDA — SOLO un objeto JSON válido, sin texto extra:
   "trackNotes": [{ "position": 4, "title": "título EXACTO del tracklist", "note": "1-2 frases" }],
   "jumps": [{ "title": "álbum destino", "artist": "artista destino", "connection": "1 frase: la relación real que une este disco con aquel" }],
   "difficulty": 2,
-  "impact": 4
+  "impact": 72
 }
 
 trackNotes: elige las 3 a 6 canciones más significativas. position y title deben coincidir EXACTAMENTE con el tracklist del payload.
 jumps: 0 a 3 saltos de descubrimiento ("de aquí puedes saltar a…"): rivalidades, colaboraciones, influencias, mismo productor. La "connection" SOLO puede afirmar relaciones que aparezcan en el FACTS PAYLOAD (menciona la relación, no inventes datos del álbum destino). El álbum destino es tu recomendación curatorial de melómano. Si el payload no respalda ninguna conexión, devuelve [].
-difficulty (1-5): qué tan exigente es para un oído casual. impact (1-5): peso histórico/cultural.`;
+
+difficulty (1-5): qué tan exigente es para un oído casual (1 = se entra fácil, 5 = pide oído atento).
+
+impact (1-100): IMPACTO CULTURAL HONESTO — cuánto movió este disco la historia de la música. Sé REALISTA y conservador: la inmensa mayoría de los discos NO son hitos. No infles. Calíbralo con la evidencia del FACTS PAYLOAD (premios, certificaciones/ventas, presencia en listas históricas, influencia documentada, reinvención de un género). Si el payload trae poca evidencia de impacto, baja la nota; no premies un disco solo por ser querido o exitoso comercialmente.
+  · 90-100: hito que cambió la música (referente ineludible, redefinió un género o una época).
+  · 75-89: clásico mayor, muy influyente y aclamado más allá de su nicho.
+  · 60-74: disco importante y respetado en su género o país, con legado real.
+  · 40-59: disco notable, querido o exitoso, pero de impacto histórico modesto.
+  · 20-39: sólido, con repercusión local o de nicho.
+  · 1-19: impacto cultural mínimo o sin evidencia.
+Dos discos de distinto calibre NO deben quedar con la misma nota: úsala para diferenciar.`;
 
 export type GeneratedDossier = DossierContent & {
   difficulty: number;
@@ -57,6 +67,6 @@ export async function generateDossier(
     .filter((j) => j?.title && j?.artist && j?.connection)
     .slice(0, 3);
   parsed.difficulty = Math.min(5, Math.max(1, Math.round(parsed.difficulty ?? 2)));
-  parsed.impact = Math.min(5, Math.max(1, Math.round(parsed.impact ?? 3)));
+  parsed.impact = Math.min(100, Math.max(1, Math.round(parsed.impact ?? 45)));
   return parsed;
 }

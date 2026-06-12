@@ -20,6 +20,7 @@ import { parseJson, type FactsPayload } from "./types";
 import { formatCuriosities, type CuriosityAnswer } from "./curiosities";
 import { proponerDiscoDescubrimiento } from "./discover";
 import { runDossierPipeline } from "./dossier/pipeline";
+import { LOVED_THRESHOLD, RATING_MAX } from "./review";
 
 const MAX_REVIEWS = 10;
 const MAX_RECENT_PICKS = 7;
@@ -674,7 +675,7 @@ function diarioATexto(reviews: ReviewConAlbum[]): string {
         .map(([q, v]) => `    · ${q} → "${v.slice(0, 140)}"`)
         .join("\n");
       return (
-        `- "${r.album.title}" de ${r.album.artist.name}: ${r.rating}★` +
+        `- "${r.album.title}" de ${r.album.artist.name}: ${r.rating}/${RATING_MAX}` +
         (respuestas ? `\n${respuestas}` : "")
       );
     })
@@ -717,10 +718,10 @@ function elegirPorGusto(input: {
   const generos = input.profile ? comoLista(input.profile.genres).map(normalizar) : [];
   const artistas = [
     ...(input.profile ? comoLista(input.profile.artists) : []),
-    ...input.reviews.filter((r) => r.rating >= 4).map((r) => r.album.artist.name),
+    ...input.reviews.filter((r) => r.rating >= LOVED_THRESHOLD).map((r) => r.album.artist.name),
   ].map(normalizar);
   const tagsGustados = new Set<string>();
-  for (const r of input.reviews.filter((x) => x.rating >= 4)) {
+  for (const r of input.reviews.filter((x) => x.rating >= LOVED_THRESHOLD)) {
     for (const t of parseJson<Partial<FactsPayload>>(r.album.factsJson, {}).tags ?? []) {
       tagsGustados.add(normalizar(t));
     }

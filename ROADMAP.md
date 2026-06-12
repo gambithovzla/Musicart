@@ -303,6 +303,16 @@ disco se sienta elegido para ti, no una rotación genérica.
   Solo se fabrica a quien tiene señales de gusto (perfil o diario); sin señales,
   rotación global. Botón solo-admin "Rehacer mi disco de hoy" (`RehacerDiscoAdmin`)
   para regenerar a voluntad — el control del dueño sobre el disco de cada día.
+- [x] **6.5 Reseña más expresiva + rankings honestos** — el puntaje del usuario
+  pasó de 1-5 a **1-10** (escala más amplia para puntuar mejor); el formulario de
+  reseña gana una **caja de comentario libre** ("escribe lo que quieras del
+  disco") y un **selector de canción favorita** del tracklist. Ambos se guardan en
+  el diario y alimentan la memoria del curador (entran al prompt del motor con
+  etiqueta legible; claves en `src/lib/review.ts`). El **Impacto cultural** ahora
+  muestra su **leyenda** junto al número (90+ hito, 75+ clásico mayor, 60+ muy
+  influyente, 40+ notable, <40 de nicho) tras pasar de estrellas 1-5 a 1-100
+  honesto. Migraciones que reescalan datos existentes (reseñas ×2; impacto a
+  1-100) para que nada se vea con la escala vieja.
 
 ### Criterios de aceptación
 
@@ -315,7 +325,7 @@ disco se sienta elegido para ti, no una rotación genérica.
 
 ## Estado actual (junio 2026)
 
-**Fases 0–5 completas. Fase 6 EN CURSO** (6.1 y 6.4 hechas; 6.2 y 6.3 pendientes).
+**Fases 0–5 completas. Fase 6 EN CURSO** (6.1, 6.4 y 6.5 hechas; 6.2 y 6.3 pendientes).
 
 ---
 

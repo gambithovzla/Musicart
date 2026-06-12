@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getJournal } from "@/app/actions";
 import { getListenerIdentity } from "@/lib/identity";
 import { getMusicalThread } from "@/lib/musical-thread";
+import { RATING_MAX, splitAnswers } from "@/lib/review";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +107,9 @@ export default async function DiarioPage() {
 
       <div className="mt-8 flex flex-col gap-4 pb-10">
         {entries.map((e) => {
-          const reflection = Object.values(e.answers).find((a) => a.trim());
+          const { comment, favorite, reflections } = splitAnswers(e.answers);
+          const reflection =
+            comment.trim() || Object.values(reflections).find((a) => a.trim());
           return (
             <Link
               key={e.albumId}
@@ -131,10 +134,13 @@ export default async function DiarioPage() {
                 <p className="truncate text-sm text-dim">
                   {e.artist} · {e.year}
                 </p>
-                <p className="mt-1 text-sm text-album">
-                  {"★".repeat(e.rating)}
-                  <span className="text-white/15">{"★".repeat(5 - e.rating)}</span>
+                <p className="mt-1 text-sm">
+                  <span className="font-semibold text-album">{e.rating}</span>
+                  <span className="text-dim">/{RATING_MAX}</span>
                 </p>
+                {favorite && (
+                  <p className="mt-0.5 truncate text-xs text-album-light">♪ {favorite}</p>
+                )}
                 {reflection && (
                   <p className="font-serif mt-1 truncate text-sm italic text-foreground/70">
                     “{reflection}”

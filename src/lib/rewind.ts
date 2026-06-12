@@ -10,6 +10,7 @@ import {
   type ListenerIdentity,
 } from "./identity";
 import { listenerKey, monthKey } from "./freemium";
+import { RATING_MAX } from "./review";
 
 const LLM_TIMEOUT_MS = 12_000;
 
@@ -132,7 +133,7 @@ REGLAS ESTRICTAS:
 
   const user = `Datos reales del mes (${stats.monthLabel}):
 - Dossiers leídos: ${stats.albumsRead}
-- Reseñas: ${stats.reviews.map((r) => `«${r.title}» de ${r.artist} (${r.rating}★)`).join("; ") || "ninguna"}
+- Reseñas: ${stats.reviews.map((r) => `«${r.title}» de ${r.artist} (${r.rating}/${RATING_MAX})`).join("; ") || "ninguna"}
 - Disco mejor puntuado: ${stats.bestAlbum ? `«${stats.bestAlbum.title}» de ${stats.bestAlbum.artist}` : "ninguno"}
 - Ánimos del check-in: ${stats.topMoods.join(", ") || "sin registros"}
 

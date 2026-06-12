@@ -326,10 +326,20 @@ disco se sienta elegido para ti, no una rotación genérica.
   Pensado para abrir la app a testers sin sustos (con gpt-4o-mini, ~$1-3/mes
   para 5 personas).
 
+- [x] **6.7 Entrada = onboarding (sin disco hasta conocerte)** — quien entra sin
+  perfil ya NO ve un disco genérico: va directo a un onboarding por pasos, bonito
+  e interactivo (`Onboarding.tsx`), que pregunta géneros, artistas favoritos (con
+  foto), un disco que te marcó, tu canción favorita, idiomas y qué buscas en un
+  disco. Al terminar, guarda el perfil, fija el idioma de hoy y la home fabrica su
+  PRIMER disco a su medida. Las nuevas señales (`markedAlbum`, `favoriteSong`…)
+  entran al motor vía `formatPerfil` y se editan también en `/perfil`.
+
 ### Criterios de aceptación
 
 - [x] El perfil captura géneros y artistas favoritos, y el primer disco tras
   el onboarding ya es personalizado (no la rotación global).
+- [x] Un usuario nuevo no ve ningún disco hasta completar el onboarding; al
+  terminarlo, su primer disco se fabrica a su medida.
 - [x] El disco del día se genera fresco por usuario (no se saca de un catálogo
   sembrado); si la IA falla, cae a catálogo/rotación sin romper la app.
 
@@ -337,7 +347,7 @@ disco se sienta elegido para ti, no una rotación genérica.
 
 ## Estado actual (junio 2026)
 
-**Fases 0–5 completas. Fase 6 EN CURSO** (6.1, 6.4, 6.5 y 6.6 hechas; 6.2 y 6.3 pendientes).
+**Fases 0–5 completas. Fase 6 EN CURSO** (6.1, 6.4, 6.5, 6.6 y 6.7 hechas; 6.2 y 6.3 pendientes).
 
 ---
 

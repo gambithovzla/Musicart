@@ -36,6 +36,10 @@ export type ProfileAnswers = {
   bio?: string;           // línea libre opcional: trabajo, rutina, contexto
   artistImages?: Record<string, string>; // nombre → foto (solo para mostrar)
   anchors?: string; // libre, opcional (perfiles antiguos); ya no se muestra
+  markedAlbum?: string;   // un disco que te marcó
+  markedArtist?: string;  // …de qué artista
+  favoriteSong?: string;  // tu canción favorita
+  favoriteSongArtist?: string; // …de qué artista
   listenTime: string;
 };
 
@@ -422,6 +426,40 @@ export function ProfileForm({
               </motion.ul>
             )}
           </AnimatePresence>
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="font-serif text-lg">Lo que te marcó</h2>
+        <p className="mt-1 text-xs text-dim">
+          Un disco y una canción que recuerdas con cariño — le dan al curador una
+          brújula de tu gusto
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <input
+            value={answers.markedAlbum ?? ""}
+            onChange={(e) => update({ markedAlbum: e.target.value.slice(0, 80) })}
+            placeholder="Un disco que te marcó"
+            className="rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm placeholder:text-white/25 focus:border-album focus:outline-none focus:ring-2 focus:ring-album/25"
+          />
+          <input
+            value={answers.markedArtist ?? ""}
+            onChange={(e) => update({ markedArtist: e.target.value.slice(0, 80) })}
+            placeholder="…de qué artista"
+            className="rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm placeholder:text-white/25 focus:border-album focus:outline-none focus:ring-2 focus:ring-album/25"
+          />
+          <input
+            value={answers.favoriteSong ?? ""}
+            onChange={(e) => update({ favoriteSong: e.target.value.slice(0, 80) })}
+            placeholder="Tu canción favorita"
+            className="rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm placeholder:text-white/25 focus:border-album focus:outline-none focus:ring-2 focus:ring-album/25"
+          />
+          <input
+            value={answers.favoriteSongArtist ?? ""}
+            onChange={(e) => update({ favoriteSongArtist: e.target.value.slice(0, 80) })}
+            placeholder="…de qué artista"
+            className="rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm placeholder:text-white/25 focus:border-album focus:outline-none focus:ring-2 focus:ring-album/25"
+          />
         </div>
       </section>
 

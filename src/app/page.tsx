@@ -13,6 +13,7 @@ import { albumThemeStyle } from "@/lib/theme";
 import { parseJson, type Palette } from "@/lib/types";
 import { isAdminEmail } from "@/lib/admin";
 import { DailyReveal } from "@/components/DailyReveal";
+import { Onboarding } from "@/components/Onboarding";
 import { CreandoDiscoHoy } from "@/components/CreandoDiscoHoy";
 import { RehacerDiscoAdmin } from "@/components/RehacerDiscoAdmin";
 import { MoodCheckin } from "@/components/MoodCheckin";
@@ -38,6 +39,13 @@ export default async function Home() {
   const tz = tzRaw ? decodeURIComponent(tzRaw) : null;
   const userId = session?.user?.id ?? null;
   const dateKey = todayKey(tz);
+
+  // La entrada es el ritual de conocerte: sin perfil, NO se muestra ningún disco.
+  // Vamos directo al onboarding por pasos; al terminar, la home fabrica el primero.
+  const tienePerfil = await hasProfile();
+  if (!tienePerfil) {
+    return <Onboarding dateKey={dateKey} nombre={session?.user?.name ?? null} />;
+  }
 
   // Gate de idioma: usuarios con deviceId que no han elegido idioma hoy.
   const langRaw = jar.get(LANG_COOKIE)?.value;
@@ -76,8 +84,7 @@ export default async function Home() {
     );
   }
 
-  const [tienePerfil, madriguera, identity] = await Promise.all([
-    hasProfile(),
+  const [madriguera, identity] = await Promise.all([
     getMadriguera(pick.album.id),
     getListenerIdentity(),
   ]);

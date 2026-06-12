@@ -651,12 +651,23 @@ function formatPerfil(profile: Record<string, unknown>): string {
   const bio = typeof profile.bio === "string" ? profile.bio.trim() : "";
   const tiempo = typeof profile.listenTime === "string" ? profile.listenTime : "";
   const anchors = typeof profile.anchors === "string" ? profile.anchors : "";
+  const texto = (k: string) => (typeof profile[k] === "string" ? (profile[k] as string).trim() : "");
+  const discoMarca = texto("markedAlbum");
+  const discoMarcaArtista = texto("markedArtist");
+  const cancionFav = texto("favoriteSong");
+  const cancionFavArtista = texto("favoriteSongArtist");
   const curiosities = Array.isArray(profile.curiosities)
     ? formatCuriosities(profile.curiosities as CuriosityAnswer[])
     : "";
   const lineas = [
     generos.length ? `Géneros favoritos: ${generos.join(", ")}` : null,
     artistas.length ? `Artistas que ama: ${artistas.join(", ")}` : null,
+    discoMarca
+      ? `Un disco que lo marcó: "${discoMarca}"${discoMarcaArtista ? ` de ${discoMarcaArtista}` : ""}`
+      : null,
+    cancionFav
+      ? `Su canción favorita: "${cancionFav}"${cancionFavArtista ? ` de ${cancionFavArtista}` : ""}`
+      : null,
     idiomas.length ? `Idiomas en los que disfruta música: ${idiomas.join(", ")}` : null,
     busca.length ? `Busca en un disco: ${busca.join(", ")}` : null,
     momentos.length ? `Escucha: ${momentos.join(", ")}` : null,

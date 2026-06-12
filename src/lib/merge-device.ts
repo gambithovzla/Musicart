@@ -2,6 +2,7 @@
 
 import { prisma } from "./db";
 import { dedupeReviewsByAlbum } from "./identity";
+import { mergeProfileAnswers, profileHasSignal, profileRichness } from "./profile-merge";
 import { parseJson } from "./types";
 
 export async function mergeDeviceToUser(
@@ -76,26 +77,60 @@ export async function mergeDeviceToUser(
   }
 }
 
-/** Fusiona respuestas de perfil: conserva lo no vacío de ambos lados. */
-function mergeProfileAnswers(
-  account: Record<string, unknown>,
-  device: Record<string, unknown>,
-): Record<string, unknown> {
-  const out = { ...account };
-  for (const [key, val] of Object.entries(device)) {
-    if (Array.isArray(val) && val.length > 0) {
-      const prev = Array.isArray(out[key]) ? (out[key] as unknown[]) : [];
-      out[key] = [...new Set([...prev, ...val])];
-    } else if (typeof val === "string" && val.trim() && !String(out[key] ?? "").trim()) {
-      out[key] = val;
-    } else if (
-      val &&
-      typeof val === "object" &&
-      !Array.isArray(val) &&
-      Object.keys(val as object).length > 0
-    ) {
-      out[key] = { ...(out[key] as object), ...(val as object) };
+/**
+ * Busca perfiles huérfanos (otros deviceId con datos) ligados a la cuenta vía
+ * reseñas o picks, y los fusiona en el perfil canónico por userId.
+ */
+export async function mergeAllOrphanProfilesForUser(userId: string): Promise<void> {
+  let account = await prisma.profile.findUnique({ where: { userId } });
+
+  const deviceIds = new Set<string>();
+  if (account) deviceIds.add(account.deviceId);
+
+  const [reviews, picks] = await Promise.all([
+    prisma.review.findMany({ where: { userId }, select: { deviceId: true } }),
+    prisma.dailyPick.findMany({ where: { userId }, select: { deviceId: true } }),
+  ]);
+  for (const r of reviews) deviceIds.add(r.deviceId);
+  for (const p of picks) deviceIds.add(p.deviceId);
+
+  let accountAnswers = parseJson<Record<string, unknown>>(account?.answersJson ?? "{}", {});
+
+  for (const deviceId of deviceIds) {
+    const dev = await prisma.profile.findUnique({ where: { deviceId } });
+    if (!dev || dev.id === account?.id) continue;
+    if (dev.userId && dev.userId !== userId) continue;
+    if (!profileHasSignal(dev.answersJson) && profileRichness(dev.answersJson) === 0) continue;
+
+    if (!account) {
+      await prisma.profile.update({ where: { id: dev.id }, data: { userId } });
+      account = await prisma.profile.findUnique({ where: { userId } });
+      accountAnswers = parseJson<Record<string, unknown>>(account!.answersJson, {});
+      continue;
     }
+
+    accountAnswers = mergeProfileAnswers(
+      accountAnswers,
+      parseJson<Record<string, unknown>>(dev.answersJson, {}),
+    );
+    await prisma.profile.update({
+      where: { id: account.id },
+      data: { answersJson: JSON.stringify(accountAnswers) },
+    });
+    await prisma.profile.delete({ where: { id: dev.id } });
   }
-  return out;
+}
+
+/** Con sesión: fusiona dispositivo + huérfanos y devuelve el perfil canónico. */
+export async function resolveProfileForUser(
+  userId: string,
+  deviceId: string,
+): Promise<Awaited<ReturnType<typeof prisma.profile.findUnique>>> {
+  if (deviceId) await mergeDeviceToUser(userId, deviceId);
+
+  let account = await prisma.profile.findUnique({ where: { userId } });
+  if (account && profileHasSignal(account.answersJson)) return account;
+
+  await mergeAllOrphanProfilesForUser(userId);
+  return prisma.profile.findUnique({ where: { userId } });
 }

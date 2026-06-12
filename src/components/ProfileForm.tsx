@@ -84,6 +84,9 @@ export function ProfileForm({
   subscription?: SubscriptionInfo;
 }) {
   const [answers, setAnswers] = useState<ProfileAnswers>(EMPTY);
+  const perfilVacioEnCuenta =
+    Boolean(user) &&
+    !(initialAnswers?.genres?.length || initialAnswers?.artists?.length);
   const [artistInput, setArtistInput] = useState("");
   const [suggestions, setSuggestions] = useState<ArtistSuggestion[]>([]);
   const [status, setStatus] = useState<SaveStatus>("idle");
@@ -282,6 +285,13 @@ export function ProfileForm({
           </span>
           <span className="text-dim">→</span>
         </Link>
+      )}
+
+      {perfilVacioEnCuenta && (
+        <p className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-xs leading-relaxed text-amber-100/90">
+          Si ya llenaste tu perfil en el móvil, abre Musicart allí con la misma
+          cuenta (Entrar → Google) y recarga esta página. Así se unen tus gustos.
+        </p>
       )}
 
       <SaveIndicator status={status} />

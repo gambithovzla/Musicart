@@ -9,12 +9,13 @@ import { QUESTIONS, todayQuestion, formatCuriosities } from "@/lib/curiosities";
 import { parseJson } from "@/lib/types";
 import { llm, extractJson } from "@/lib/dossier/llm";
 import {
+  findProfileRecord,
   dedupeReviewsByAlbum,
   getListenerIdentity,
   hasListener,
-  findProfileRecord,
   reviewsWhere,
 } from "@/lib/identity";
+import { profileHasSignal } from "@/lib/profile-merge";
 import { applyMood } from "@/lib/recommend";
 
 export async function saveReview(input: {
@@ -84,11 +85,15 @@ export async function saveProfile(deviceId: string, answers: Record<string, unkn
 
   // Con cuenta: un solo perfil por userId (sincroniza móvil ↔ desktop).
   if (userId) {
+    const { resolveProfileForUser } = await import("@/lib/merge-device");
+    await resolveProfileForUser(userId, deviceId);
     const account = await prisma.profile.findUnique({ where: { userId } });
     if (account) {
+      const prev = parseJson<Record<string, unknown>>(account.answersJson, {});
+      const merged = { ...prev, ...answers };
       await prisma.profile.update({
         where: { userId },
-        data: { answersJson },
+        data: { answersJson: JSON.stringify(merged) },
       });
       return { ok: true };
     }
@@ -142,7 +147,8 @@ export async function getJournal() {
 
 export async function hasProfile(): Promise<boolean> {
   const identity = await getListenerIdentity();
-  return Boolean(await findProfileRecord(identity));
+  const profile = await findProfileRecord(identity);
+  return profile ? profileHasSignal(profile.answersJson) : false;
 }
 
 /** Guarda una respuesta a la pregunta del día en el perfil del usuario. */

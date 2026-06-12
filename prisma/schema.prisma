@@ -124,8 +124,8 @@ model Review {
   deviceId    String
   userId      String?
   albumId     String
-  rating      Int // 1-5
-  answersJson String   @default("{}") // respuestas a las preguntas de reflexión
+  rating      Int // 1-10 (puntaje del usuario)
+  answersJson String   @default("{}") // reflexión + comentario libre + canción favorita
   createdAt   DateTime @default(now())
 
   album Album @relation(fields: [albumId], references: [id])

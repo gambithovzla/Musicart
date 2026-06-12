@@ -10,6 +10,7 @@ import {
   type ListenerIdentity,
 } from "./identity";
 import { listenerKey } from "./freemium";
+import { LOVED_THRESHOLD, RATING_MAX, splitAnswers } from "./review";
 
 const LLM_TIMEOUT_MS = 10_000;
 const MAX_REVIEWS = 10;
@@ -28,7 +29,9 @@ export type ThreadEntry = {
 function extractReflection(answersJson: string): string {
   try {
     const answers = JSON.parse(answersJson) as Record<string, string>;
-    return Object.values(answers).find((a) => a.trim())?.trim() ?? "";
+    // Prioriza el comentario libre; la canción favorita no es una reflexión.
+    const { comment, reflections } = splitAnswers(answers);
+    return (comment.trim() || Object.values(reflections).find((a) => a.trim())?.trim()) ?? "";
   } catch {
     return "";
   }
@@ -94,7 +97,7 @@ export function fallbackThread(entries: ThreadEntry[]): string {
     return `Tu diario ya guarda ${entries.length} discos. ${a.whenLabel.charAt(0).toUpperCase() + a.whenLabel.slice(1)} escribiste sobre «${a.title}»; «${newest.title}» es la parada más reciente del viaje.`;
   }
 
-  const high = entries.filter((e) => e.rating >= 4);
+  const high = entries.filter((e) => e.rating >= LOVED_THRESHOLD);
   if (high.length >= 2) {
     return `Entre «${oldest.title}» (${oldest.whenLabel}) y «${newest.title}» (${newest.whenLabel}) llevas ${entries.length} paradas. Los que más brillan: ${high
       .slice(0, 3)
@@ -123,7 +126,7 @@ REGLAS ESTRICTAS:
 
   const lines = entries.map(
     (e) =>
-      `- ${e.whenLabel}: «${e.title}» de ${e.artist} (${e.year}), ${e.rating}★${
+      `- ${e.whenLabel}: «${e.title}» de ${e.artist} (${e.year}), ${e.rating}/${RATING_MAX}${
         e.reflection ? ` — reflexión: “${e.reflection}”` : ""
       }`,
   );

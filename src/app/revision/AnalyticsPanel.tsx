@@ -74,7 +74,7 @@ export function AnalyticsPanel({ metrics }: { metrics: ProductMetrics }) {
           value={metrics.engagement.reviewsTotal}
           hint={
             metrics.engagement.avgRating != null
-              ? `★ ${metrics.engagement.avgRating.toFixed(1)} media · +${metrics.engagement.reviews7d} semana`
+              ? `${metrics.engagement.avgRating.toFixed(1)}/10 media · +${metrics.engagement.reviews7d} semana`
               : `+${metrics.engagement.reviews7d} esta semana`
           }
         />

@@ -207,7 +207,7 @@ export default async function AlbumPage({
           <p className="mt-1 text-lg text-dim">
             {album.artist.name} · {album.year}
           </p>
-          <div className="mt-4 flex items-center gap-5 text-sm text-dim">
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-dim">
             {album.durationMin && <span>{album.durationMin} min</span>}
             <span>
               Dificultad <Stars value={album.difficulty} />
@@ -339,7 +339,11 @@ export default async function AlbumPage({
               </DossierSection>
 
               <DossierSection n="06" title="Después de escuchar">
-                <ReflectionForm albumId={album.id} questions={questions} />
+                <ReflectionForm
+                  albumId={album.id}
+                  questions={questions}
+                  tracks={dossier.trackNotes.map((t) => t.title)}
+                />
               </DossierSection>
 
               {saltos.length > 0 && (

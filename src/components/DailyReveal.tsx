@@ -84,7 +84,7 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
           {album.artist} · {album.year}
         </p>
 
-        <div className="mt-5 flex items-center justify-center gap-5 text-sm text-dim">
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-dim">
           {album.durationMin && <span>{album.durationMin} min</span>}
           <span>
             Dificultad <Stars value={album.difficulty} />

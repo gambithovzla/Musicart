@@ -5,6 +5,7 @@
 
 import { prisma } from "./db";
 import { llm, extractJson } from "./dossier/llm";
+import { LOVED_THRESHOLD, RATING_MAX } from "./review";
 
 const MAX_PROPOSALS = 10;
 
@@ -145,7 +146,7 @@ export async function proposeNextAlbums(
       take: 50,
     }),
     prisma.review.findMany({
-      where: { rating: { gte: 4 } },
+      where: { rating: { gte: LOVED_THRESHOLD } },
       include: { album: { include: { artist: true } } },
       orderBy: { createdAt: "desc" },
       take: 30,
@@ -169,7 +170,7 @@ export async function proposeNextAlbums(
       ? resenas
           .map(
             (r) =>
-              `- "${r.album.title}" de ${r.album.artist.name}: ${r.rating}★`,
+              `- "${r.album.title}" de ${r.album.artist.name}: ${r.rating}/${RATING_MAX}`,
           )
           .join("\n")
       : "(aún no hay reseñas altas)";

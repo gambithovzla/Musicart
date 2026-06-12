@@ -119,6 +119,7 @@ async function main() {
             artistStory: f.dossier.artistStory,
             whyItMatters: f.dossier.whyItMatters,
             questionsJson: JSON.stringify(f.dossier.questions),
+            impactNote: f.dossier.impactNote ?? null,
             trackNotes: {
               create: f.tracks.map((t) => ({
                 position: t.position,

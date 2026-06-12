@@ -56,6 +56,7 @@ export type DossierContent = {
   questions: string[]; // preguntas de reflexión post-escucha
   trackNotes: { position: number; title: string; note?: string }[];
   jumps?: DiscoveryJump[]; // 0-3 saltos de descubrimiento (la madriguera)
+  impactNote?: string; // por qué este impacto cultural (sobre hechos verificados)
 };
 
 // MP3s de narración pre-renderizados por sección (TTS). Si falta, la UI usa Web Speech API.

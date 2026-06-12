@@ -138,6 +138,7 @@ export default async function Home() {
             durationMin: pick.album.durationMin,
             difficulty: pick.album.difficulty,
             impact: pick.album.impact,
+            impactNote: pick.impactNote,
             hook: firstSentence(pick.intro),
             dateLabel: formatDateEs(tz),
             reason: personal?.reason ?? null,

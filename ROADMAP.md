@@ -281,7 +281,7 @@ disco se sienta elegido para ti, no una rotación genérica.
   artistas favoritos (autocompletado con foto vía Deezer, `/api/artists`).
   El motor los pondera con fuerza
   (regla 7 del prompt) y, si la IA se cae, `elegirPorGusto` elige por afinidad
-  (géneros + artistas + diario 4★) en vez de la rotación global: un rockero ya
+  (géneros + artistas + diario 8/10) en vez de la rotación global: un rockero ya
   no recibe una balada.
 - [ ] **6.2 Conectar Spotify** — login con Spotify (Auth.js ya guarda tokens en
   Account) + leer top artists/tracks/géneros para alimentar el motor con gustos
@@ -333,6 +333,33 @@ disco se sienta elegido para ti, no una rotación genérica.
   disco. Al terminar, guarda el perfil, fija el idioma de hoy y la home fabrica su
   PRIMER disco a su medida. Las nuevas señales (`markedAlbum`, `favoriteSong`…)
   entran al motor vía `formatPerfil` y se editan también en `/perfil`.
+
+> **Plan acordado (jun 2026): profundidad narrativa + curiosidades "wow".**
+> Diagnóstico: el texto se siente genérico por DOS causas que comparten raíz —
+> (a) el modelo barato (`gpt-4o-mini`) escribe plano, y (b) a la IA solo le damos
+> ~6000 chars del inicio del artículo de Wikipedia (el resumen), así que las
+> anécdotas jugosas (rivalidad MJ–Prince, Jay-Z en Glastonbury tocando
+> *Wonderwall*) NUNCA llegan al FactsPayload. Material pobre + modelo barato =
+> texto plano. Las anécdotas SÍ son verificables; el problema es de sourcing, no
+> de la regla anti-alucinación. Orden sugerido: 6.8 primero (valida la hipótesis
+> del modelo, rápido), luego 6.9.
+
+- [ ] **6.8 Profundidad narrativa** — separar el modelo por tarea: un
+  `GENERATION_MODEL` premium (Claude Sonnet/Opus o GPT-4o) **solo para ESCRIBIR
+  el dossier** (`generate.ts`/`verify.ts`) — se hace una vez y queda cacheado,
+  servido a todos; el `LLM_MODEL` barato sigue para lo frecuente (recomendar,
+  chat). Subir el prompt de redacción hacia narrativa vívida y específica (menos
+  "frases cortas / evita clichés", más escena y anécdota concreta). Costo acotado
+  por el tope 6.6. Validación: regenerar 1 disco y comparar prosa.
+- [ ] **6.9 Curiosidades y la madriguera viva** (incluye 6.3) — enriquecer el
+  sourcing: traer de Wikipedia las secciones profundas (Recepción, Legado,
+  Controversias, En vivo) y datos a nivel de artista (rivalidades, momentos
+  legendarios), cada nugget con fuente + cita para que el verificador lo valide.
+  Paso nuevo que "mina" 2-4 *"¿Sabías que…?"* verificados (guardados como
+  `impactNote`). Mostrarlos sin invadir: sección desplegable "Lo que no sabías"
+  en el dossier (6.3), UN gancho de curiosidad en la home al terminar el disco, y
+  saltos (`jumps`) enriquecidos con su historia. Meta: que la gente diga "guau,
+  esto no lo sabía" y vuelva mañana.
 
 ### Criterios de aceptación
 

@@ -47,24 +47,27 @@ export default async function Home() {
     return <Onboarding dateKey={dateKey} nombre={session?.user?.name ?? null} />;
   }
 
-  // Gate de idioma: usuarios con deviceId que no han elegido idioma hoy.
-  const langRaw = jar.get(LANG_COOKIE)?.value;
-  const todayLang = parseTodayLang(langRaw, dateKey);
-  if (deviceId && !todayLang) {
-    return <LanguageGate dateKey={dateKey} />;
-  }
-
+  // ¿Ya tiene el disco de hoy guardado? Lo miramos ANTES del gate de idioma:
+  // si el disco ya existe, no tiene sentido volver a preguntar el idioma (sería
+  // confuso y, además, el pick está cacheado y no cambiaría). El idioma solo
+  // importa para generar el primero del día.
   const personal =
     deviceId || userId
       ? await getPersonalizedPick(deviceId, userId, tz)
       : null;
 
-  // Sin disco guardado todavía: si el oyente tiene señales de gusto, fabricamos
-  // hoy un disco fresco a su medida (tarda 1-3 min) mostrando una pantalla de
-  // carga; cuando termina, se refresca y aparece. Si no tiene señales (o no hay
-  // IA), seguimos con la rotación global de siempre, sin esperas.
-  if (!personal && (deviceId || userId)) {
-    if (await puedeGenerarPickFresco(deviceId, userId)) {
+  if (!personal) {
+    // Gate de idioma: solo antes de fabricar el disco del día (una vez al día).
+    const langRaw = jar.get(LANG_COOKIE)?.value;
+    const todayLang = parseTodayLang(langRaw, dateKey);
+    if (deviceId && !todayLang) {
+      return <LanguageGate dateKey={dateKey} />;
+    }
+
+    // Si el oyente tiene señales de gusto, fabricamos hoy un disco fresco a su
+    // medida (tarda 1-3 min) con pantalla de carga; cuando termina, se refresca
+    // y aparece. Sin señales (o sin IA), va la rotación global, sin esperas.
+    if ((deviceId || userId) && (await puedeGenerarPickFresco(deviceId, userId))) {
       return <CreandoDiscoHoy />;
     }
   }

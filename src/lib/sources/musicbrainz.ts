@@ -64,11 +64,67 @@ export async function searchReleaseGroup(
   };
 }
 
+export type MbConnection = {
+  kind: "sample" | "remix";
+  track: string; // canción de ESTE álbum
+  relatedTitle: string; // canción relacionada
+  relatedArtist?: string; // artista de la canción relacionada
+  direction: "uses" | "usedBy"; // esta canción usa la otra, o fue usada por la otra
+};
+
 export type MbAlbumDetails = {
   label?: string;
   tracklist: { position: number; title: string; lengthMs?: number }[];
   durationMin?: number;
+  connections: MbConnection[]; // samples/remixes verificados (la madriguera)
 };
+
+type MbRelation = {
+  type?: string;
+  direction?: string;
+  recording?: {
+    title?: string;
+    "artist-credit"?: { name?: string; artist?: { name?: string } }[];
+  };
+};
+
+function artistName(
+  credit?: { name?: string; artist?: { name?: string } }[],
+): string | undefined {
+  if (!credit?.length) return undefined;
+  const joined = credit.map((c) => c.name ?? c.artist?.name ?? "").join("").trim();
+  return joined || undefined;
+}
+
+// Extrae samples y remixes de las relaciones de cada grabación (la materia
+// prima de la madriguera). Solo relaciones que MusicBrainz da como datos duros.
+function parseConnections(
+  media: { tracks?: { title: string; recording?: { relations?: MbRelation[] } }[] }[],
+): MbConnection[] {
+  const out: MbConnection[] = [];
+  for (const m of media ?? []) {
+    for (const t of m.tracks ?? []) {
+      for (const rel of t.recording?.relations ?? []) {
+        const kind =
+          rel.type === "samples material"
+            ? "sample"
+            : rel.type === "remix" || rel.type === "remixes"
+              ? "remix"
+              : null;
+        if (!kind || !rel.recording?.title) continue;
+        out.push({
+          kind,
+          track: t.title,
+          relatedTitle: rel.recording.title,
+          relatedArtist: artistName(rel.recording["artist-credit"]),
+          direction: rel.direction === "backward" ? "usedBy" : "uses",
+        });
+        if (out.length >= 12) return out; // tope: no inflar el payload
+      }
+    }
+  }
+  return out;
+}
 
 export async function getAlbumDetails(
   releaseGroupMbid: string,
@@ -84,11 +140,22 @@ export async function getAlbumDetails(
   const release = official[0] ?? rg.releases?.[0];
   if (!release) return null;
 
-  // 2. Tracklist y sello de esa edición.
+  // 2. Tracklist, sello y relaciones (samples/remixes) de esa edición.
+  //    `recording-level-rels` trae las relaciones de cada grabación en la misma
+  //    llamada — sin pedir una request por canción (respeta el rate limit).
   const rel = await mb<{
-    media?: { tracks?: { position: number; title: string; length?: number }[] }[];
+    media?: {
+      tracks?: {
+        position: number;
+        title: string;
+        length?: number;
+        recording?: { relations?: MbRelation[] };
+      }[];
+    }[];
     "label-info"?: { label?: { name?: string } }[];
-  }>(`/release/${release.id}?fmt=json&inc=recordings+labels`);
+  }>(
+    `/release/${release.id}?fmt=json&inc=recordings+labels+recording-level-rels+artist-credits`,
+  );
 
   const tracks = (rel.media ?? []).flatMap((m, mi) =>
     (m.tracks ?? []).map((t) => ({
@@ -107,5 +174,6 @@ export async function getAlbumDetails(
     label: rel["label-info"]?.[0]?.label?.name,
     tracklist,
     durationMin: totalMs > 0 ? Math.round(totalMs / 60_000) : undefined,
+    connections: parseConnections(rel.media ?? []),
   };
 }

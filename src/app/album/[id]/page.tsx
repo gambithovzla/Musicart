@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { auth } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
 import { prisma } from "@/lib/db";
@@ -33,6 +32,7 @@ import { Paywall } from "@/components/Paywall";
 import { AlbumChat } from "@/components/AlbumChat";
 import { Narrator, type NarratorSection } from "@/components/Narrator";
 import { FuentesVerificadas } from "@/components/FuentesVerificadas";
+import { SaltoInteractivo } from "@/components/SaltoInteractivo";
 import { BorrarDiscoAdmin } from "@/components/BorrarDiscoAdmin";
 import { getChatQuota } from "@/lib/album-chat";
 
@@ -350,51 +350,18 @@ export default async function AlbumPage({
               {saltos.length > 0 && (
                 <DossierSection n="08" title="Sigue la madriguera">
                   <p className="text-sm text-dim">De este disco puedes saltar a…</p>
+                  <p className="mt-1 text-xs text-dim">
+                    Si un disco aún no existe, tócalo y la IA lo crea al momento.
+                  </p>
                   <div className="mt-4 flex flex-col gap-3">
-                    {saltos.map(({ jump, albumId, coverUrl }) => {
-                      const tarjeta = (
-                        <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-                          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg">
-                            {coverUrl ? (
-                              <Image
-                                src={coverUrl}
-                                alt={`Portada de ${jump.title}`}
-                                fill
-                                sizes="56px"
-                                className="object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center bg-album-dark">
-                                <span className="font-serif text-xl text-album-light">♪</span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">
-                              {jump.title}{" "}
-                              <span className="font-normal text-dim">· {jump.artist}</span>
-                            </p>
-                            <p className="font-serif mt-1 text-sm italic leading-snug text-foreground/80">
-                              {jump.connection}
-                            </p>
-                            <p className="mt-1.5 text-xs text-dim">
-                              {albumId ? "Léelo en Musicart →" : "La IA lo está preparando…"}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                      return albumId ? (
-                        <Link
-                          key={`${jump.artist}-${jump.title}`}
-                          href={`/album/${albumId}`}
-                          className="transition-transform active:scale-[0.99]"
-                        >
-                          {tarjeta}
-                        </Link>
-                      ) : (
-                        <div key={`${jump.artist}-${jump.title}`}>{tarjeta}</div>
-                      );
-                    })}
+                    {saltos.map(({ jump, albumId, coverUrl }) => (
+                      <SaltoInteractivo
+                        key={`${jump.artist}-${jump.title}`}
+                        jump={jump}
+                        albumId={albumId}
+                        coverUrl={coverUrl}
+                      />
+                    ))}
                   </div>
                 </DossierSection>
               )}

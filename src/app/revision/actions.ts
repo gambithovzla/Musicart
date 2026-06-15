@@ -243,34 +243,48 @@ export async function generarDiscoSugerido(): Promise<GenerarAlbumResult> {
 
 export async function generateDossierTts(
   dossierId: string,
-): Promise<{ message: string }> {
+): Promise<{ message: string; ok: boolean }> {
   await requireAdmin();
-  const loaded = await loadDossierForTts(dossierId);
-  if (!loaded) throw new Error("Dossier no encontrado");
+  try {
+    const loaded = await loadDossierForTts(dossierId);
+    if (!loaded) return { ok: false, message: "Dossier no encontrado." };
 
-  await renderDossierAudio(loaded.dossierId, loaded.input);
-  revalidatePath("/revision");
-  revalidatePath(`/album/${loaded.albumId}`);
-  return {
-    message: `Audio listo: «${loaded.albumTitle}» — ${loaded.artistName}`,
-  };
+    await renderDossierAudio(loaded.dossierId, loaded.input);
+    revalidatePath("/revision");
+    revalidatePath(`/album/${loaded.albumId}`);
+    return {
+      ok: true,
+      message: `Audio listo: «${loaded.albumTitle}» — ${loaded.artistName}`,
+    };
+  } catch (e) {
+    // En prod, Next oculta los errores lanzados; los devolvemos como dato para
+    // que el admin vea la causa real (p. ej. "falta BLOB_READ_WRITE_TOKEN").
+    return { ok: false, message: `No se pudo generar el audio. ${(e as Error).message}` };
+  }
 }
 
-export async function generateMissingTts(limit = 5): Promise<{ message: string }> {
+export async function generateMissingTts(
+  limit = 5,
+): Promise<{ message: string; ok: boolean }> {
   await requireAdmin();
-  const pending = await findDossiersMissingAudio(limit);
-  if (pending.length === 0) {
-    return { message: "Todos los dossiers publicados ya tienen audio." };
-  }
+  try {
+    const pending = await findDossiersMissingAudio(limit);
+    if (pending.length === 0) {
+      return { ok: true, message: "Todos los dossiers publicados ya tienen audio." };
+    }
 
-  for (const d of pending) {
-    await renderDossierAudio(d.id, dossierAudioInputFromRow(d));
-    revalidatePath(`/album/${d.albumId}`);
-  }
-  revalidatePath("/revision");
+    for (const d of pending) {
+      await renderDossierAudio(d.id, dossierAudioInputFromRow(d));
+      revalidatePath(`/album/${d.albumId}`);
+    }
+    revalidatePath("/revision");
 
-  const names = pending.map((d) => `«${d.album.title}»`).join(", ");
-  return {
-    message: `Audio generado para ${pending.length} disco(s): ${names}`,
-  };
+    const names = pending.map((d) => `«${d.album.title}»`).join(", ");
+    return {
+      ok: true,
+      message: `Audio generado para ${pending.length} disco(s): ${names}`,
+    };
+  } catch (e) {
+    return { ok: false, message: `No se pudo generar el audio. ${(e as Error).message}` };
+  }
 }

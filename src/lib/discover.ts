@@ -59,7 +59,8 @@ Reglas estrictas:
 4. DESCUBRIMIENTO: elige algo que probablemente NO conozca pero que encaje con su gusto — un puente desde lo que ama hacia algo nuevo. Mejor un disco que sienta suyo que uno "objetivamente importante" pero ajeno.
 5. GUSTO ANTE TODO: respeta sus géneros y artistas favoritos. Un rockero NO recibe una balada romántica salvo como puente claro y justificado en la "reason".
 6. NO propongas ninguno de los discos que ya se le mostraron o que ya reseñó (lista abajo). Cada día es un disco distinto.
-7. "reason": 1 a 3 frases cálidas y concretas, citando SOLO señales reales del usuario que aparecen abajo (sus estrellas, sus respuestas, su perfil, su ánimo). Ej.: "Le diste 5★ a X, así que…". PROHIBIDO inventar datos del usuario.${idiomaRegla}`;
+7. "reason": 1 a 3 frases cálidas y concretas, citando SOLO señales reales del usuario que aparecen abajo (sus estrellas, sus respuestas, su perfil, su ánimo). PROHIBIDO inventar datos del usuario.
+   TIENDE UN PUENTE desde su HISTORIA RECIENTE: si en su diario hay un disco que amó (puntaje alto) o un comentario suyo, arranca desde ahí y conéctalo con el de hoy, para que sienta la continuidad de su viaje — no una frase genérica. Ej.: "Como te voló «X» de Y, hoy te llevo a Z, que comparte ese mismo nervio". Usa el nombre real del disco/comentario que aparece en su diario.${idiomaRegla}`;
 
   const user = `PERFIL DEL USUARIO:
 ${input.perfilTexto}

@@ -22,8 +22,8 @@ FORMATO DE SALIDA — SOLO un objeto JSON válido, sin texto extra:
   "trackNotes": [{ "position": 1, "title": "título EXACTO del tracklist", "note": "1 frase concreta" }],
   "wowFacts": ["¿Sabías que…? (2-4 frases cortas, cada una un dato verificable del payload)"],
   "jumps": [{ "title": "álbum destino", "artist": "artista destino", "connection": "1 frase: la relación real que une este disco con aquel" }],
-  "difficulty": 2,
-  "impact": 72,
+  "difficulty": "ENTERO 1-5 según la rúbrica de abajo (un número real, no copies este texto)",
+  "impact": "ENTERO 1-100 según la rúbrica de abajo, honesto y DISTINTO en cada disco (un número real, NO 72, no copies este texto)",
   "impactNote": "Por qué este nivel de impacto, en 2-3 frases, SOLO con hechos del payload (premios, certificaciones/ventas, posiciones en listas, reconocimiento de Rolling Stone u otras publicaciones, influencia documentada). Menciona la evidencia concreta. Si el payload trae poca evidencia, dilo con honestidad y baja el tono. PROHIBIDO inventar premios, cifras o rankings."
 }
 
@@ -41,6 +41,7 @@ impact (1-100): IMPACTO CULTURAL HONESTO — cuánto movió este disco la histor
   · 20-39: sólido, con repercusión local o de nicho.
   · 1-19: impacto cultural mínimo o sin evidencia.
 Dos discos de distinto calibre NO deben quedar con la misma nota: úsala para diferenciar.
+CÓMO ELEGIR EL NÚMERO: 1) decide el TRAMO según la evidencia del payload; 2) elige un número concreto DENTRO de ese tramo (no siempre el centro). El resultado casi nunca es 72 — ese era solo un ejemplo. Si dudas entre dos tramos, baja al menor.
 
 impactNote: la justificación del impacto que el usuario puede abrir con un clic. Es FACTUAL: se verifica contra el payload igual que la narrativa. Cita la evidencia real (un premio con su nombre, una certificación, una posición en lista, una mención de Rolling Stone/prensa si aparece en passages). No la adornes ni inventes; si no hay evidencia fuerte, sé honesto ("no destacó en premios ni listas; su huella es más de nicho").`;
 
@@ -48,6 +49,15 @@ export type GeneratedDossier = DossierContent & {
   difficulty: number;
   impact: number;
 };
+
+// Convierte a entero acotado. Tolera que el LLM devuelva número o string ("64").
+// Si viene corrupto (p. ej. copió el texto del placeholder) cae a un neutro —
+// pero el prompt está hecho para que entregue un número real y distinto por disco.
+function aEntero(v: unknown, fallback: number, min: number, max: number): number {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
 
 function normTitle(s: string): string {
   return s
@@ -114,8 +124,8 @@ export async function generateDossier(
   parsed.jumps = (parsed.jumps ?? [])
     .filter((j) => j?.title && j?.artist && j?.connection)
     .slice(0, 3);
-  parsed.difficulty = Math.min(5, Math.max(1, Math.round(parsed.difficulty ?? 2)));
-  parsed.impact = Math.min(100, Math.max(1, Math.round(parsed.impact ?? 45)));
+  parsed.difficulty = aEntero(parsed.difficulty, 3, 1, 5);
+  parsed.impact = aEntero(parsed.impact, 50, 1, 100);
   parsed.impactNote = parsed.impactNote?.toString().trim().slice(0, 600) || undefined;
   return parsed;
 }

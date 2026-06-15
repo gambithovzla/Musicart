@@ -20,6 +20,7 @@ import {
 import { parseJson, type FactsPayload } from "./types";
 import { formatCuriosities, type CuriosityAnswer } from "./curiosities";
 import { proponerDiscoDescubrimiento } from "./discover";
+import { curatorVoz } from "./curators";
 import { runDossierPipeline } from "./dossier/pipeline";
 import { LOVED_THRESHOLD, RATING_MAX } from "./review";
 import { hayPresupuestoHoy, registrarGeneracion } from "./budget";
@@ -352,6 +353,9 @@ export async function generarPickDelDia(
     const parsedProfile = profile
       ? parseJson<Record<string, unknown>>(profile.answersJson, {})
       : null;
+    const voz = curatorVoz(
+      typeof parsedProfile?.curator === "string" ? parsedProfile.curator : undefined,
+    );
     const returnRitual = await detectReturnRitual(identity, date);
 
     // Tope de gasto: si ya fabricamos el máximo de discos nuevos hoy, no gastamos
@@ -379,6 +383,7 @@ export async function generarPickDelDia(
       esRegreso: Boolean(returnRitual),
       diasAusente: returnRitual?.absenceDays ?? null,
       esRehacer,
+      voz,
     });
 
     if (esRehacer && (await propuestaEsAlbumExcluido(propuesta, excluir))) {
@@ -393,6 +398,7 @@ export async function generarPickDelDia(
         esRegreso: false,
         diasAusente: null,
         esRehacer: true,
+        voz,
       });
       if (await propuestaEsAlbumExcluido(propuesta, excluir)) {
         return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);

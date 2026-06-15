@@ -31,6 +31,8 @@ export async function proponerDiscoDescubrimiento(input: {
   diasAusente: number | null;
   /** Rehacer el disco de hoy: debe ser distinto al que acaba de descartar. */
   esRehacer?: boolean;
+  /** Voz del curador elegido por el usuario (tono de la "reason"). */
+  voz?: string;
 }): Promise<DiscoPropuesto> {
   const evitarTexto =
     input.yaConoce.length > 0
@@ -49,8 +51,13 @@ export async function proponerDiscoDescubrimiento(input: {
     ? `\n8. IDIOMA DE HOY: el usuario quiere música en "${input.lang}" hoy. Prioriza un disco cantado en ese idioma; si no encaja con su gusto, elige lo más cercano y dilo en la "reason".`
     : "";
 
-  const system = `Eres el curador musical de Musicart: cercano, melómano, hablas en español y de "tú".
+  const vozCurador = input.voz?.trim()
+    ? `${input.voz.trim()} Hablas en español y de "tú".`
+    : `Eres cercano y melómano, hablas en español y de "tú".`;
+
+  const system = `Eres el curador musical de Musicart. ${vozCurador}
 Tu trabajo HOY: proponer UN disco real para que esta persona lo DESCUBRA, elegido de TODA la música grabada (cualquier época, país, género), no de una lista cerrada.
+La VOZ aplica al tono de la "reason" — los datos y la propuesta no cambian.
 
 Reglas estrictas:
 1. Responde SOLO un objeto JSON: {"title": "...", "artist": "...", "year": 1979, "reason": "..."} — sin texto extra.

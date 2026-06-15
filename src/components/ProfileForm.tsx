@@ -13,6 +13,7 @@ import type { SpotifyPanelState } from "@/app/perfil/spotify-actions";
 import type { DuetSummary } from "@/lib/duet";
 import { SubscriptionPanel } from "@/components/SubscriptionPanel";
 import { getDeviceId } from "@/lib/device";
+import { CURATORS, DEFAULT_CURATOR } from "@/lib/curators";
 
 const MOMENTS = ["Manejando", "Trabajando", "En casa", "Entrenando", "Antes de dormir"];
 const SEEKS = ["La historia", "La emoción", "La técnica", "Descubrir lo nuevo"];
@@ -42,6 +43,7 @@ export type ProfileAnswers = {
   markedArtist?: string;  // …de qué artista
   favoriteSong?: string;  // tu canción favorita
   favoriteSongArtist?: string; // …de qué artista
+  curator?: string;       // voz del curador elegida (id de CURATORS)
   listenTime: string;
 };
 
@@ -540,6 +542,42 @@ export function ProfileForm({
               onClick={() => toggle("seeks", s)}
             />
           ))}
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="font-serif text-lg">¿Qué voz quieres para tu curador?</h2>
+        <p className="mt-1 text-xs text-dim">
+          Le da el tono a tu “por qué este disco, hoy”. La historia del disco
+          sigue igual de rigurosa.
+        </p>
+        <div className="mt-3 flex flex-col gap-2">
+          {CURATORS.map((c) => {
+            const activo = (answers.curator ?? DEFAULT_CURATOR) === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => update({ curator: c.id })}
+                className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
+                  activo
+                    ? "border-album bg-album/10"
+                    : "border-white/12 bg-surface hover:border-white/30"
+                }`}
+              >
+                <span className="text-2xl" aria-hidden>
+                  {c.emoji}
+                </span>
+                <span className="min-w-0">
+                  <span className={`block text-sm font-medium ${activo ? "text-album-light" : ""}`}>
+                    {c.name}
+                  </span>
+                  <span className="block text-xs text-dim">{c.blurb}</span>
+                </span>
+                {activo && <span className="ml-auto text-album-light">✓</span>}
+              </button>
+            );
+          })}
         </div>
       </section>
 

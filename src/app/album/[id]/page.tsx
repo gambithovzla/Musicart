@@ -19,6 +19,7 @@ import {
   type AlbumLinks,
   type DiscoveryJump,
   type DossierAudio,
+  type FactsPayload,
   type Palette,
 } from "@/lib/types";
 import { ImpactoCultural } from "@/components/ImpactoCultural";
@@ -31,6 +32,7 @@ import { ShareAlbum } from "@/components/ShareAlbum";
 import { Paywall } from "@/components/Paywall";
 import { AlbumChat } from "@/components/AlbumChat";
 import { Narrator, type NarratorSection } from "@/components/Narrator";
+import { FuentesVerificadas } from "@/components/FuentesVerificadas";
 import { BorrarDiscoAdmin } from "@/components/BorrarDiscoAdmin";
 import { getChatQuota } from "@/lib/album-chat";
 
@@ -98,6 +100,7 @@ export default async function AlbumPage({
   const palette = parseJson<Palette | null>(album.paletteJson, null);
   const stripeReady = stripeConfigured();
   const links = parseJson<AlbumLinks>(album.linksJson, {});
+  const facts = parseJson<FactsPayload | null>(album.factsJson, null);
   const questions = parseJson<string[]>(dossier.questionsJson, []);
   const wowFacts = parseJson<string[]>(dossier.wowFactsJson, []);
   const audio = parseJson<DossierAudio | null>(dossier.audioJson, null);
@@ -398,6 +401,8 @@ export default async function AlbumPage({
             </div>
           </>
         )}
+
+        <FuentesVerificadas facts={facts} />
 
         {isAdminEmail(session?.user?.email) && (
           <BorrarDiscoAdmin albumId={album.id} title={album.title} />

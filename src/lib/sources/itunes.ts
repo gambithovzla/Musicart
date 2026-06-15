@@ -18,6 +18,16 @@ export type ItunesTrack = {
   title: string;
 };
 
+/** ¿Es un sencillo o EP? (por el sufijo del título o por traer ≤3 pistas). */
+export function esSingleOEp(
+  collectionName?: string,
+  trackCount?: number,
+): boolean {
+  if (collectionName && /-\s*(single|ep)\s*$/i.test(collectionName)) return true;
+  if (typeof trackCount === "number" && trackCount <= 3) return true;
+  return false;
+}
+
 export async function searchAlbum(
   album: string,
   artist: string,
@@ -50,10 +60,13 @@ export async function searchAlbum(
       copyright?: string;
     }[];
   };
+  // Descartamos sencillos y EPs: Musicart recomienda ÁLBUMES completos. iTunes
+  // los nombra "… - Single" / "… - EP" y traen pocas pistas.
+  const albumes = (data.results ?? []).filter((r) => !esSingleOEp(r.collectionName, r.trackCount));
   const match =
-    data.results.find((r) =>
+    albumes.find((r) =>
       r.collectionName?.toLowerCase().includes(album.toLowerCase()),
-    ) ?? data.results[0];
+    ) ?? albumes[0];
   if (!match)
     return {
       coverUrl: null,

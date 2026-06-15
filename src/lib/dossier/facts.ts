@@ -112,6 +112,21 @@ export async function gatherAlbumFacts(
     }
   }
 
+  // ── Guardia: nunca un sencillo/EP ────────────────────────────────────────
+  //    MusicBrainz ya filtra por primarytype:album; esto atrapa lo que se cuele
+  //    por iTunes (singles recientes con sufijo "- Single"). Si lo es, lanzamos:
+  //    el pipeline lo descarta y el motor cae a otra opción del catálogo.
+  const tituloAlbum = title!;
+  if (/-\s*(single|ep)\s*$/i.test(tituloAlbum)) {
+    throw new Error(`"${tituloAlbum}" es un sencillo o EP, no un álbum. Se descarta.`);
+  }
+  const totalPistas = tracklist.length || itunes.trackCount || 0;
+  if (!usedMusicBrainz && totalPistas > 0 && totalPistas <= 3) {
+    throw new Error(
+      `"${tituloAlbum}" parece un sencillo (${totalPistas} pista(s)), no un álbum. Se descarta.`,
+    );
+  }
+
   // ── Construcción del payload base ────────────────────────────────────────
   const payload: FactsPayload = {
     album: {

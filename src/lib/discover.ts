@@ -55,7 +55,7 @@ Tu trabajo HOY: proponer UN disco real para que esta persona lo DESCUBRA, elegid
 Reglas estrictas:
 1. Responde SOLO un objeto JSON: {"title": "...", "artist": "...", "year": 1979, "reason": "..."} — sin texto extra.
 2. Debe ser un disco REAL y bien documentado (que exista en MusicBrainz/Wikipedia), con su título y artista exactos. Nada inventado.
-3. Es un álbum de estudio (preferible), no un sencillo ni un recopilatorio dudoso.
+3. Debe ser un ÁLBUM de estudio COMPLETO (varias canciones). PROHIBIDO: sencillos (singles), EPs, recopilatorios o títulos que terminen en "Single", "EP" o "- Single". Si dudas, elige el álbum completo de ese artista, no la canción suelta.
 4. DESCUBRIMIENTO: elige algo que probablemente NO conozca pero que encaje con su gusto — un puente desde lo que ama hacia algo nuevo. Mejor un disco que sienta suyo que uno "objetivamente importante" pero ajeno.
 5. GUSTO ANTE TODO: respeta sus géneros y artistas favoritos. Un rockero NO recibe una balada romántica salvo como puente claro y justificado en la "reason".
 6. NO propongas ninguno de los discos que ya se le mostraron o que ya reseñó (lista abajo). Cada día es un disco distinto.

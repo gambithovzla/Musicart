@@ -13,7 +13,8 @@ import {
   queueKey,
 } from "@/lib/curator";
 import { runDossierPipeline } from "@/lib/dossier/pipeline";
-import { parseJson } from "@/lib/types";
+import { recomputeImpact } from "@/lib/dossier/impact";
+import { parseJson, type FactsPayload } from "@/lib/types";
 import {
   dossierAudioInputFromRow,
   findDossiersMissingAudio,
@@ -286,5 +287,92 @@ export async function generateMissingTts(
     };
   } catch (e) {
     return { ok: false, message: `No se pudo generar el audio. ${(e as Error).message}` };
+  }
+}
+
+/**
+ * Recalcula en lote el impacto de los discos viejos que quedaron pegados en 72
+ * (la IA copiaba el ejemplo). Procesa hasta `limit` por corrida; el admin puede
+ * tocar el botón otra vez para seguir. Aprovecha maxDuration=300.
+ */
+export async function recalcularImpactos(
+  limit = 20,
+): Promise<{ message: string; ok: boolean }> {
+  await requireAdmin();
+  try {
+    const pegados = await prisma.album.findMany({
+      where: { impact: 72, dossiers: { some: { locale: "es" } } },
+      include: { dossiers: { where: { locale: "es" }, select: { id: true } } },
+      take: limit,
+    });
+    if (pegados.length === 0) {
+      return { ok: true, message: "No quedan discos en 72 — todos tienen impacto real. ✓" };
+    }
+
+    let hechos = 0;
+    for (const album of pegados) {
+      const payload = parseJson<FactsPayload | null>(album.factsJson, null);
+      if (!payload) continue;
+      try {
+        const { impact, impactNote } = await recomputeImpact(payload);
+        await prisma.album.update({ where: { id: album.id }, data: { impact } });
+        if (impactNote) {
+          await prisma.dossier.updateMany({
+            where: { albumId: album.id, locale: "es" },
+            data: { impactNote },
+          });
+        }
+        hechos++;
+        revalidatePath(`/album/${album.id}`);
+      } catch {
+        // un disco que falle no detiene el lote
+      }
+    }
+
+    const restantes = await prisma.album.count({ where: { impact: 72 } });
+    revalidatePath("/revision");
+    revalidatePath("/explorar");
+    return {
+      ok: true,
+      message: `Recalculados ${hechos} disco(s).${restantes > 0 ? ` Quedan ${restantes} en 72 — toca de nuevo para seguir.` : " ¡Listo, no quedan en 72!"}`,
+    };
+  } catch (e) {
+    return { ok: false, message: `No se pudo recalcular. ${(e as Error).message}` };
+  }
+}
+
+/**
+ * Borra un disco del catálogo por completo (dossier, notas, reseñas, picks…).
+ * Solo admin. Útil para limpiar un sencillo que se coló o un disco no deseado.
+ */
+export async function borrarAlbum(
+  albumId: string,
+): Promise<{ message: string; ok: boolean }> {
+  await requireAdmin();
+  if (!albumId) return { ok: false, message: "Falta el id del disco." };
+  try {
+    const album = await prisma.album.findUnique({
+      where: { id: albumId },
+      select: { title: true },
+    });
+    if (!album) return { ok: false, message: "Ese disco ya no existe." };
+
+    // Borramos los hijos sin cascade automática, luego el álbum (DossierView sí
+    // cascadea). Todo en una transacción para no dejar restos.
+    await prisma.$transaction([
+      prisma.trackNote.deleteMany({ where: { dossier: { albumId } } }),
+      prisma.dossier.deleteMany({ where: { albumId } }),
+      prisma.review.deleteMany({ where: { albumId } }),
+      prisma.dailyPick.deleteMany({ where: { albumId } }),
+      prisma.duetPick.deleteMany({ where: { albumId } }),
+      prisma.dossierChat.deleteMany({ where: { albumId } }),
+      prisma.album.delete({ where: { id: albumId } }),
+    ]);
+
+    revalidatePath("/explorar");
+    revalidatePath("/revision");
+    return { ok: true, message: `Borrado: «${album.title}».` };
+  } catch (e) {
+    return { ok: false, message: `No se pudo borrar. ${(e as Error).message}` };
   }
 }

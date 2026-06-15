@@ -13,6 +13,7 @@ import { publishDossier, discardDossier } from "./actions";
 import { AnalyticsPanel } from "./AnalyticsPanel";
 import { TtsControls } from "./TtsControls";
 import { GenerarDiscoForm } from "./GenerarDiscoForm";
+import { RecalcularImpactos } from "./RecalcularImpactos";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -109,6 +110,7 @@ export default async function RevisionPage() {
           </span>
         </p>
         <GenerarDiscoForm />
+        <RecalcularImpactos />
       </section>
 
       <section className="mt-12">

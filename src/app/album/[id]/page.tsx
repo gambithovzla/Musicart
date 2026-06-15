@@ -31,6 +31,7 @@ import { ShareAlbum } from "@/components/ShareAlbum";
 import { Paywall } from "@/components/Paywall";
 import { AlbumChat } from "@/components/AlbumChat";
 import { Narrator, type NarratorSection } from "@/components/Narrator";
+import { BorrarDiscoAdmin } from "@/components/BorrarDiscoAdmin";
 import { getChatQuota } from "@/lib/album-chat";
 
 export const dynamic = "force-dynamic";
@@ -396,6 +397,10 @@ export default async function AlbumPage({
               )}
             </div>
           </>
+        )}
+
+        {isAdminEmail(session?.user?.email) && (
+          <BorrarDiscoAdmin albumId={album.id} title={album.title} />
         )}
       </div>
     </main>

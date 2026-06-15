@@ -2,7 +2,6 @@
 
 import { auth } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
-import { prisma } from "@/lib/db";
 import {
   countDossiersThisMonth,
   freemiumLimit,

@@ -128,7 +128,7 @@ export async function resolveProfileForUser(
 ): Promise<Awaited<ReturnType<typeof prisma.profile.findUnique>>> {
   if (deviceId) await mergeDeviceToUser(userId, deviceId);
 
-  let account = await prisma.profile.findUnique({ where: { userId } });
+  const account = await prisma.profile.findUnique({ where: { userId } });
   if (account && profileHasSignal(account.answersJson)) return account;
 
   await mergeAllOrphanProfilesForUser(userId);

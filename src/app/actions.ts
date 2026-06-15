@@ -5,7 +5,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { TZ_COOKIE } from "@/lib/device";
 import type { CuriosityAnswer, CuriosityQuestion } from "@/lib/curiosities";
-import { QUESTIONS, todayQuestion, formatCuriosities } from "@/lib/curiosities";
+import { todayQuestion, formatCuriosities } from "@/lib/curiosities";
 import { parseJson } from "@/lib/types";
 import { llm, extractJson } from "@/lib/dossier/llm";
 import {

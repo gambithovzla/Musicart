@@ -10,6 +10,7 @@
 import {
   searchReleaseGroup,
   getAlbumDetails,
+  getArtistConnections,
   type MbConnection,
 } from "../sources/musicbrainz";
 import { getCoverUrl } from "../sources/coverart";
@@ -187,6 +188,21 @@ export async function gatherAlbumFacts(
   }
   if (connections.length > 0) {
     log(`Conexiones encontradas (samples/remixes): ${connections.length}.`);
+  }
+
+  // ── 2.6 Conexiones de artista (colaboraciones, bandas…) ───────────────────
+  //    Materia prima de los saltos entre artistas (la madriguera). De MusicBrainz.
+  if (artistMbid) {
+    const artistConns = await getArtistConnections(artistMbid).catch(() => []);
+    for (const c of artistConns) {
+      payload.facts.push({
+        fact: `Conexión de ${artist!}: ${c.relatedArtist} (${c.label}).`,
+        source: "musicbrainz:artista",
+      });
+    }
+    if (artistConns.length > 0) {
+      log(`Conexiones de artista: ${artistConns.length}.`);
+    }
   }
 
   // ── 3. Wikipedia (intro + secciones profundas, Fase 6.9) ─────────────────

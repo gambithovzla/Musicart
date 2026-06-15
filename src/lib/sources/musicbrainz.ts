@@ -177,3 +177,49 @@ export async function getAlbumDetails(
     connections: parseConnections(rel.media ?? []),
   };
 }
+
+// Conexiones a nivel ARTISTA (colaboraciones, bandas, fundadores…): la materia
+// prima de los saltos de descubrimiento entre artistas. Datos estructurados de
+// MusicBrainz, con su etiqueta → verificables.
+export type MbArtistConnection = {
+  relatedArtist: string;
+  label: string; // etiqueta en español del tipo de vínculo
+};
+
+const TIPOS_ARTISTA: Record<string, string> = {
+  collaboration: "colaboración",
+  "member of band": "banda",
+  founder: "fundador/a",
+  "supporting musician": "músico de apoyo",
+  "instrumental supporting musician": "músico de apoyo",
+  "vocal supporting musician": "voz de apoyo",
+  sibling: "vínculo familiar",
+  parent: "vínculo familiar",
+  married: "vínculo personal",
+  "involved with": "vínculo personal",
+  teacher: "maestro/discípulo",
+  tribute: "tributo",
+};
+
+export async function getArtistConnections(
+  artistMbid: string,
+): Promise<MbArtistConnection[]> {
+  const data = await mb<{
+    relations?: { type?: string; artist?: { name?: string } }[];
+  }>(`/artist/${artistMbid}?fmt=json&inc=artist-rels`).catch(() => null);
+  if (!data?.relations) return [];
+
+  const out: MbArtistConnection[] = [];
+  const vistos = new Set<string>();
+  for (const r of data.relations) {
+    const label = r.type ? TIPOS_ARTISTA[r.type] : undefined;
+    const name = r.artist?.name?.trim();
+    if (!label || !name) continue;
+    const key = `${name}|${label}`;
+    if (vistos.has(key)) continue;
+    vistos.add(key);
+    out.push({ relatedArtist: name, label });
+    if (out.length >= 10) break;
+  }
+  return out;
+}

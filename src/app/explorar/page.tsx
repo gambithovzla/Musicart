@@ -23,7 +23,7 @@ export default async function ExplorarPage() {
       factsJson: true,
       artist: { select: { name: true } },
     },
-    orderBy: { year: "asc" },
+    orderBy: { id: "desc" }, // id es cuid (ordenable por tiempo): más nuevos primero
   });
 
   const routes = THEMATIC_ROUTES.map((route) => {
@@ -89,10 +89,58 @@ export default async function ExplorarPage() {
       </div>
 
       {routes.length === 0 && (
-        <p className="mt-12 text-center text-sm text-dim">
+        <p className="mt-10 text-center text-sm text-dim">
           El catálogo aún crece — vuelve pronto para ver las rutas.
         </p>
       )}
+
+      {/* Toda la biblioteca: cada disco que la IA ha fabricado queda guardado aquí
+          (no se vuelve a generar). Aparecen todos, hasta los que no caen en una ruta. */}
+      <section className="mt-12">
+        <h2 className="font-serif text-2xl font-semibold">Toda la biblioteca</h2>
+        <p className="mt-1 text-sm text-dim">
+          {catalog.length}{" "}
+          {catalog.length === 1 ? "disco fabricado" : "discos fabricados"} hasta hoy
+          — del más nuevo al primero. Cada uno queda guardado para siempre.
+        </p>
+
+        {catalog.length === 0 ? (
+          <p className="mt-6 rounded-2xl bg-surface p-5 text-sm text-dim">
+            Todavía no hay discos en la biblioteca. Generá tu disco de hoy y aquí
+            quedará guardado.
+          </p>
+        ) : (
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {catalog.map((a) => (
+              <Link
+                key={a.id}
+                href={`/album/${a.id}`}
+                className="group rounded-2xl border border-white/10 bg-surface p-3 transition-transform active:scale-[0.98]"
+              >
+                <div className="relative aspect-square w-full overflow-hidden rounded-lg">
+                  {a.coverUrl ? (
+                    <Image
+                      src={a.coverUrl}
+                      alt={`Portada de ${a.title}`}
+                      fill
+                      sizes="(max-width: 640px) 45vw, 30vw"
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-album-dark">
+                      <span className="font-serif text-2xl text-album-light">♪</span>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-2 truncate text-sm font-medium">{a.title}</p>
+                <p className="truncate text-xs text-dim">
+                  {a.artist.name} · {a.year}
+                </p>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
     </main>
   );
 }

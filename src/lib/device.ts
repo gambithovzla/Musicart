@@ -6,6 +6,7 @@ const KEY = "musicart:device";
 export const DEVICE_COOKIE = "musicart_device";
 export const TZ_COOKIE = "musicart_tz";
 export const LANG_COOKIE = "musicart_lang"; // valor: "YYYY-MM-DD|idioma"
+export const THEME_COOKIE = "musicart_theme"; // valor: "light" | "dark" (default dark)
 
 export function getDeviceId(): string {
   if (typeof window === "undefined") return "";

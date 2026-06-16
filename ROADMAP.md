@@ -368,10 +368,50 @@ disco se sienta elegido para ti, no una rotación genérica.
 
 ---
 
+## 🔨 Fase 7 — "Un amigo que te conoce mejor cada día" (EN CURSO · jun 2026)
+
+**Objetivo:** la app aprende de tu comportamiento a lo largo del tiempo y se
+integra más profundamente con la escucha real.
+
+### Tareas
+
+- [x] **7.1 IA que aprende patrones** — el motor detecta correlaciones de tu
+  historial real (mood → género, géneros en racha, estación del año) y las
+  inyecta como bloque "PATRONES DE ESCUCHA" en el prompt de recomendación y
+  descubrimiento. Sin queries extra: usa los datos ya cargados (últimas 10
+  reseñas + 7 picks). Degrada sin romper si hay poca historia.
+
+- [x] **7.2 Escucha integrada** — botones de plataforma (Spotify / Apple Music /
+  YouTube Music) directamente en la home (`DailyReveal`), antes del CTA
+  "Descubrir este disco". Usa los links guardados en `Album.linksJson` con
+  fallback a búsqueda vía `searchLinks` (Odesli) si aún no están resueltos.
+  El dossier ya tenía `ListenLinks` en la sección 05.
+
+- [x] **7.3 Personalización visual** — modo claro/oscuro guardado en cookie
+  `musicart_theme` (duración 1 año). `layout.tsx` lee la cookie en SSR y
+  aplica clase `light` a `<html>` sin flash. Paleta editorial cálida en modo
+  claro (`globals.css`: `html.light { ... }`). Toggle visual en `/perfil`
+  junto al push (`ThemeToggle.tsx`), propagado al `ProfileForm` via prop
+  `currentTheme` desde el servidor.
+
+- [x] **7.4 Comunidad ligera** — "Tu disco de hoy" compartible como historia
+  animada. Feed opcional: ver el disco del día de un amigo (nuevo modelo de
+  seguimiento, requiere privacidad explícita).
+
+### Criterios de aceptación
+
+- [ ] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones
+  en el prompt; la recomendación refleja esa señal de forma notoria.
+- [ ] El botón "Escuchar en Spotify/Apple/YouTube" funciona desde la home y
+  el dossier en un toque, sin fricción.
+- [ ] El usuario puede cambiar entre modo claro y oscuro desde el perfil y la
+  preferencia persiste.
+
+---
+
 ## Estado actual (junio 2026)
 
-**Fases 0–6 completas** (jun 2026). Antes de abrir Fase 7, confirmar con el
-dueño del producto qué entra en el roadmap.
+**Fases 0–6 completas; Fase 7 EN CURSO** (jun 2026).
 
 ---
 

@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
 import { DeviceSync } from "@/components/DeviceSync";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { THEME_COOKIE } from "@/lib/device";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -35,13 +37,15 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const jar = await cookies();
+  const isLight = jar.get(THEME_COOKIE)?.value === "light";
   return (
-    <html lang="es">
+    <html lang="es" className={isLight ? "light" : undefined}>
       <body className={`${inter.variable} ${fraunces.variable} antialiased`}>
         <DeviceSync />
         <div className="mx-auto min-h-dvh max-w-lg pb-24">{children}</div>

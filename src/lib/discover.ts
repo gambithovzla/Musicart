@@ -33,6 +33,8 @@ export async function proponerDiscoDescubrimiento(input: {
   esRehacer?: boolean;
   /** Voz del curador elegido por el usuario (tono de la "reason"). */
   voz?: string;
+  /** Patrones de escucha detectados del historial (mood→género, racha, estación). */
+  patronesTexto?: string | null;
 }): Promise<DiscoPropuesto> {
   const evitarTexto =
     input.yaConoce.length > 0
@@ -71,7 +73,7 @@ Reglas estrictas:
 
   const user = `PERFIL DEL USUARIO:
 ${input.perfilTexto}
-
+${input.patronesTexto ? `\n${input.patronesTexto}\n` : ""}
 SU DIARIO (reseñas recientes, de la más nueva a la más vieja):
 ${input.diarioTexto}
 

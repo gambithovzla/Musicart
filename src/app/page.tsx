@@ -140,7 +140,7 @@ export default async function Home() {
         }}
       />
       <div className="relative">
-        {isAdminEmail(session?.user?.email) && <RehacerDiscoAdmin />}
+        {isAdminEmail(session?.user?.email) && <RehacerDiscoAdmin dateKey={dateKey} />}
         <MoodCheckin
           mood={personal?.mood ?? null}
           canChange={!personal?.regenerated}

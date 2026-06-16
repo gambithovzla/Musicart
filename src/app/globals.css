@@ -28,6 +28,14 @@
   --font-serif: var(--font-fraunces);
 }
 
+/* Modo claro: paleta editorial cálida, como leer un vinilo a la luz del día */
+html.light {
+  --background: #f5f0e8;
+  --surface: #e8e1d5;
+  --foreground: #1a1510;
+  --foreground-dim: #7a6f63;
+}
+
 html {
   background: var(--background);
 }

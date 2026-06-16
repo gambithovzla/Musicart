@@ -12,6 +12,7 @@ import { SpotifyConnectPanel } from "@/components/SpotifyConnectPanel";
 import type { SpotifyPanelState } from "@/app/perfil/spotify-actions";
 import type { DuetSummary } from "@/lib/duet";
 import { SubscriptionPanel } from "@/components/SubscriptionPanel";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { getDeviceId } from "@/lib/device";
 import { CURATORS, DEFAULT_CURATOR } from "@/lib/curators";
 
@@ -77,6 +78,7 @@ export function ProfileForm({
   duet,
   spotify,
   subscription,
+  currentTheme = "dark",
 }: {
   user: UserInfo | null;
   isAdmin?: boolean;
@@ -84,6 +86,7 @@ export function ProfileForm({
   duet?: DuetSummary | null;
   spotify?: SpotifyPanelState;
   subscription?: SubscriptionInfo;
+  currentTheme?: "light" | "dark";
 }) {
   const [answers, setAnswers] = useState<ProfileAnswers>(EMPTY);
   const [artistInput, setArtistInput] = useState("");
@@ -300,6 +303,8 @@ export function ProfileForm({
       )}
 
       <PushToggle />
+
+      <ThemeToggle current={currentTheme} />
 
       {user && duet && <DuetPanel duet={duet} />}
 

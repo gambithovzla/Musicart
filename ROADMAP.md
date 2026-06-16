@@ -387,9 +387,12 @@ integra más profundamente con la escucha real.
   fallback a búsqueda vía `searchLinks` (Odesli) si aún no están resueltos.
   El dossier ya tenía `ListenLinks` en la sección 05.
 
-- [ ] **7.3 Personalización visual** — modo claro/oscuro por preferencia
-  guardada en perfil (ahora solo hay modo oscuro fijo). Opción de acento de
-  color constante en lugar de la paleta del álbum.
+- [x] **7.3 Personalización visual** — modo claro/oscuro guardado en cookie
+  `musicart_theme` (duración 1 año). `layout.tsx` lee la cookie en SSR y
+  aplica clase `light` a `<html>` sin flash. Paleta editorial cálida en modo
+  claro (`globals.css`: `html.light { ... }`). Toggle visual en `/perfil`
+  junto al push (`ThemeToggle.tsx`), propagado al `ProfileForm` via prop
+  `currentTheme` desde el servidor.
 
 - [ ] **7.4 Comunidad ligera** — "Tu disco de hoy" compartible como historia
   animada. Feed opcional: ver el disco del día de un amigo (nuevo modelo de

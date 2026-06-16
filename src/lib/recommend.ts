@@ -405,6 +405,32 @@ export async function generarPickDelDia(
       }
     }
 
+    // Red de seguridad: el LLM a veces ignora la lista "yaConoce". Si propuso
+    // un disco que ya se le mostró en los últimos días, pedimos otro explícitamente.
+    const recientesNorm = new Set(
+      picksRecientes.map((p) =>
+        normalizar(`${p.album.title}|${p.album.artist.name}`)
+      )
+    );
+    if (recientesNorm.has(normalizar(`${propuesta.title}|${propuesta.artist}`))) {
+      console.warn(`[recommend] propuesta "${propuesta.title}" era pick reciente; pidiendo disco distinto.`);
+      propuesta = await proponerDiscoDescubrimiento({
+        perfilTexto: perfilATexto(parsedProfile),
+        diarioTexto: diarioATexto(reviews),
+        recientesTexto: recientesATexto(picksRecientes),
+        yaConoce: [
+          ...yaConoce,
+          `"${propuesta.title}" de ${propuesta.artist} (rechazado: ya fue pick reciente, PROHIBIDO repetir)`,
+        ],
+        mood: mood ?? null,
+        lang: langPick,
+        esRegreso: Boolean(returnRitual),
+        diasAusente: returnRitual?.absenceDays ?? null,
+        esRehacer: true,
+        voz,
+      });
+    }
+
     // El pipeline investiga, narra, verifica y publica (o reutiliza si ya existe).
     const result = await runDossierPipeline(propuesta.title, propuesta.artist, {
       publish: true,
@@ -702,7 +728,7 @@ Reglas estrictas:
 4. Sobre el disco solo puedes mencionar lo que aparece en el catálogo (título, artista, año, duración, etiquetas). PROHIBIDO inventar datos del álbum o del usuario.
 5. Evita repetir discos recomendados en días recientes, salvo que no haya alternativa razonable.
 6. Si el usuario indicó su ánimo de hoy, dale prioridad como señal.
-7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.${input.lang ? `\n8. IDIOMA DE HOY: el usuario quiere escuchar en "${input.lang}" hoy. Prioriza artistas que cantan en ese idioma. Si no hay ninguno en el catálogo, elige el más cercano y mencionalo en la "reason".` : ""}`;
+7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.${input.lang ? `\n8. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO elegir un álbum donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Si no hay ninguno en el catálogo que encaje, elige el más cercano y menciónalo en la "reason".` : ""}`;
 
   const user = `CATÁLOGO DISPONIBLE (elige uno por su albumId):
 ${catalogoTexto}

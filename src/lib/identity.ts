@@ -61,7 +61,13 @@ export function pastPicksWhere(
   beforeDate: string,
 ): Prisma.DailyPickWhereInput | null {
   if (identity.userId) {
-    return { userId: identity.userId, date: { lt: beforeDate } };
+    return {
+      date: { lt: beforeDate },
+      OR: [
+        { userId: identity.userId },
+        ...(identity.deviceId ? [{ deviceId: identity.deviceId }] : []),
+      ],
+    };
   }
   if (identity.deviceId) {
     return { deviceId: identity.deviceId, date: { lt: beforeDate } };

@@ -373,6 +373,8 @@ export async function generarPickDelDia(
       ...(await etiquetasAlbumes([...excluir])),
     ];
 
+    const patronesTexto = patronesDeEscucha(reviews, picksRecientes);
+
     let propuesta = await proponerDiscoDescubrimiento({
       perfilTexto: perfilATexto(parsedProfile),
       diarioTexto: diarioATexto(reviews),
@@ -384,6 +386,7 @@ export async function generarPickDelDia(
       diasAusente: returnRitual?.absenceDays ?? null,
       esRehacer,
       voz,
+      patronesTexto,
     });
 
     if (esRehacer && (await propuestaEsAlbumExcluido(propuesta, excluir))) {
@@ -399,6 +402,7 @@ export async function generarPickDelDia(
         diasAusente: null,
         esRehacer: true,
         voz,
+        patronesTexto,
       });
       if (await propuestaEsAlbumExcluido(propuesta, excluir)) {
         return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
@@ -428,6 +432,7 @@ export async function generarPickDelDia(
         diasAusente: returnRitual?.absenceDays ?? null,
         esRehacer: true,
         voz,
+        patronesTexto,
       });
     }
 
@@ -592,6 +597,8 @@ async function recomendarYGuardar(
         ? await detectReturnRitual(identity, date)
         : null;
 
+    const patronesTexto = patronesDeEscucha(reviews, picksRecientes);
+
     let eleccion: { albumId: string; reason: string };
     try {
       eleccion = await elegirConLlm({
@@ -606,6 +613,7 @@ async function recomendarYGuardar(
           : null,
         returnRitual,
         forzarDistinto: opts.forzarDistinto ?? false,
+        patronesTexto,
       });
     } catch (err) {
       // La IA falló: el oyente nunca cae en la rotación global si tenemos sus
@@ -688,6 +696,7 @@ async function elegirConLlm(input: {
   albumPrevio: DossierConAlbum | null;
   returnRitual: ReturnRitual | null;
   forzarDistinto?: boolean;
+  patronesTexto?: string | null;
 }): Promise<{ albumId: string; reason: string }> {
   const catalogoTexto = input.catalogo
     .map((d) => {
@@ -735,7 +744,7 @@ ${catalogoTexto}
 
 PERFIL DEL USUARIO:
 ${perfilTexto}
-
+${input.patronesTexto ? `\n${input.patronesTexto}\n` : ""}
 SU DIARIO (reseñas recientes, de la más nueva a la más vieja):
 ${diarioTexto}
 
@@ -866,6 +875,60 @@ function recientesATexto(picks: PickConAlbum[]): string {
   return picks
     .map((p) => `- ${p.date}: "${p.album.title}" de ${p.album.artist.name}`)
     .join("\n");
+}
+
+// ─── Patrones de escucha ─────────────────────────────────────────────────────
+// Detecta correlaciones mood→género, géneros en racha y estación del año,
+// usando datos ya cargados (reviews + picks). Sin queries extra.
+
+function patronesDeEscucha(
+  reviews: ReviewConAlbum[],
+  picks: PickConAlbum[],
+): string | null {
+  const lineas: string[] = [];
+
+  // Géneros/tags que el usuario puntúa alto de forma consistente
+  const tagsAmados = new Map<string, number>();
+  for (const r of reviews.filter((r) => r.rating >= LOVED_THRESHOLD)) {
+    const tags = parseJson<Partial<FactsPayload>>(r.album.factsJson, {}).tags ?? [];
+    for (const tag of tags.slice(0, 6)) {
+      const t = normalizar(tag);
+      tagsAmados.set(t, (tagsAmados.get(t) ?? 0) + 1);
+    }
+  }
+  const topAmados = [...tagsAmados.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([t]) => t);
+  if (topAmados.length > 0) {
+    lineas.push(`- Lo que más le ha gustado (rating ≥${LOVED_THRESHOLD}): ${topAmados.join(", ")}`);
+  }
+
+  // Correlación mood → géneros (de los picks recientes que registraron ánimo)
+  const moodGenres = new Map<string, Set<string>>();
+  for (const pick of picks) {
+    if (!pick.mood) continue;
+    const tags = parseJson<Partial<FactsPayload>>(pick.album.factsJson, {}).tags ?? [];
+    if (!moodGenres.has(pick.mood)) moodGenres.set(pick.mood, new Set());
+    for (const t of tags.slice(0, 3)) moodGenres.get(pick.mood)!.add(normalizar(t));
+  }
+  for (const [mood, tagSet] of moodGenres.entries()) {
+    const top = [...tagSet].slice(0, 3);
+    if (top.length > 0) {
+      lineas.push(`- Con ánimo "${mood}" ha escuchado: ${top.join(", ")}`);
+    }
+  }
+
+  // Estación del año actual
+  const mes = new Date().getMonth();
+  const estaciones = ["invierno","invierno","primavera","primavera","primavera","verano","verano","verano","otoño","otoño","otoño","invierno"];
+  const meses = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  lineas.push(`- Ahora es ${meses[mes]} (${estaciones[mes]})`);
+
+  // Solo tiene sentido si hay patrones reales, no solo la estación
+  if (lineas.length <= 1) return null;
+
+  return `PATRONES DE ESCUCHA (de su historial real):\n${lineas.join("\n")}`;
 }
 
 // ─── Fallback por gusto, sin IA ──────────────────────────────────────────────

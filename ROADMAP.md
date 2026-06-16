@@ -368,10 +368,46 @@ disco se sienta elegido para ti, no una rotación genérica.
 
 ---
 
+## 🔨 Fase 7 — "Un amigo que te conoce mejor cada día" (EN CURSO · jun 2026)
+
+**Objetivo:** la app aprende de tu comportamiento a lo largo del tiempo y se
+integra más profundamente con la escucha real.
+
+### Tareas
+
+- [x] **7.1 IA que aprende patrones** — el motor detecta correlaciones de tu
+  historial real (mood → género, géneros en racha, estación del año) y las
+  inyecta como bloque "PATRONES DE ESCUCHA" en el prompt de recomendación y
+  descubrimiento. Sin queries extra: usa los datos ya cargados (últimas 10
+  reseñas + 7 picks). Degrada sin romper si hay poca historia.
+
+- [ ] **7.2 Escucha integrada** — botón "Escuchar ahora" que abre el disco
+  directamente en Spotify / Apple Music / YouTube Music con un toque (Odesli
+  ya integrado en `facts.ts`). Preview de 30 s de la canción favorita dentro
+  del dossier para usuarios con Spotify conectado.
+
+- [ ] **7.3 Personalización visual** — modo claro/oscuro por preferencia
+  guardada en perfil (ahora solo hay modo oscuro fijo). Opción de acento de
+  color constante en lugar de la paleta del álbum.
+
+- [ ] **7.4 Comunidad ligera** — "Tu disco de hoy" compartible como historia
+  animada. Feed opcional: ver el disco del día de un amigo (nuevo modelo de
+  seguimiento, requiere privacidad explícita).
+
+### Criterios de aceptación
+
+- [ ] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones
+  en el prompt; la recomendación refleja esa señal de forma notoria.
+- [ ] El botón "Escuchar en Spotify/Apple/YouTube" funciona desde la home y
+  el dossier en un toque, sin fricción.
+- [ ] El usuario puede cambiar entre modo claro y oscuro desde el perfil y la
+  preferencia persiste.
+
+---
+
 ## Estado actual (junio 2026)
 
-**Fases 0–6 completas** (jun 2026). Antes de abrir Fase 7, confirmar con el
-dueño del producto qué entra en el roadmap.
+**Fases 0–6 completas; Fase 7 EN CURSO** (jun 2026).
 
 ---
 

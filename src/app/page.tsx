@@ -24,8 +24,47 @@ import { todayQuestion } from "@/lib/curiosities";
 import type { CuriosityAnswer } from "@/lib/curiosities";
 import { getListenerIdentity, findProfileRecord, reviewsWhere } from "@/lib/identity";
 import { prisma } from "@/lib/db";
+import { AmigoPick } from "@/components/AmigoPick";
 
 export const dynamic = "force-dynamic";
+
+async function getPartnerPick(
+  userId: string,
+  dateKey: string,
+): Promise<{ partnerName: string | null; album: { id: string; title: string; artist: string; year: number; coverUrl: string | null } } | null> {
+  const pair = await prisma.duetPair.findFirst({
+    where: {
+      status: "active",
+      OR: [{ userAId: userId }, { userBId: userId }],
+    },
+    include: {
+      userA: { select: { id: true, name: true } },
+      userB: { select: { id: true, name: true } },
+    },
+  });
+  if (!pair || !pair.userBId) return null;
+
+  const isA = pair.userAId === userId;
+  const partnerId = isA ? pair.userBId : pair.userAId;
+  const partnerUser = isA ? pair.userB : pair.userA;
+
+  const pick = await prisma.dailyPick.findFirst({
+    where: { userId: partnerId, date: dateKey },
+    include: { album: { include: { artist: { select: { name: true } } } } },
+  });
+  if (!pick) return null;
+
+  return {
+    partnerName: partnerUser?.name ?? null,
+    album: {
+      id: pick.album.id,
+      title: pick.album.title,
+      artist: pick.album.artist.name,
+      year: pick.album.year,
+      coverUrl: pick.album.coverUrl,
+    },
+  };
+}
 
 function firstSentence(text: string, maxLen = 160): string {
   const match = text.match(/^.+?[.!?…](\s|$)/);
@@ -88,9 +127,10 @@ export default async function Home() {
     );
   }
 
-  const [madriguera, identity] = await Promise.all([
+  const [madriguera, identity, partnerPick] = await Promise.all([
     getMadriguera(pick.album.id),
     getListenerIdentity(),
+    userId ? getPartnerPick(userId, dateKey) : Promise.resolve(null),
   ]);
 
   // Pregunta del día: fallback estático; el CuriosityCard carga la IA en background.
@@ -179,6 +219,12 @@ export default async function Home() {
           <CuriosityCard
             initialQuestion={initialCuriosityQuestion}
             dateKey={dateKey}
+          />
+        )}
+        {partnerPick && (
+          <AmigoPick
+            partnerName={partnerPick.partnerName}
+            album={partnerPick.album}
           />
         )}
       </div>

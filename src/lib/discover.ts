@@ -48,7 +48,7 @@ export async function proponerDiscoDescubrimiento(input: {
     : "";
 
   const idiomaRegla = input.lang
-    ? `\n8. IDIOMA DE HOY: el usuario quiere música en "${input.lang}" hoy. Prioriza un disco cantado en ese idioma; si no encaja con su gusto, elige lo más cercano y dilo en la "reason".`
+    ? `\n8. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO proponer un disco donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Solo si no existe ningún disco decente en ese idioma puedes elegir el más cercano, y debes mencionarlo en la "reason".`
     : "";
 
   const vozCurador = input.voz?.trim()

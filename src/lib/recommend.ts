@@ -22,11 +22,11 @@ import { formatCuriosities, type CuriosityAnswer } from "./curiosities";
 import { proponerDiscoDescubrimiento } from "./discover";
 import { curatorVoz } from "./curators";
 import { runDossierPipeline } from "./dossier/pipeline";
-import { LOVED_THRESHOLD, RATING_MAX } from "./review";
+import { LOVED_THRESHOLD, RATING_MAX, DISLIKED_THRESHOLD } from "./review";
 import { hayPresupuestoHoy, registrarGeneracion } from "./budget";
 
 const MAX_REVIEWS = 10;
-const MAX_RECENT_PICKS = 7;
+const MAX_RECENT_PICKS = 14;
 const LLM_TIMEOUT_MS = 4_000;
 
 type DossierConAlbum = Prisma.DossierGetPayload<{
@@ -367,8 +367,16 @@ export async function generarPickDelDia(
     }
 
     // Lo que ya conoce (a evitar al proponer): reseñados + mostrados recientes.
+    // Los mal puntuados llevan etiqueta explícita para que el LLM los priorice
+    // en su lista de rechazos — la IA no puede volver a proponer lo que no gustó.
     const yaConoce = [
-      ...reviews.map((r) => `"${r.album.title}" de ${r.album.artist.name}`),
+      ...reviews.map((r) => {
+        const sufijo =
+          r.rating <= DISLIKED_THRESHOLD
+            ? ` (puntuado ${r.rating}/${RATING_MAX} — NO volver a proponer nunca)`
+            : "";
+        return `"${r.album.title}" de ${r.album.artist.name}${sufijo}`;
+      }),
       ...picksRecientes.map((p) => `"${p.album.title}" de ${p.album.artist.name}`),
       ...(await etiquetasAlbumes([...excluir])),
     ];
@@ -410,21 +418,30 @@ export async function generarPickDelDia(
     }
 
     // Red de seguridad: el LLM a veces ignora la lista "yaConoce". Si propuso
-    // un disco que ya se le mostró en los últimos días, pedimos otro explícitamente.
+    // un disco que ya se le mostró en los últimos días O que ya reseñó, pedimos
+    // otro explícitamente. Si el segundo intento también falla, vamos al catálogo.
     const recientesNorm = new Set(
       picksRecientes.map((p) =>
         normalizar(`${p.album.title}|${p.album.artist.name}`)
       )
     );
-    if (recientesNorm.has(normalizar(`${propuesta.title}|${propuesta.artist}`))) {
-      console.warn(`[recommend] propuesta "${propuesta.title}" era pick reciente; pidiendo disco distinto.`);
+    const revisadosNorm = new Set(
+      reviews.map((r) => normalizar(`${r.album.title}|${r.album.artist.name}`))
+    );
+    const esPropuestaConflictiva = (p: { title: string; artist: string }) => {
+      const k = normalizar(`${p.title}|${p.artist}`);
+      return recientesNorm.has(k) || revisadosNorm.has(k);
+    };
+
+    if (esPropuestaConflictiva(propuesta)) {
+      console.warn(`[recommend] propuesta "${propuesta.title}" era pick reciente o ya reseñada; pidiendo disco distinto.`);
       propuesta = await proponerDiscoDescubrimiento({
         perfilTexto: perfilATexto(parsedProfile),
         diarioTexto: diarioATexto(reviews),
         recientesTexto: recientesATexto(picksRecientes),
         yaConoce: [
           ...yaConoce,
-          `"${propuesta.title}" de ${propuesta.artist} (rechazado: ya fue pick reciente, PROHIBIDO repetir)`,
+          `"${propuesta.title}" de ${propuesta.artist} (rechazado: ya conocido, PROHIBIDO repetir)`,
         ],
         mood: mood ?? null,
         lang: langPick,
@@ -434,6 +451,11 @@ export async function generarPickDelDia(
         voz,
         patronesTexto,
       });
+      // Verificación del segundo intento: si sigue siendo conflictivo, al catálogo.
+      if (esPropuestaConflictiva(propuesta)) {
+        console.warn(`[recommend] segunda propuesta "${propuesta.title}" también era conflictiva; voy al catálogo.`);
+        return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+      }
     }
 
     // El pipeline investiga, narra, verifica y publica (o reutiliza si ya existe).
@@ -441,9 +463,25 @@ export async function generarPickDelDia(
       publish: true,
     });
 
-    if (excluir.has(result.albumId)) {
-      console.warn("[recommend] pipeline devolvió el mismo disco; elijo otro del catálogo.");
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+    // Post-pipeline: rechazar si el resultado es el disco a excluir, un pick
+    // reciente, o un album que el usuario puntuó bajo — todos son discos que no
+    // deben aparecer hoy aunque el pipeline los devuelva como "reused".
+    const recientesAlbumIds = new Set(picksRecientes.map((p) => p.album.id));
+    const malPuntuadosAlbumIds = new Set(
+      reviews.filter((r) => r.rating <= DISLIKED_THRESHOLD).map((r) => r.album.id),
+    );
+    if (
+      excluir.has(result.albumId) ||
+      recientesAlbumIds.has(result.albumId) ||
+      malPuntuadosAlbumIds.has(result.albumId)
+    ) {
+      const por = excluir.has(result.albumId)
+        ? "mismo disco excluido"
+        : recientesAlbumIds.has(result.albumId)
+        ? "pick reciente"
+        : "disco mal puntuado";
+      console.warn(`[recommend] pipeline devolvió ${por}; elijo otro del catálogo.`);
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [result.albumId, ...excluir]);
     }
 
     // Solo consume presupuesto un disco fabricado de verdad; reutilizar es gratis.
@@ -585,7 +623,18 @@ async function recomendarYGuardar(
     if (!profile && reviews.length === 0 && !opts.mood) return null;
 
     const excluir = new Set(opts.excluirAlbumIds ?? []);
-    const catalogoFiltrado = catalogo.filter((d) => !excluir.has(d.album.id));
+    // Siempre excluir: disco explícitamente descartado + albums mal puntuados (≤4).
+    const malPuntuadosIds = new Set(
+      reviews.filter((r) => r.rating <= DISLIKED_THRESHOLD).map((r) => r.album.id),
+    );
+    const recientesIds = new Set(picksRecientes.map((p) => p.album.id));
+    const catalogoBase = catalogo.filter(
+      (d) => !excluir.has(d.album.id) && !malPuntuadosIds.has(d.album.id),
+    );
+    // Excluir picks recientes cuando aún quedan alternativas — si el catálogo
+    // entero son picks recientes (edge case), los permitimos para no quedar sin disco.
+    const sinRecientes = catalogoBase.filter((d) => !recientesIds.has(d.album.id));
+    const catalogoFiltrado = sinRecientes.length > 0 ? sinRecientes : catalogoBase;
     if (catalogoFiltrado.length === 0) return null;
 
     const parsedProfile = profile
@@ -735,7 +784,7 @@ Reglas estrictas:
 2. "albumId" debe ser EXACTAMENTE uno de los albumId del catálogo.
 3. "reason": 1 a 3 frases en español, cálidas y concretas, citando SOLO señales reales del usuario que aparecen abajo (sus estrellas, sus respuestas, su perfil, su ánimo de hoy). Ej.: "Le diste 5★ a X…", "dijiste que buscas la historia…".
 4. Sobre el disco solo puedes mencionar lo que aparece en el catálogo (título, artista, año, duración, etiquetas). PROHIBIDO inventar datos del álbum o del usuario.
-5. Evita repetir discos recomendados en días recientes, salvo que no haya alternativa razonable.
+5. PROHIBIDO elegir un disco que aparezca en la lista "DISCOS RECOMENDADOS EN DÍAS RECIENTES". El catálogo que ves ya los excluye — si ves uno ahí, es un error de lectura.
 6. Si el usuario indicó su ánimo de hoy, dale prioridad como señal.
 7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.${input.lang ? `\n8. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO elegir un álbum donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Si no hay ninguno en el catálogo que encaje, elige el más cercano y menciónalo en la "reason".` : ""}`;
 

@@ -394,7 +394,7 @@ integra más profundamente con la escucha real.
   junto al push (`ThemeToggle.tsx`), propagado al `ProfileForm` via prop
   `currentTheme` desde el servidor.
 
-- [ ] **7.4 Comunidad ligera** — "Tu disco de hoy" compartible como historia
+- [x] **7.4 Comunidad ligera** — "Tu disco de hoy" compartible como historia
   animada. Feed opcional: ver el disco del día de un amigo (nuevo modelo de
   seguimiento, requiere privacidad explícita).
 

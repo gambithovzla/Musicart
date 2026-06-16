@@ -381,10 +381,11 @@ integra más profundamente con la escucha real.
   descubrimiento. Sin queries extra: usa los datos ya cargados (últimas 10
   reseñas + 7 picks). Degrada sin romper si hay poca historia.
 
-- [ ] **7.2 Escucha integrada** — botón "Escuchar ahora" que abre el disco
-  directamente en Spotify / Apple Music / YouTube Music con un toque (Odesli
-  ya integrado en `facts.ts`). Preview de 30 s de la canción favorita dentro
-  del dossier para usuarios con Spotify conectado.
+- [x] **7.2 Escucha integrada** — botones de plataforma (Spotify / Apple Music /
+  YouTube Music) directamente en la home (`DailyReveal`), antes del CTA
+  "Descubrir este disco". Usa los links guardados en `Album.linksJson` con
+  fallback a búsqueda vía `searchLinks` (Odesli) si aún no están resueltos.
+  El dossier ya tenía `ListenLinks` en la sección 05.
 
 - [ ] **7.3 Personalización visual** — modo claro/oscuro por preferencia
   guardada en perfil (ahora solo hay modo oscuro fijo). Opción de acento de

@@ -9,8 +9,9 @@ import { getPersonalizedPick, puedeGenerarPickFresco } from "@/lib/recommend";
 import { getMadriguera } from "@/lib/madriguera";
 import { hasProfile } from "@/app/actions";
 import { DEVICE_COOKIE, TZ_COOKIE, LANG_COOKIE, parseTodayLang } from "@/lib/device";
+import { searchLinks } from "@/lib/sources/odesli";
 import { albumThemeStyle } from "@/lib/theme";
-import { parseJson, type Palette } from "@/lib/types";
+import { parseJson, type AlbumLinks, type Palette } from "@/lib/types";
 import { isAdminEmail } from "@/lib/admin";
 import { DailyReveal } from "@/components/DailyReveal";
 import { Onboarding } from "@/components/Onboarding";
@@ -118,6 +119,13 @@ export default async function Home() {
   }
 
   const palette = parseJson<Palette | null>(pick.album.paletteJson, null);
+  const storedLinks = parseJson<AlbumLinks>(pick.album.linksJson, {});
+  const fallbackLinks = searchLinks(pick.album.title, pick.album.artist.name);
+  const albumLinks: AlbumLinks = {
+    spotify: storedLinks.spotify ?? fallbackLinks.spotify,
+    appleMusic: storedLinks.appleMusic,
+    youtubeMusic: storedLinks.youtubeMusic ?? fallbackLinks.youtubeMusic,
+  };
 
   const reviewFilter = reviewsWhere(identity);
   const yaResenoHoy =
@@ -164,6 +172,7 @@ export default async function Home() {
             returnWelcome: personal?.returnPick ?? false,
             madriguera,
             wowHook,
+            links: albumLinks,
           }}
         />
         {initialCuriosityQuestion && (

@@ -9,6 +9,7 @@ import { ImpactoCultural } from "./ImpactoCultural";
 import { DificultadEscucha } from "./DificultadEscucha";
 import { ShareAlbum } from "./ShareAlbum";
 import type { MadrigueraAlbum } from "@/lib/madriguera";
+import type { AlbumLinks } from "@/lib/types";
 
 export type DailyAlbum = {
   albumId: string;
@@ -28,6 +29,7 @@ export type DailyAlbum = {
   returnWelcome?: boolean; // Fase 5.6: regreso tras ausencia del ritual
   madriguera: MadrigueraAlbum[]; // discos para seguir explorando al terminar
   wowHook?: string | null; // Fase 6.9: curiosidad verificada tras escuchar el disco
+  links?: AlbumLinks; // links de streaming directo (Spotify / Apple / YouTube Music)
 };
 
 export function DailyReveal({ album }: { album: DailyAlbum }) {
@@ -113,6 +115,43 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
         transition={{ duration: 0.6, delay: 1.7 }}
         className="mt-auto pb-8 pt-10"
       >
+        {album.links && (album.links.spotify || album.links.appleMusic || album.links.youtubeMusic) && (
+          <div className="mb-4 flex flex-wrap justify-center gap-2">
+            {album.links.spotify && (
+              <a
+                href={album.links.spotify}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm font-medium transition-transform active:scale-95"
+              >
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#1DB954]" />
+                Spotify
+              </a>
+            )}
+            {album.links.appleMusic && (
+              <a
+                href={album.links.appleMusic}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm font-medium transition-transform active:scale-95"
+              >
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#FA586A]" />
+                Apple Music
+              </a>
+            )}
+            {album.links.youtubeMusic && (
+              <a
+                href={album.links.youtubeMusic}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm font-medium transition-transform active:scale-95"
+              >
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#FF0000]" />
+                YT Music
+              </a>
+            )}
+          </div>
+        )}
         <Link
           href={`/album/${album.albumId}`}
           className="block rounded-2xl bg-album px-6 py-4 text-center text-base font-semibold text-black shadow-lg shadow-album/30 transition-transform active:scale-[0.98]"

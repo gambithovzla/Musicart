@@ -61,29 +61,22 @@ export async function albumIdPickDeHoy(
   return pick?.albumId ?? null;
 }
 
-async function etiquetasAlbumes(ids: string[]): Promise<string[]> {
+/** Una obra musical para comparar repeticiones (independiente del id de fila). */
+type Obra = { title: string; artist: string };
+
+/** Trae título + artista de varios álbumes por id (para comparar repeticiones). */
+async function albumesObras(ids: string[]): Promise<Obra[]> {
   if (ids.length === 0) return [];
   const albums = await prisma.album.findMany({
     where: { id: { in: ids } },
     include: { artist: true },
   });
-  return albums.map((a) => `"${a.title}" de ${a.artist.name}`);
+  return albums.map((a) => ({ title: a.title, artist: a.artist.name }));
 }
 
-async function propuestaEsAlbumExcluido(
-  propuesta: { title: string; artist: string },
-  excluir: Set<string>,
-): Promise<boolean> {
-  if (excluir.size === 0) return false;
-  const match = await prisma.album.findFirst({
-    where: {
-      id: { in: [...excluir] },
-      title: { equals: propuesta.title, mode: "insensitive" },
-      artist: { name: { equals: propuesta.artist, mode: "insensitive" } },
-    },
-    select: { id: true },
-  });
-  return match !== null;
+/** ¿La propuesta es la MISMA obra que alguno de los discos a evitar? */
+function esObraConocida(propuesta: Obra, conocidas: Obra[]): boolean {
+  return conocidas.some((o) => mismaObra(propuesta, o));
 }
 
 async function findTodaysPick(ctx: PickCtx, date: string) {
@@ -366,6 +359,21 @@ export async function generarPickDelDia(
       return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
     }
 
+    // Obras a evitar, comparables por contenido (artista + núcleo del título),
+    // no por id ni texto exacto: así reconocemos el mismo disco aunque las
+    // fuentes lo guarden con un título o un id distinto.
+    const recientesObras: Obra[] = picksRecientes.map((p) => ({
+      title: p.album.title,
+      artist: p.album.artist.name,
+    }));
+    const revisadosObras: Obra[] = reviews.map((r) => ({
+      title: r.album.title,
+      artist: r.album.artist.name,
+    }));
+    const excluidasObras = await albumesObras([...excluir]);
+    // Todas las obras que NO deben volver a salir hoy.
+    const obrasAEvitar: Obra[] = [...recientesObras, ...revisadosObras, ...excluidasObras];
+
     // Lo que ya conoce (a evitar al proponer): reseñados + mostrados recientes.
     // Los mal puntuados llevan etiqueta explícita para que el LLM los priorice
     // en su lista de rechazos — la IA no puede volver a proponer lo que no gustó.
@@ -378,7 +386,7 @@ export async function generarPickDelDia(
         return `"${r.album.title}" de ${r.album.artist.name}${sufijo}`;
       }),
       ...picksRecientes.map((p) => `"${p.album.title}" de ${p.album.artist.name}`),
-      ...(await etiquetasAlbumes([...excluir])),
+      ...excluidasObras.map((o) => `"${o.title}" de ${o.artist}`),
     ];
 
     const patronesTexto = patronesDeEscucha(reviews, picksRecientes);
@@ -397,7 +405,7 @@ export async function generarPickDelDia(
       patronesTexto,
     });
 
-    if (esRehacer && (await propuestaEsAlbumExcluido(propuesta, excluir))) {
+    if (esRehacer && esObraConocida(propuesta, excluidasObras)) {
       console.warn("[recommend] rehacer repitió propuesta; pido otro disco.");
       propuesta = await proponerDiscoDescubrimiento({
         perfilTexto: perfilATexto(parsedProfile),
@@ -412,26 +420,16 @@ export async function generarPickDelDia(
         voz,
         patronesTexto,
       });
-      if (await propuestaEsAlbumExcluido(propuesta, excluir)) {
+      if (esObraConocida(propuesta, excluidasObras)) {
         return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
       }
     }
 
     // Red de seguridad: el LLM a veces ignora la lista "yaConoce". Si propuso
-    // un disco que ya se le mostró en los últimos días O que ya reseñó, pedimos
-    // otro explícitamente. Si el segundo intento también falla, vamos al catálogo.
-    const recientesNorm = new Set(
-      picksRecientes.map((p) =>
-        normalizar(`${p.album.title}|${p.album.artist.name}`)
-      )
-    );
-    const revisadosNorm = new Set(
-      reviews.map((r) => normalizar(`${r.album.title}|${r.album.artist.name}`))
-    );
-    const esPropuestaConflictiva = (p: { title: string; artist: string }) => {
-      const k = normalizar(`${p.title}|${p.artist}`);
-      return recientesNorm.has(k) || revisadosNorm.has(k);
-    };
+    // un disco que ya se le mostró en los últimos días O que ya reseñó (la MISMA
+    // obra, aunque el título no calce letra a letra), pedimos otro explícitamente.
+    // Si el segundo intento también falla, vamos al catálogo.
+    const esPropuestaConflictiva = (p: Obra) => esObraConocida(p, obrasAEvitar);
 
     if (esPropuestaConflictiva(propuesta)) {
       console.warn(`[recommend] propuesta "${propuesta.title}" era pick reciente o ya reseñada; pidiendo disco distinto.`);
@@ -466,20 +464,33 @@ export async function generarPickDelDia(
     // Post-pipeline: rechazar si el resultado es el disco a excluir, un pick
     // reciente, o un album que el usuario puntuó bajo — todos son discos que no
     // deben aparecer hoy aunque el pipeline los devuelva como "reused".
+    // Comparamos por id Y por obra: el pipeline puede devolver una fila distinta
+    // (mbid/iTunes) que en realidad es el mismo disco que ya vio.
     const recientesAlbumIds = new Set(picksRecientes.map((p) => p.album.id));
     const malPuntuadosAlbumIds = new Set(
       reviews.filter((r) => r.rating <= DISLIKED_THRESHOLD).map((r) => r.album.id),
     );
+    const resultAlbum = await prisma.album.findUnique({
+      where: { id: result.albumId },
+      include: { artist: true },
+    });
+    const resultObra: Obra | null = resultAlbum
+      ? { title: resultAlbum.title, artist: resultAlbum.artist.name }
+      : null;
+    const obraRepetida = resultObra ? esObraConocida(resultObra, obrasAEvitar) : false;
     if (
       excluir.has(result.albumId) ||
       recientesAlbumIds.has(result.albumId) ||
-      malPuntuadosAlbumIds.has(result.albumId)
+      malPuntuadosAlbumIds.has(result.albumId) ||
+      obraRepetida
     ) {
       const por = excluir.has(result.albumId)
         ? "mismo disco excluido"
         : recientesAlbumIds.has(result.albumId)
         ? "pick reciente"
-        : "disco mal puntuado";
+        : malPuntuadosAlbumIds.has(result.albumId)
+        ? "disco mal puntuado"
+        : "misma obra ya vista (otro id/título)";
       console.warn(`[recommend] pipeline devolvió ${por}; elijo otro del catálogo.`);
       return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [result.albumId, ...excluir]);
     }
@@ -628,12 +639,37 @@ async function recomendarYGuardar(
       reviews.filter((r) => r.rating <= DISLIKED_THRESHOLD).map((r) => r.album.id),
     );
     const recientesIds = new Set(picksRecientes.map((p) => p.album.id));
+    // Obras a evitar también por contenido (no solo por id): así no servimos una
+    // fila duplicada del mismo disco reciente, excluido o mal puntuado.
+    const excluidasObras = await albumesObras([...excluir]);
+    const obraVetada = (d: DossierConAlbum): boolean => {
+      const obra: Obra = { title: d.album.title, artist: d.album.artist.name };
+      return (
+        excluidasObras.some((o) => mismaObra(obra, o)) ||
+        reviews.some(
+          (r) =>
+            r.rating <= DISLIKED_THRESHOLD &&
+            mismaObra(obra, { title: r.album.title, artist: r.album.artist.name }),
+        )
+      );
+    };
     const catalogoBase = catalogo.filter(
-      (d) => !excluir.has(d.album.id) && !malPuntuadosIds.has(d.album.id),
+      (d) =>
+        !excluir.has(d.album.id) && !malPuntuadosIds.has(d.album.id) && !obraVetada(d),
     );
-    // Excluir picks recientes cuando aún quedan alternativas — si el catálogo
-    // entero son picks recientes (edge case), los permitimos para no quedar sin disco.
-    const sinRecientes = catalogoBase.filter((d) => !recientesIds.has(d.album.id));
+    // Excluir picks recientes (por id y por obra) cuando aún quedan alternativas;
+    // si el catálogo entero son picks recientes (edge case), los permitimos para
+    // no quedar sin disco.
+    const sinRecientes = catalogoBase.filter(
+      (d) =>
+        !recientesIds.has(d.album.id) &&
+        !picksRecientes.some((p) =>
+          mismaObra(
+            { title: d.album.title, artist: d.album.artist.name },
+            { title: p.album.title, artist: p.album.artist.name },
+          ),
+        ),
+    );
     const catalogoFiltrado = sinRecientes.length > 0 ? sinRecientes : catalogoBase;
     if (catalogoFiltrado.length === 0) return null;
 
@@ -998,6 +1034,39 @@ function normalizar(s: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+}
+
+// N\u00facleo del t\u00edtulo: sin diacr\u00edticos, sin par\u00e9ntesis/corchetes, sin lo que va
+// tras " - ", y sin sufijos de edici\u00f3n/directo (deluxe, remaster, en directo\u2026).
+// As\u00ed "Cometas por el cielo (En directo desde Am\u00e9rica)" y "Cometas por el cielo"
+// se reconocen como la MISMA obra aunque las fuentes guarden t\u00edtulos distintos.
+function nucleoTitulo(s: string): string {
+  let t = normalizar(s);
+  t = t.replace(/\([^)]*\)/g, " ").replace(/\[[^\]]*\]/g, " ");
+  t = t.split(/\s-\s/)[0];
+  const m = t.match(
+    /^(.*?\S.*?)\s+\b(en vivo|en directo|live|deluxe|remaster\w*|edicion|edition|expanded|bonus|reedicion|unplugged|acustico|acoustic)\b/u,
+  );
+  if (m && m[1].trim().length >= 3) t = m[1];
+  return t
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Dos discos son la MISMA obra si comparten artista (con tolerancia) y el n\u00facleo
+// del t\u00edtulo coincide. Compara por contenido, no por id de fila ni texto exacto:
+// es la barrera definitiva contra el "mismo disco con t\u00edtulo o id distinto".
+function mismaObra(a: { title: string; artist: string }, b: { title: string; artist: string }): boolean {
+  const artistaA = normalizar(a.artist).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const artistaB = normalizar(b.artist).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const mismoArtista =
+    artistaA.length > 0 &&
+    (artistaA === artistaB || artistaA.includes(artistaB) || artistaB.includes(artistaA));
+  if (!mismoArtista) return false;
+  const nucA = nucleoTitulo(a.title);
+  const nucB = nucleoTitulo(b.title);
+  return nucA.length > 0 && nucA === nucB;
 }
 
 function elegirPorGusto(input: {

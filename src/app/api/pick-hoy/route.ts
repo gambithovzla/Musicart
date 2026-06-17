@@ -49,12 +49,16 @@ export async function POST(req: Request) {
     const vistosHoy = parseSeenToday(jar.get(SEEN_TODAY_COOKIE)?.value, date);
 
     // ¿Pidieron rehacer? Solo admins: guardamos el disco actual para no repetirlo.
-    const rehacer = await pidieronRehacer(req);
+    // También leemos la instrucción en lenguaje natural ("rock en inglés…"), que
+    // solo respetamos si quien pide es admin.
+    const { rehacer, instruccion } = await leerCuerpo(req);
     const excluirAlbumIds: string[] = [...vistosHoy];
+    let instruccionAdmin: string | null = null;
     if (rehacer) {
       if (!isAdminEmail(session?.user?.email)) {
         return NextResponse.json({ ok: false, reason: "no-admin" }, { status: 403 });
       }
+      instruccionAdmin = instruccion;
       const previo = await albumIdPickDeHoy(deviceId, userId, tz);
       if (previo) excluirAlbumIds.push(previo);
       await borrarPickDeHoy(deviceId, userId, tz);
@@ -62,6 +66,7 @@ export async function POST(req: Request) {
 
     const pick = await generarPickDelDia(deviceId, userId, tz, lang, undefined, {
       excluirAlbumIds,
+      instruccionAdmin,
     });
 
     // Recordamos lo mostrado hoy (lo previo + el nuevo) para próximos "Rehacer".
@@ -84,11 +89,18 @@ export async function POST(req: Request) {
   }
 }
 
-async function pidieronRehacer(req: Request): Promise<boolean> {
+async function leerCuerpo(
+  req: Request,
+): Promise<{ rehacer: boolean; instruccion: string | null }> {
   try {
-    const body = (await req.json()) as { rehacer?: boolean };
-    return body?.rehacer === true;
+    const body = (await req.json()) as { rehacer?: boolean; instruccion?: string };
+    const instruccion = body?.instruccion?.trim();
+    return {
+      rehacer: body?.rehacer === true,
+      // Cota defensiva: el pedido del admin va a un prompt; lo recortamos.
+      instruccion: instruccion ? instruccion.slice(0, 500) : null,
+    };
   } catch {
-    return false; // sin body (la home dispara sin cuerpo)
+    return { rehacer: false, instruccion: null }; // sin body (la home dispara sin cuerpo)
   }
 }

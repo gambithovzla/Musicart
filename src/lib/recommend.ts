@@ -79,6 +79,69 @@ function esObraConocida(propuesta: Obra, conocidas: Obra[]): boolean {
   return conocidas.some((o) => mismaObra(propuesta, o));
 }
 
+/**
+ * Memoria COMPLETA del oyente: TODO disco que alguna vez se le recomendó (todo
+ * el historial de DailyPick, no solo las últimas semanas) y TODO disco que
+ * reseñó. Es la lista definitiva de "no me lo repitas" — ayer, hace un mes o
+ * hace un año. Devuelve ids y obras (para comparar por contenido) y los mal
+ * puntuados aparte. Las obras vienen con los picks más recientes primero.
+ */
+type MemoriaDiscos = {
+  vistosIds: Set<string>;
+  vistosObras: Obra[];
+  dislikedIds: Set<string>;
+};
+
+async function cargarMemoriaDiscos(
+  identity: ListenerIdentity,
+  date: string,
+): Promise<MemoriaDiscos> {
+  const pastFilter = pastPicksWhere(identity, date);
+  const reviewFilter = reviewsWhere(identity);
+  const [picks, reseñas] = await Promise.all([
+    pastFilter
+      ? prisma.dailyPick.findMany({
+          where: pastFilter,
+          orderBy: { date: "desc" },
+          select: {
+            album: {
+              select: { id: true, title: true, artist: { select: { name: true } } },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    reviewFilter
+      ? prisma.review.findMany({
+          where: reviewFilter,
+          orderBy: { createdAt: "desc" },
+          select: {
+            rating: true,
+            album: {
+              select: { id: true, title: true, artist: { select: { name: true } } },
+            },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const vistosIds = new Set<string>();
+  const vistosObras: Obra[] = [];
+  const dislikedIds = new Set<string>();
+  const recordar = (album: { id: string; title: string; artist: { name: string } }) => {
+    if (vistosIds.has(album.id)) return;
+    vistosIds.add(album.id);
+    vistosObras.push({ title: album.title, artist: album.artist.name });
+  };
+  // Picks primero (más recientes primero) para que el recorte del prompt
+  // priorice lo más nuevo; luego las reseñas.
+  for (const p of picks) recordar(p.album);
+  for (const r of reseñas) {
+    recordar(r.album);
+    if (r.rating <= DISLIKED_THRESHOLD) dislikedIds.add(r.album.id);
+  }
+  return { vistosIds, vistosObras, dislikedIds };
+}
+
 async function findTodaysPick(ctx: PickCtx, date: string) {
   if (ctx.userId) {
     const byUser = await prisma.dailyPick.findFirst({
@@ -317,7 +380,7 @@ export async function generarPickDelDia(
     const reviewFilter = reviewsWhere(identity);
     const pastFilter = pastPicksWhere(identity, date);
 
-    const [profile, reviews, picksRecientes] = await Promise.all([
+    const [profile, reviews, picksRecientes, memoria] = await Promise.all([
       findProfileRecord(identity),
       reviewFilter
         ? prisma.review.findMany({
@@ -335,6 +398,8 @@ export async function generarPickDelDia(
             take: MAX_RECENT_PICKS,
           })
         : Promise.resolve([]),
+      // Memoria COMPLETA (todo el historial), para no repetir NUNCA un disco ya visto.
+      cargarMemoriaDiscos(identity, date),
     ]);
 
     // Sin señales de gusto no fabricamos (sería un disco al azar): que decida la
@@ -361,33 +426,37 @@ export async function generarPickDelDia(
 
     // Obras a evitar, comparables por contenido (artista + núcleo del título),
     // no por id ni texto exacto: así reconocemos el mismo disco aunque las
-    // fuentes lo guarden con un título o un id distinto.
-    const recientesObras: Obra[] = picksRecientes.map((p) => ({
-      title: p.album.title,
-      artist: p.album.artist.name,
-    }));
-    const revisadosObras: Obra[] = reviews.map((r) => ({
-      title: r.album.title,
-      artist: r.album.artist.name,
-    }));
+    // fuentes lo guarden con un título o un id distinto. Usamos la memoria
+    // COMPLETA (todo el historial), no solo las últimas semanas: un disco de
+    // hace un mes tampoco debe repetirse.
     const excluidasObras = await albumesObras([...excluir]);
-    // Todas las obras que NO deben volver a salir hoy.
-    const obrasAEvitar: Obra[] = [...recientesObras, ...revisadosObras, ...excluidasObras];
+    const obrasAEvitar: Obra[] = [...memoria.vistosObras, ...excluidasObras];
 
-    // Lo que ya conoce (a evitar al proponer): reseñados + mostrados recientes.
-    // Los mal puntuados llevan etiqueta explícita para que el LLM los priorice
-    // en su lista de rechazos — la IA no puede volver a proponer lo que no gustó.
-    const yaConoce = [
-      ...reviews.map((r) => {
-        const sufijo =
-          r.rating <= DISLIKED_THRESHOLD
-            ? ` (puntuado ${r.rating}/${RATING_MAX} — NO volver a proponer nunca)`
-            : "";
-        return `"${r.album.title}" de ${r.album.artist.name}${sufijo}`;
-      }),
-      ...picksRecientes.map((p) => `"${p.album.title}" de ${p.album.artist.name}`),
-      ...excluidasObras.map((o) => `"${o.title}" de ${o.artist}`),
-    ];
+    // Lo que ya conoce (a evitar al proponer): TODO el historial. Las reseñas
+    // recientes mal puntuadas llevan etiqueta explícita para que el LLM las
+    // priorice en su lista de rechazos. El resto del historial va en líneas
+    // simples; recortamos a un máximo razonable para no inflar el prompt — la
+    // barrera dura (obrasAEvitar) cubre TODO, esta lista es solo una pista.
+    const MAX_YA_CONOCE = 120;
+    const yaConoce: string[] = [];
+    const vistosEnLista = new Set<string>();
+    const agregar = (title: string, artist: string, sufijo = "") => {
+      const clave = normalizar(`${title}|${artist}`);
+      if (vistosEnLista.has(clave)) return;
+      vistosEnLista.add(clave);
+      yaConoce.push(`"${title}" de ${artist}${sufijo}`);
+    };
+    for (const r of reviews) {
+      const sufijo =
+        r.rating <= DISLIKED_THRESHOLD
+          ? ` (puntuado ${r.rating}/${RATING_MAX} — NO volver a proponer nunca)`
+          : "";
+      agregar(r.album.title, r.album.artist.name, sufijo);
+    }
+    for (const o of [...memoria.vistosObras, ...excluidasObras]) {
+      if (yaConoce.length >= MAX_YA_CONOCE) break;
+      agregar(o.title, o.artist);
+    }
 
     const patronesTexto = patronesDeEscucha(reviews, picksRecientes);
 
@@ -461,15 +530,11 @@ export async function generarPickDelDia(
       publish: true,
     });
 
-    // Post-pipeline: rechazar si el resultado es el disco a excluir, un pick
-    // reciente, o un album que el usuario puntuó bajo — todos son discos que no
-    // deben aparecer hoy aunque el pipeline los devuelva como "reused".
-    // Comparamos por id Y por obra: el pipeline puede devolver una fila distinta
-    // (mbid/iTunes) que en realidad es el mismo disco que ya vio.
-    const recientesAlbumIds = new Set(picksRecientes.map((p) => p.album.id));
-    const malPuntuadosAlbumIds = new Set(
-      reviews.filter((r) => r.rating <= DISLIKED_THRESHOLD).map((r) => r.album.id),
-    );
+    // Post-pipeline: rechazar si el resultado es el disco a excluir o CUALQUIER
+    // disco que ya se le recomendó/reseñó alguna vez (memoria completa) — aunque
+    // el pipeline lo devuelva como "reused". Comparamos por id Y por obra: el
+    // pipeline puede devolver una fila distinta (mbid/iTunes) que en realidad es
+    // el mismo disco que ya vio.
     const resultAlbum = await prisma.album.findUnique({
       where: { id: result.albumId },
       include: { artist: true },
@@ -480,16 +545,13 @@ export async function generarPickDelDia(
     const obraRepetida = resultObra ? esObraConocida(resultObra, obrasAEvitar) : false;
     if (
       excluir.has(result.albumId) ||
-      recientesAlbumIds.has(result.albumId) ||
-      malPuntuadosAlbumIds.has(result.albumId) ||
+      memoria.vistosIds.has(result.albumId) ||
       obraRepetida
     ) {
       const por = excluir.has(result.albumId)
         ? "mismo disco excluido"
-        : recientesAlbumIds.has(result.albumId)
-        ? "pick reciente"
-        : malPuntuadosAlbumIds.has(result.albumId)
-        ? "disco mal puntuado"
+        : memoria.vistosIds.has(result.albumId)
+        ? "disco ya visto en el historial"
         : "misma obra ya vista (otro id/título)";
       console.warn(`[recommend] pipeline devolvió ${por}; elijo otro del catálogo.`);
       return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [result.albumId, ...excluir]);
@@ -606,7 +668,7 @@ async function recomendarYGuardar(
     const reviewFilter = reviewsWhere(identity);
     const pastFilter = pastPicksWhere(identity, date);
 
-    const [profile, reviews, catalogo, picksRecientes] = await Promise.all([
+    const [profile, reviews, catalogo, picksRecientes, memoria] = await Promise.all([
       findProfileRecord(identity),
       reviewFilter
         ? prisma.review.findMany({
@@ -629,48 +691,36 @@ async function recomendarYGuardar(
             take: MAX_RECENT_PICKS,
           })
         : Promise.resolve([]),
+      // Memoria COMPLETA (todo el historial), para no repetir NUNCA un disco visto.
+      cargarMemoriaDiscos(identity, date),
     ]);
 
     if (!profile && reviews.length === 0 && !opts.mood) return null;
 
     const excluir = new Set(opts.excluirAlbumIds ?? []);
-    // Siempre excluir: disco explícitamente descartado + albums mal puntuados (≤4).
-    const malPuntuadosIds = new Set(
-      reviews.filter((r) => r.rating <= DISLIKED_THRESHOLD).map((r) => r.album.id),
-    );
-    const recientesIds = new Set(picksRecientes.map((p) => p.album.id));
-    // Obras a evitar también por contenido (no solo por id): así no servimos una
-    // fila duplicada del mismo disco reciente, excluido o mal puntuado.
     const excluidasObras = await albumesObras([...excluir]);
+    // Vetado = descartado explícito, o YA visto alguna vez (todo el historial),
+    // comparando por id Y por obra (mismo disco con otro id/título).
     const obraVetada = (d: DossierConAlbum): boolean => {
       const obra: Obra = { title: d.album.title, artist: d.album.artist.name };
       return (
-        excluidasObras.some((o) => mismaObra(obra, o)) ||
-        reviews.some(
-          (r) =>
-            r.rating <= DISLIKED_THRESHOLD &&
-            mismaObra(obra, { title: r.album.title, artist: r.album.artist.name }),
-        )
+        memoria.vistosObras.some((o) => mismaObra(obra, o)) ||
+        excluidasObras.some((o) => mismaObra(obra, o))
       );
     };
-    const catalogoBase = catalogo.filter(
-      (d) =>
-        !excluir.has(d.album.id) && !malPuntuadosIds.has(d.album.id) && !obraVetada(d),
-    );
-    // Excluir picks recientes (por id y por obra) cuando aún quedan alternativas;
-    // si el catálogo entero son picks recientes (edge case), los permitimos para
-    // no quedar sin disco.
-    const sinRecientes = catalogoBase.filter(
-      (d) =>
-        !recientesIds.has(d.album.id) &&
-        !picksRecientes.some((p) =>
-          mismaObra(
-            { title: d.album.title, artist: d.album.artist.name },
-            { title: p.album.title, artist: p.album.artist.name },
-          ),
-        ),
-    );
-    const catalogoFiltrado = sinRecientes.length > 0 ? sinRecientes : catalogoBase;
+    const noVisto = (d: DossierConAlbum): boolean =>
+      !excluir.has(d.album.id) && !memoria.vistosIds.has(d.album.id) && !obraVetada(d);
+
+    // Preferimos discos NUNCA vistos. Si ya recorrió todo el catálogo publicado
+    // (edge case), relajamos: permitimos repetir lo ya visto pero seguimos
+    // excluyendo lo descartado y lo que puntuó bajo, para no quedar sin disco.
+    const sinVistos = catalogo.filter(noVisto);
+    const catalogoFiltrado =
+      sinVistos.length > 0
+        ? sinVistos
+        : catalogo.filter(
+            (d) => !excluir.has(d.album.id) && !memoria.dislikedIds.has(d.album.id),
+          );
     if (catalogoFiltrado.length === 0) return null;
 
     const parsedProfile = profile

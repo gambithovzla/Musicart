@@ -20,7 +20,10 @@ import {
   DEVICE_COOKIE,
   TZ_COOKIE,
   LANG_COOKIE,
+  SEEN_TODAY_COOKIE,
   parseTodayLang,
+  parseSeenToday,
+  buildSeenToday,
 } from "@/lib/device";
 
 export const dynamic = "force-dynamic";
@@ -37,24 +40,43 @@ export async function POST(req: Request) {
 
     const tzRaw = jar.get(TZ_COOKIE)?.value;
     const tz = tzRaw ? decodeURIComponent(tzRaw) : null;
-    const lang = parseTodayLang(jar.get(LANG_COOKIE)?.value, todayKey(tz));
+    const date = todayKey(tz);
+    const lang = parseTodayLang(jar.get(LANG_COOKIE)?.value, date);
+
+    // Discos ya mostrados hoy (cookie por dispositivo): al rehacer los excluimos
+    // TODOS, no solo el último. Si no, rehacer cicla entre los discos del día,
+    // porque los picks de hoy no entran en el historial "reciente" (date < hoy).
+    const vistosHoy = parseSeenToday(jar.get(SEEN_TODAY_COOKIE)?.value, date);
 
     // ¿Pidieron rehacer? Solo admins: guardamos el disco actual para no repetirlo.
     const rehacer = await pidieronRehacer(req);
-    let excluirAlbumIds: string[] = [];
+    const excluirAlbumIds: string[] = [...vistosHoy];
     if (rehacer) {
       if (!isAdminEmail(session?.user?.email)) {
         return NextResponse.json({ ok: false, reason: "no-admin" }, { status: 403 });
       }
       const previo = await albumIdPickDeHoy(deviceId, userId, tz);
-      if (previo) excluirAlbumIds = [previo];
+      if (previo) excluirAlbumIds.push(previo);
       await borrarPickDeHoy(deviceId, userId, tz);
     }
 
     const pick = await generarPickDelDia(deviceId, userId, tz, lang, undefined, {
       excluirAlbumIds,
     });
-    return NextResponse.json({ ok: pick !== null });
+
+    // Recordamos lo mostrado hoy (lo previo + el nuevo) para próximos "Rehacer".
+    const nuevoId = pick?.dossier.album.id;
+    const seen = buildSeenToday(
+      date,
+      [...excluirAlbumIds, ...(nuevoId ? [nuevoId] : [])],
+    );
+    const res = NextResponse.json({ ok: pick !== null });
+    res.cookies.set(SEEN_TODAY_COOKIE, seen, {
+      path: "/",
+      maxAge: 86_400,
+      sameSite: "lax",
+    });
+    return res;
   } catch (err) {
     console.error("[api/pick-hoy] error fabricando el disco del día:", err);
     // No reventamos: la home cae a la rotación global al refrescar.

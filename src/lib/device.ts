@@ -7,6 +7,9 @@ export const DEVICE_COOKIE = "musicart_device";
 export const TZ_COOKIE = "musicart_tz";
 export const LANG_COOKIE = "musicart_lang"; // valor: "YYYY-MM-DD|idioma"
 export const THEME_COOKIE = "musicart_theme"; // valor: "light" | "dark" (default dark)
+// Discos ya mostrados hoy (para que "Rehacer" no cicle entre los del día).
+// Valor: "YYYY-MM-DD|albumId,albumId,…". Se reinicia cada día.
+export const SEEN_TODAY_COOKIE = "musicart_seen_today";
 
 export function getDeviceId(): string {
   if (typeof window === "undefined") return "";
@@ -30,4 +33,27 @@ export function parseTodayLang(
   const date = raw.slice(0, sep);
   const lang = raw.slice(sep + 1);
   return date === dateKey && lang ? decodeURIComponent(lang) : null;
+}
+
+/** AlbumIds ya mostrados hoy (de la cookie); vacío si la cookie es de otro día. */
+export function parseSeenToday(
+  raw: string | undefined,
+  dateKey: string,
+): string[] {
+  if (!raw) return [];
+  const sep = raw.indexOf("|");
+  if (sep === -1) return [];
+  const date = raw.slice(0, sep);
+  if (date !== dateKey) return [];
+  return raw
+    .slice(sep + 1)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Serializa la cookie de discos vistos hoy (con ids únicos). */
+export function buildSeenToday(dateKey: string, albumIds: string[]): string {
+  const unicos = [...new Set(albumIds.filter(Boolean))];
+  return `${dateKey}|${unicos.join(",")}`;
 }

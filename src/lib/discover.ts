@@ -35,6 +35,9 @@ export async function proponerDiscoDescubrimiento(input: {
   voz?: string;
   /** Patrones de escucha detectados del historial (mood→género, racha, estación). */
   patronesTexto?: string | null;
+  /** Solo admin (Fase 6): pedido en lenguaje natural para el disco de hoy
+   *  ("rock en inglés estilo Linkin Park"). Manda por encima del gusto. */
+  instruccionAdmin?: string | null;
 }): Promise<DiscoPropuesto> {
   const evitarTexto =
     input.yaConoce.length > 0
@@ -47,6 +50,13 @@ export async function proponerDiscoDescubrimiento(input: {
 
   const rehacerTexto = input.esRehacer
     ? `\nREHACER HOY: el usuario pidió OTRO disco distinto para hoy. PROHIBIDO repetir cualquier disco de las listas "ya conoce" o "días recientes". Elige algo diferente aunque encaje igual de bien con su gusto.\n`
+    : "";
+
+  // Pedido explícito del admin para hoy: manda por encima del gusto, el ánimo y
+  // los patrones. Sigue intacta la regla anti-alucinación (disco real y documentado).
+  const instruccionTexto = input.instruccionAdmin?.trim()
+    ? `\nPEDIDO EXPLÍCITO PARA HOY (MÁXIMA PRIORIDAD): «${input.instruccionAdmin.trim()}».
+Este pedido MANDA por encima del gusto histórico, el ánimo y los patrones de escucha: elige un disco que lo cumpla al pie de la letra (género, idioma, estilo, época o artista que mencione). Sigue siendo OBLIGATORIO que sea un álbum de estudio REAL y bien documentado (regla 2 y 3). En la "reason", conecta el disco con este pedido. Solo si es imposible cumplirlo con un disco real, elige lo más cercano y dilo con honestidad en la "reason".\n`
     : "";
 
   const idiomaRegla = input.lang
@@ -78,7 +88,7 @@ SU DIARIO (reseñas recientes, de la más nueva a la más vieja):
 ${input.diarioTexto}
 
 ÁNIMO DE HOY: ${input.mood ?? "(no indicado)"}
-${regresoTexto}${rehacerTexto}
+${instruccionTexto}${regresoTexto}${rehacerTexto}
 DISCOS QUE YA CONOCE O YA SE LE MOSTRARON (NO los repitas):
 ${evitarTexto}
 

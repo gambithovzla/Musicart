@@ -6,6 +6,10 @@ const KEY = "musicart:device";
 export const DEVICE_COOKIE = "musicart_device";
 export const TZ_COOKIE = "musicart_tz";
 export const LANG_COOKIE = "musicart_lang"; // valor: "YYYY-MM-DD|idioma"
+// Lo que el oyente pidió escuchar hoy (texto libre: "rock con energía",
+// "algo tranquilo", "pop en inglés"). Lo elige en el gate del día y manda al
+// fabricar su disco fresco. Valor: "YYYY-MM-DD|texto". Se reinicia cada día.
+export const PEDIDO_COOKIE = "musicart_pedido";
 export const THEME_COOKIE = "musicart_theme"; // valor: "light" | "dark" (default dark)
 // Discos ya mostrados hoy (para que "Rehacer" no cicle entre los del día).
 // Valor: "YYYY-MM-DD|albumId,albumId,…". Se reinicia cada día.
@@ -33,6 +37,21 @@ export function parseTodayLang(
   const date = raw.slice(0, sep);
   const lang = raw.slice(sep + 1);
   return date === dateKey && lang ? decodeURIComponent(lang) : null;
+}
+
+/** Texto que el oyente pidió escuchar hoy, si la cookie pertenece a hoy, o null. */
+export function parseTodayPedido(
+  raw: string | undefined,
+  dateKey: string,
+): string | null {
+  if (!raw) return null;
+  const sep = raw.indexOf("|");
+  if (sep === -1) return null;
+  const date = raw.slice(0, sep);
+  const texto = raw.slice(sep + 1);
+  if (date !== dateKey || !texto) return null;
+  const decoded = decodeURIComponent(texto).trim();
+  return decoded ? decoded.slice(0, 500) : null;
 }
 
 /** AlbumIds ya mostrados hoy (de la cookie); vacío si la cookie es de otro día. */

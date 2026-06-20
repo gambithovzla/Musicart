@@ -35,9 +35,13 @@ export async function proponerDiscoDescubrimiento(input: {
   voz?: string;
   /** Patrones de escucha detectados del historial (mood→género, racha, estación). */
   patronesTexto?: string | null;
-  /** Solo admin (Fase 6): pedido en lenguaje natural para el disco de hoy
-   *  ("rock en inglés estilo Linkin Park"). Manda por encima del gusto. */
-  instruccionAdmin?: string | null;
+  /** Pedido del oyente en lenguaje natural para el disco de hoy ("rock con
+   *  energía", "algo tipo Linkin Park"). Lo escribe en el gate del día (o el
+   *  admin al rehacer) y MANDA por encima del gusto histórico. */
+  peticion?: string | null;
+  /** Artistas recomendados en días recientes: NO repetir el mismo artista
+   *  (variedad), salvo que el oyente lo pida explícitamente. */
+  artistasRecientes?: string[];
 }): Promise<DiscoPropuesto> {
   const evitarTexto =
     input.yaConoce.length > 0
@@ -52,12 +56,22 @@ export async function proponerDiscoDescubrimiento(input: {
     ? `\nREHACER HOY: el usuario pidió OTRO disco distinto para hoy. PROHIBIDO repetir cualquier disco de las listas "ya conoce" o "días recientes". Elige algo diferente aunque encaje igual de bien con su gusto.\n`
     : "";
 
-  // Pedido explícito del admin para hoy: manda por encima del gusto, el ánimo y
+  // Pedido explícito del oyente para hoy: manda por encima del gusto, el ánimo y
   // los patrones. Sigue intacta la regla anti-alucinación (disco real y documentado).
-  const instruccionTexto = input.instruccionAdmin?.trim()
-    ? `\nPEDIDO EXPLÍCITO PARA HOY (MÁXIMA PRIORIDAD): «${input.instruccionAdmin.trim()}».
-Este pedido MANDA por encima del gusto histórico, el ánimo y los patrones de escucha: elige un disco que lo cumpla al pie de la letra (género, idioma, estilo, época o artista que mencione). Sigue siendo OBLIGATORIO que sea un álbum de estudio REAL y bien documentado (regla 2 y 3). En la "reason", conecta el disco con este pedido. Solo si es imposible cumplirlo con un disco real, elige lo más cercano y dilo con honestidad en la "reason".\n`
+  const peticionTexto = input.peticion?.trim()
+    ? `\nLO QUE EL OYENTE PIDIÓ ESCUCHAR HOY (MÁXIMA PRIORIDAD): «${input.peticion.trim()}».
+Este pedido MANDA por encima del gusto histórico, el ánimo y los patrones de escucha: elige un disco que lo cumpla al pie de la letra (género, idioma, estilo, época, energía o artista que mencione). Si pide un artista concreto, puedes proponer ese artista aunque salga en "artistas recientes". Sigue siendo OBLIGATORIO que sea un álbum de estudio REAL y bien documentado (regla 2 y 3). En la "reason", conecta el disco con lo que pidió. Solo si es imposible cumplirlo con un disco real, elige lo más cercano y dilo con honestidad en la "reason".\n`
     : "";
+
+  // Variedad de artistas: si en días recientes ya sonaron ciertos artistas, NO
+  // repetir el mismo (salvo petición explícita). Evita el "siempre el mismo".
+  const artistasRecientes = (input.artistasRecientes ?? [])
+    .map((a) => a.trim())
+    .filter(Boolean);
+  const artistasRecientesTexto =
+    artistasRecientes.length > 0 && !input.peticion?.trim()
+      ? `\nARTISTAS DE DÍAS RECIENTES (NO repitas el mismo artista hoy; trae uno DISTINTO para ampliar su mundo): ${[...new Set(artistasRecientes)].join(", ")}\n`
+      : "";
 
   const idiomaRegla = input.lang
     ? `\n8. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO proponer un disco donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Solo si no existe ningún disco decente en ese idioma puedes elegir el más cercano, y debes mencionarlo en la "reason".`
@@ -75,9 +89,9 @@ Reglas estrictas:
 1. Responde SOLO un objeto JSON: {"title": "...", "artist": "...", "year": 1979, "reason": "..."} — sin texto extra.
 2. Debe ser un disco REAL y bien documentado (que exista en MusicBrainz/Wikipedia), con su título y artista exactos. Nada inventado.
 3. Debe ser un ÁLBUM de estudio COMPLETO (varias canciones). PROHIBIDO: sencillos (singles), EPs, recopilatorios o títulos que terminen en "Single", "EP" o "- Single". Si dudas, elige el álbum completo de ese artista, no la canción suelta.
-4. DESCUBRIMIENTO: elige algo que probablemente NO conozca pero que encaje con su gusto — un puente desde lo que ama hacia algo nuevo. Mejor un disco que sienta suyo que uno "objetivamente importante" pero ajeno.
-5. GUSTO ANTE TODO: respeta sus géneros y artistas favoritos. Un rockero NO recibe una balada romántica salvo como puente claro y justificado en la "reason".
-6. NO propongas ninguno de los discos que ya se le mostraron o que ya reseñó (lista abajo). Cada día es un disco distinto.
+4. DESCUBRIMIENTO Y AMPLIACIÓN: tu misión es ENSANCHAR su mundo musical, no devolverle lo que ya escucha. Elige algo que probablemente NO conozca: un puente desde lo que ama hacia un territorio nuevo (otro artista, otra escena, otro país, otra época). El gusto es la rampa de despegue, no una jaula. Mejor un disco que sienta suyo PERO que lo lleve un paso más allá, que uno idéntico a su zona de confort.
+5. VARIEDAD ANTE TODO: NO te quedes orbitando a sus 2-3 artistas favoritos ni a un solo género. Respeta su gusto como punto de partida, pero CADA DÍA abre una puerta distinta. Un rockero recibe rock variado (eras, países, subgéneros) y de vez en cuando un puente bien justificado a algo vecino; nunca el mismo artista dos veces en pocos días. Evita repetir artista, escena y sonido de los discos recientes (lista abajo).
+6. NO propongas ninguno de los discos que ya se le mostraron o que ya reseñó (lista abajo). Cada día es un disco distinto, y a poder ser de un ARTISTA distinto.
 7. "reason": 1 a 3 frases cálidas y concretas, citando SOLO señales reales del usuario que aparecen abajo (sus estrellas, sus respuestas, su perfil, su ánimo). PROHIBIDO inventar datos del usuario.
    TIENDE UN PUENTE desde su HISTORIA RECIENTE: si en su diario hay un disco que amó (puntaje alto) o un comentario suyo, arranca desde ahí y conéctalo con el de hoy, para que sienta la continuidad de su viaje — no una frase genérica. Ej.: "Como te voló «X» de Y, hoy te llevo a Z, que comparte ese mismo nervio". Usa el nombre real del disco/comentario que aparece en su diario.${idiomaRegla}`;
 
@@ -88,7 +102,7 @@ SU DIARIO (reseñas recientes, de la más nueva a la más vieja):
 ${input.diarioTexto}
 
 ÁNIMO DE HOY: ${input.mood ?? "(no indicado)"}
-${instruccionTexto}${regresoTexto}${rehacerTexto}
+${peticionTexto}${artistasRecientesTexto}${regresoTexto}${rehacerTexto}
 DISCOS QUE YA CONOCE O YA SE LE MOSTRARON (NO los repitas):
 ${evitarTexto}
 

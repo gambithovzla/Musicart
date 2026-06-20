@@ -398,6 +398,16 @@ integra más profundamente con la escucha real.
   animada. Feed opcional: ver el disco del día de un amigo (nuevo modelo de
   seguimiento, requiere privacidad explícita).
 
+- [x] **7.5 Amplía mi mundo + pido lo que quiero** — dos ajustes para que el
+  disco fresco no orbite siempre los mismos 2-3 artistas y para dar voz al
+  oyente: (a) el prompt de descubrimiento (`discover.ts`) pasó de "gusto ante
+  todo" a "variedad ante todo" (ensanchar género/época/país) y ahora recibe los
+  artistas de días recientes para NO repetir el mismo artista; (b) el gate del
+  día (`LanguageGate`) suma un paso "¿qué te apetece hoy?" con chips de género/
+  ánimo + texto libre para CUALQUIER oyente; ese pedido viaja en la cookie
+  `musicart_pedido` y manda al fabricar (antes era solo-admin). El rehacer del
+  admin sigue con su propio cuadro.
+
 ### Criterios de aceptación
 
 - [ ] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones

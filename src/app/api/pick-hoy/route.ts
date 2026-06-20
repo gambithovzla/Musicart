@@ -20,8 +20,10 @@ import {
   DEVICE_COOKIE,
   TZ_COOKIE,
   LANG_COOKIE,
+  PEDIDO_COOKIE,
   SEEN_TODAY_COOKIE,
   parseTodayLang,
+  parseTodayPedido,
   parseSeenToday,
   buildSeenToday,
 } from "@/lib/device";
@@ -48,17 +50,23 @@ export async function POST(req: Request) {
     // porque los picks de hoy no entran en el historial "reciente" (date < hoy).
     const vistosHoy = parseSeenToday(jar.get(SEEN_TODAY_COOKIE)?.value, date);
 
+    // Lo que el oyente pidió escuchar hoy desde el gate del día (texto libre o
+    // un género). Lo respetamos en la fabricación normal, para CUALQUIER oyente.
+    const pedidoDelDia = parseTodayPedido(jar.get(PEDIDO_COOKIE)?.value, date);
+
     // ¿Pidieron rehacer? Solo admins: guardamos el disco actual para no repetirlo.
-    // También leemos la instrucción en lenguaje natural ("rock en inglés…"), que
-    // solo respetamos si quien pide es admin.
+    // También leemos la instrucción en lenguaje natural ("rock en inglés…") del
+    // cuadro de admin, que solo respetamos en el rehacer si quien pide es admin.
     const { rehacer, instruccion } = await leerCuerpo(req);
     const excluirAlbumIds: string[] = [...vistosHoy];
-    let instruccionAdmin: string | null = null;
+    // Por defecto manda el pedido del día (del gate); al rehacer lo reemplaza la
+    // instrucción que el admin escribió en su cuadro.
+    let peticion: string | null = pedidoDelDia;
     if (rehacer) {
       if (!isAdminEmail(session?.user?.email)) {
         return NextResponse.json({ ok: false, reason: "no-admin" }, { status: 403 });
       }
-      instruccionAdmin = instruccion;
+      peticion = instruccion ?? pedidoDelDia;
       const previo = await albumIdPickDeHoy(deviceId, userId, tz);
       if (previo) excluirAlbumIds.push(previo);
       await borrarPickDeHoy(deviceId, userId, tz);
@@ -66,7 +74,7 @@ export async function POST(req: Request) {
 
     const pick = await generarPickDelDia(deviceId, userId, tz, lang, undefined, {
       excluirAlbumIds,
-      instruccionAdmin,
+      peticion,
     });
 
     // Recordamos lo mostrado hoy (lo previo + el nuevo) para próximos "Rehacer".

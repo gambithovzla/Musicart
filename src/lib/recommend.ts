@@ -47,9 +47,10 @@ type PickCtx = { deviceId: string; userId: string | null };
 export type GenerarPickOpts = {
   /** AlbumIds que no pueden volver a salir (p. ej. el disco de hoy antes de rehacer). */
   excluirAlbumIds?: string[];
-  /** Solo admin: pedido en lenguaje natural para el disco de hoy
-   *  ("rock en inglés estilo Linkin Park"). Manda sobre el gusto al proponer. */
-  instruccionAdmin?: string | null;
+  /** Pedido del oyente en lenguaje natural para el disco de hoy ("rock con
+   *  energía", "algo tipo Linkin Park"). Lo escribe en el gate del día (o el
+   *  admin al rehacer) y manda sobre el gusto al proponer. */
+  peticion?: string | null;
 };
 
 /** AlbumId del pick guardado hoy, si existe. */
@@ -361,7 +362,7 @@ export async function generarPickDelDia(
   const langPick = lang && lang !== "Cualquiera" ? lang : null;
   const excluir = new Set(opts?.excluirAlbumIds ?? []);
   const esRehacer = excluir.size > 0;
-  const instruccionAdmin = opts?.instruccionAdmin?.trim() || null;
+  const peticion = opts?.peticion?.trim() || null;
 
   try {
     // Idempotencia: si ya hay disco de hoy (otra pestaña lo hizo), devolverlo.
@@ -463,6 +464,10 @@ export async function generarPickDelDia(
     }
 
     const patronesTexto = patronesDeEscucha(reviews, picksRecientes);
+    // Artistas de los picks recientes: para no repetir el mismo artista (variedad).
+    const artistasRecientes = [
+      ...new Set(picksRecientes.map((p) => p.album.artist.name)),
+    ];
 
     let propuesta = await proponerDiscoDescubrimiento({
       perfilTexto: perfilATexto(parsedProfile),
@@ -476,7 +481,8 @@ export async function generarPickDelDia(
       esRehacer,
       voz,
       patronesTexto,
-      instruccionAdmin,
+      peticion,
+      artistasRecientes,
     });
 
     if (esRehacer && esObraConocida(propuesta, excluidasObras)) {
@@ -493,7 +499,8 @@ export async function generarPickDelDia(
         esRehacer: true,
         voz,
         patronesTexto,
-        instruccionAdmin,
+        peticion,
+        artistasRecientes,
       });
       if (esObraConocida(propuesta, excluidasObras)) {
         return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
@@ -523,7 +530,8 @@ export async function generarPickDelDia(
         esRehacer: true,
         voz,
         patronesTexto,
-        instruccionAdmin,
+        peticion,
+        artistasRecientes,
       });
       // Verificación del segundo intento: si sigue siendo conflictivo, al catálogo.
       if (esPropuestaConflictiva(propuesta)) {

@@ -284,10 +284,11 @@ async function caerAlCatalogo(
   mood: string | null,
   lang: string | null,
   excluirAlbumIds?: string[],
+  peticion?: string | null,
 ): Promise<PickPersonal | null> {
   const delCatalogo = await recomendarYGuardar(
     ctx,
-    { mood, lang, excluirAlbumIds, forzarDistinto: (excluirAlbumIds?.length ?? 0) > 0 },
+    { mood, lang, excluirAlbumIds, peticion, forzarDistinto: (excluirAlbumIds?.length ?? 0) > 0 },
     tz,
   );
   if (delCatalogo) return delCatalogo;
@@ -410,7 +411,7 @@ export async function generarPickDelDia(
     // Sin señales de gusto no fabricamos (sería un disco al azar): que decida la
     // rotación global. (Normalmente no llegamos aquí: la home filtra antes.)
     if (!profile && reviews.length === 0) {
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
     }
 
     const parsedProfile = profile
@@ -426,7 +427,7 @@ export async function generarPickDelDia(
     // sin costo de generación nueva). Así abrir la app a testers no se dispara.
     if (!(await hayPresupuestoHoy(date))) {
       console.warn("[recommend] tope de generación diario alcanzado; voy al catálogo.");
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
     }
 
     // Obras a evitar, comparables por contenido (artista + núcleo del título),
@@ -503,7 +504,7 @@ export async function generarPickDelDia(
         artistasRecientes,
       });
       if (esObraConocida(propuesta, excluidasObras)) {
-        return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+        return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
       }
     }
 
@@ -536,7 +537,7 @@ export async function generarPickDelDia(
       // Verificación del segundo intento: si sigue siendo conflictivo, al catálogo.
       if (esPropuestaConflictiva(propuesta)) {
         console.warn(`[recommend] segunda propuesta "${propuesta.title}" también era conflictiva; voy al catálogo.`);
-        return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+        return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
       }
     }
 
@@ -569,7 +570,7 @@ export async function generarPickDelDia(
         ? "disco ya visto en el historial"
         : "misma obra ya vista (otro id/título)";
       console.warn(`[recommend] pipeline devolvió ${por}; elijo otro del catálogo.`);
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [result.albumId, ...excluir]);
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [result.albumId, ...excluir], peticion);
     }
 
     // Solo consume presupuesto un disco fabricado de verdad; reutilizar es gratis.
@@ -580,12 +581,12 @@ export async function generarPickDelDia(
       console.warn(
         `[recommend] "${propuesta.title}" de ${propuesta.artist} no pasó verificación; voy al catálogo.`,
       );
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
     }
 
     const dossier = await dossierDelAlbum(result.albumId);
     if (!dossier) {
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
     }
 
     let reason = propuesta.reason?.trim().slice(0, 600) || null;
@@ -617,7 +618,7 @@ export async function generarPickDelDia(
   } catch (err) {
     console.error("[recommend] disco fresco falló, voy al catálogo:", err);
     try {
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
     } catch {
       return null;
     }
@@ -671,6 +672,9 @@ async function recomendarYGuardar(
     regenerated?: boolean;
     excluirAlbumIds?: string[];
     forzarDistinto?: boolean;
+    /** Lo que el oyente pidió hoy en lenguaje natural. Aunque el catálogo sea
+     *  cerrado, elegimos el disco que más se acerque al pedido. */
+    peticion?: string | null;
   },
   tz?: string | null,
 ): Promise<PickPersonal | null> {
@@ -729,12 +733,22 @@ async function recomendarYGuardar(
     // Preferimos discos NUNCA vistos. Si ya recorrió todo el catálogo publicado
     // (edge case), relajamos: permitimos repetir lo ya visto pero seguimos
     // excluyendo lo descartado y lo que puntuó bajo, para no quedar sin disco.
+    // Incluso al relajar, NUNCA re-servimos la MISMA obra que acabamos de excluir
+    // (el disco de hoy/ayer que dispara el rehacer) ni aunque venga con otro id:
+    // ese es justo el "me lo repite cada vez" que queremos cortar.
+    const esObraExcluida = (d: DossierConAlbum): boolean => {
+      const obra: Obra = { title: d.album.title, artist: d.album.artist.name };
+      return excluidasObras.some((o) => mismaObra(obra, o));
+    };
     const sinVistos = catalogo.filter(noVisto);
     const catalogoFiltrado =
       sinVistos.length > 0
         ? sinVistos
         : catalogo.filter(
-            (d) => !excluir.has(d.album.id) && !memoria.dislikedIds.has(d.album.id),
+            (d) =>
+              !excluir.has(d.album.id) &&
+              !memoria.dislikedIds.has(d.album.id) &&
+              !esObraExcluida(d),
           );
     if (catalogoFiltrado.length === 0) return null;
 
@@ -764,6 +778,7 @@ async function recomendarYGuardar(
         returnRitual,
         forzarDistinto: opts.forzarDistinto ?? false,
         patronesTexto,
+        peticion: opts.peticion ?? null,
       });
     } catch (err) {
       // La IA falló: el oyente nunca cae en la rotación global si tenemos sus
@@ -847,6 +862,7 @@ async function elegirConLlm(input: {
   returnRitual: ReturnRitual | null;
   forzarDistinto?: boolean;
   patronesTexto?: string | null;
+  peticion?: string | null;
 }): Promise<{ albumId: string; reason: string }> {
   const catalogoTexto = input.catalogo
     .map((d) => {
@@ -877,6 +893,14 @@ async function elegirConLlm(input: {
     ? `\nREGRESO TRAS AUSENCIA: el usuario vuelve después de ${input.returnRitual.absenceDays} días sin el ritual (último pick: ${input.returnRitual.lastPickDate}). Elige un disco acogedor para reenganchar — prioriza dificultad baja/media si la ausencia fue larga. En "reason" reconoce el regreso con calidez ("te guardé algo", "bienvenido de vuelta"), SIN culpa, SIN mencionar rachas rotas ni gamificación.\n`
     : "";
 
+  // Lo que el oyente pidió hoy (texto libre). El catálogo es cerrado, así que no
+  // siempre se puede cumplir al pie de la letra: elegimos el disco que MÁS se
+  // acerque. Si menciona discos como referencia de un sentimiento, NO elegimos
+  // ese mismo disco — buscamos uno que comparta ese espíritu.
+  const peticionTexto = input.peticion?.trim()
+    ? `\nLO QUE EL OYENTE PIDIÓ HOY (máxima prioridad): «${input.peticion.trim()}». Elige del catálogo el disco que MÁS se acerque a ese pedido (género, idioma, estilo, energía o escena). Si menciona discos o artistas como referencia de cómo quiere SENTIRSE, NO elijas ese mismo disco: busca otro que comparta ese espíritu. Si nada encaja bien, elige lo más cercano y dilo con honestidad en la "reason".\n`
+    : "";
+
   const system = `Eres el curador musical de Musicart: cercano, melómano, hablas en español y de "tú".
 Tu trabajo: elegir UN disco del catálogo para este usuario hoy, y explicar por qué ese disco, para él/ella, hoy.
 
@@ -899,7 +923,7 @@ SU DIARIO (reseñas recientes, de la más nueva a la más vieja):
 ${diarioTexto}
 
 ÁNIMO DE HOY: ${input.mood ?? "(no indicado)"}
-${regeneracionTexto}${regresoTexto}
+${peticionTexto}${regeneracionTexto}${regresoTexto}
 DISCOS RECOMENDADOS EN DÍAS RECIENTES (evítalos si puedes):
 ${recientesTexto}
 

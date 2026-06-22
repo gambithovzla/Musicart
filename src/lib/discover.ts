@@ -60,7 +60,12 @@ export async function proponerDiscoDescubrimiento(input: {
   // los patrones. Sigue intacta la regla anti-alucinación (disco real y documentado).
   const peticionTexto = input.peticion?.trim()
     ? `\nLO QUE EL OYENTE PIDIÓ ESCUCHAR HOY (MÁXIMA PRIORIDAD): «${input.peticion.trim()}».
-Este pedido MANDA por encima del gusto histórico, el ánimo y los patrones de escucha: elige un disco que lo cumpla al pie de la letra (género, idioma, estilo, época, energía o artista que mencione). Si pide un artista concreto, puedes proponer ese artista aunque salga en "artistas recientes". Sigue siendo OBLIGATORIO que sea un álbum de estudio REAL y bien documentado (regla 2 y 3). En la "reason", conecta el disco con lo que pidió. Solo si es imposible cumplirlo con un disco real, elige lo más cercano y dilo con honestidad en la "reason".\n`
+Este pedido MANDA por encima del gusto histórico, el ánimo y los patrones de escucha.
+- Si nombra un GÉNERO, IDIOMA, ÉPOCA, ESTILO o ENERGÍA, cúmplelo al pie de la letra.
+- Si pide EXPLÍCITAMENTE un artista ("quiero a X", "ponme algo de X"), puedes proponer ese artista aunque salga en "artistas recientes".
+- REFERENCIAS COMO INSPIRACIÓN: si menciona discos o artistas para describir cómo quiere SENTIRSE ("algo que me haga sentir como X", "en la vena de X", "parecido a X", "como Y me hizo sentir"), esos nombres son EJEMPLOS para que te inspires, NO discos para recomendárselos: el oyente YA los conoce de sobra. PROHIBIDO proponer el mismo disco que puso de referencia y, salvo que insista, también su mismo artista. Propón algo DISTINTO que comparta ese nervio, esa emoción o esa escena.
+- IDIOMA IMPLÍCITO: aunque el idioma del día sea "Cualquiera", si el pedido o sus referencias apuntan claramente a un idioma o escena (p. ej. menciona artistas que cantan en español), respeta ese idioma al elegir.
+Sigue siendo OBLIGATORIO que sea un álbum de estudio REAL y bien documentado (regla 2 y 3). En la "reason", conecta el disco con lo que pidió (sin prometer que suena idéntico a sus referencias). Solo si es imposible cumplirlo con un disco real, elige lo más cercano y dilo con honestidad en la "reason".\n`
     : "";
 
   // Variedad de artistas: si en días recientes ya sonaron ciertos artistas, NO

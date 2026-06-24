@@ -30,6 +30,7 @@ import { ReflectionForm } from "@/components/ReflectionForm";
 import { ShareAlbum } from "@/components/ShareAlbum";
 import { Paywall } from "@/components/Paywall";
 import { AlbumChat } from "@/components/AlbumChat";
+import { FeedbackCurador } from "@/components/FeedbackCurador";
 import { Narrator, type NarratorSection } from "@/components/Narrator";
 import { FuentesVerificadas } from "@/components/FuentesVerificadas";
 import { SaltoInteractivo } from "@/components/SaltoInteractivo";
@@ -277,6 +278,13 @@ export default async function AlbumPage({
                 initialQuota={chatQuota}
               />
             </div>
+
+            <FeedbackCurador
+              albumId={album.id}
+              albumTitle={album.title}
+              albumArtist={album.artist.name}
+              initialQuota={chatQuota}
+            />
 
             <div className="mb-4 mt-3 flex flex-col gap-3">
               <DossierSection n="02" title={`Quién era ${album.artist.name}`}>

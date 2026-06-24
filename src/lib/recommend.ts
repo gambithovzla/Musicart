@@ -19,7 +19,8 @@ import {
 } from "./return-ritual";
 import { parseJson, type FactsPayload } from "./types";
 import { formatCuriosities, type CuriosityAnswer } from "./curiosities";
-import { proponerDiscoDescubrimiento } from "./discover";
+import { proponerDiscoDescubrimiento, discoCumplePedido } from "./discover";
+import { cargarNotasTexto } from "./listener-notes";
 import { curatorVoz } from "./curators";
 import { runDossierPipeline } from "./dossier/pipeline";
 import { LOVED_THRESHOLD, RATING_MAX, DISLIKED_THRESHOLD } from "./review";
@@ -386,7 +387,7 @@ export async function generarPickDelDia(
     const reviewFilter = reviewsWhere(identity);
     const pastFilter = pastPicksWhere(identity, date);
 
-    const [profile, reviews, picksRecientes, memoria] = await Promise.all([
+    const [profile, reviews, picksRecientes, memoria, notasTexto] = await Promise.all([
       findProfileRecord(identity),
       reviewFilter
         ? prisma.review.findMany({
@@ -406,6 +407,8 @@ export async function generarPickDelDia(
         : Promise.resolve([]),
       // Memoria COMPLETA (todo el historial), para no repetir NUNCA un disco ya visto.
       cargarMemoriaDiscos(identity, date),
+      // Memoria personal: lo que el oyente le ha contado al curador (Fase interacción).
+      cargarNotasTexto(identity),
     ]);
 
     // Sin señales de gusto no fabricamos (sería un disco al azar): que decida la
@@ -417,6 +420,11 @@ export async function generarPickDelDia(
     const parsedProfile = profile
       ? parseJson<Record<string, unknown>>(profile.answersJson, {})
       : null;
+    // El perfil para el prompt incluye su memoria personal (lo que nos contó),
+    // así el disco del día se afina con cada cosa que comparte.
+    const perfilTexto = [perfilATexto(parsedProfile), notasTexto]
+      .filter(Boolean)
+      .join("\n\n");
     const voz = curatorVoz(
       typeof parsedProfile?.curator === "string" ? parsedProfile.curator : undefined,
     );
@@ -471,7 +479,7 @@ export async function generarPickDelDia(
     ];
 
     let propuesta = await proponerDiscoDescubrimiento({
-      perfilTexto: perfilATexto(parsedProfile),
+      perfilTexto,
       diarioTexto: diarioATexto(reviews),
       recientesTexto: recientesATexto(picksRecientes),
       yaConoce,
@@ -489,7 +497,7 @@ export async function generarPickDelDia(
     if (esRehacer && esObraConocida(propuesta, excluidasObras)) {
       console.warn("[recommend] rehacer repitió propuesta; pido otro disco.");
       propuesta = await proponerDiscoDescubrimiento({
-        perfilTexto: perfilATexto(parsedProfile),
+        perfilTexto,
         diarioTexto: diarioATexto(reviews),
         recientesTexto: recientesATexto(picksRecientes),
         yaConoce: [...yaConoce, `"${propuesta.title}" de ${propuesta.artist} (rechazado: ya fue hoy)`],
@@ -517,7 +525,7 @@ export async function generarPickDelDia(
     if (esPropuestaConflictiva(propuesta)) {
       console.warn(`[recommend] propuesta "${propuesta.title}" era pick reciente o ya reseñada; pidiendo disco distinto.`);
       propuesta = await proponerDiscoDescubrimiento({
-        perfilTexto: perfilATexto(parsedProfile),
+        perfilTexto,
         diarioTexto: diarioATexto(reviews),
         recientesTexto: recientesATexto(picksRecientes),
         yaConoce: [
@@ -537,6 +545,59 @@ export async function generarPickDelDia(
       // Verificación del segundo intento: si sigue siendo conflictivo, al catálogo.
       if (esPropuestaConflictiva(propuesta)) {
         console.warn(`[recommend] segunda propuesta "${propuesta.title}" también era conflictiva; voy al catálogo.`);
+        return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
+      }
+    }
+
+    // Barrera dura del PEDIDO: si el oyente pidió algo concreto hoy (un género,
+    // un estilo, un idioma), verificamos que el disco DE VERDAD lo cumpla — no
+    // que "resuene". Es la barrera que faltaba: el proponedor a veces reconoce que
+    // el disco no encaja ("aunque no es un bolero…") y lo recomienda igual,
+    // cayendo en un favorito del perfil. Si no cumple, pedimos otro disco una vez
+    // y, si tampoco, caemos al catálogo (que filtra por el pedido). Solo gastamos
+    // este verificador cuando hubo pedido explícito, no en el día normal.
+    if (peticion) {
+      let intentosPeticion = 0;
+      let veredicto = await discoCumplePedido({
+        peticion,
+        title: propuesta.title,
+        artist: propuesta.artist,
+        lang: langPick,
+      });
+      while (!veredicto.cumple && intentosPeticion < 1) {
+        intentosPeticion += 1;
+        console.warn(
+          `[recommend] "${propuesta.title}" de ${propuesta.artist} NO cumple el pedido «${peticion}» (${veredicto.motivo}); pido otro disco.`,
+        );
+        propuesta = await proponerDiscoDescubrimiento({
+          perfilTexto,
+          diarioTexto: diarioATexto(reviews),
+          recientesTexto: recientesATexto(picksRecientes),
+          yaConoce: [
+            ...yaConoce,
+            `"${propuesta.title}" de ${propuesta.artist} (rechazado: NO cumple el pedido «${peticion}» — ${veredicto.motivo})`,
+          ],
+          mood: mood ?? null,
+          lang: langPick,
+          esRegreso: Boolean(returnRitual),
+          diasAusente: returnRitual?.absenceDays ?? null,
+          esRehacer: true,
+          voz,
+          patronesTexto,
+          peticion,
+          artistasRecientes,
+        });
+        veredicto = await discoCumplePedido({
+          peticion,
+          title: propuesta.title,
+          artist: propuesta.artist,
+          lang: langPick,
+        });
+      }
+      if (!veredicto.cumple) {
+        console.warn(
+          `[recommend] segunda propuesta tampoco cumple el pedido «${peticion}»; voy al catálogo.`,
+        );
         return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
       }
     }
@@ -702,7 +763,7 @@ async function recomendarYGuardar(
     const reviewFilter = reviewsWhere(identity);
     const pastFilter = pastPicksWhere(identity, date);
 
-    const [profile, reviews, catalogo, picksRecientes, memoria] = await Promise.all([
+    const [profile, reviews, catalogo, picksRecientes, memoria, notasTexto] = await Promise.all([
       findProfileRecord(identity),
       reviewFilter
         ? prisma.review.findMany({
@@ -727,6 +788,8 @@ async function recomendarYGuardar(
         : Promise.resolve([]),
       // Memoria COMPLETA (todo el historial), para no repetir NUNCA un disco visto.
       cargarMemoriaDiscos(identity, date),
+      // Memoria personal del oyente (lo que nos contó), para afinar la elección.
+      cargarNotasTexto(identity),
     ]);
 
     if (!profile && reviews.length === 0 && !opts.mood) return null;
@@ -844,6 +907,7 @@ async function recomendarYGuardar(
         patronesTexto,
         peticion: opts.peticion ?? null,
         yaVistosHistorial,
+        notasTexto,
       });
     } catch (err) {
       // La IA falló: el oyente nunca cae en la rotación global si tenemos sus
@@ -932,6 +996,8 @@ async function elegirConLlm(input: {
    *  está agotado (todo visto) para que el LLM elija el que lleva MÁS TIEMPO sin
    *  aparecer, no el que mejor encaja por gusto (evita el bucle del mismo disco). */
   yaVistosHistorial?: string[];
+  /** Memoria personal del oyente (lo que le contó al curador). */
+  notasTexto?: string | null;
 }): Promise<{ albumId: string; reason: string }> {
   const catalogoTexto = input.catalogo
     .map((d) => {
@@ -948,7 +1014,9 @@ async function elegirConLlm(input: {
     })
     .join("\n");
 
-  const perfilTexto = perfilATexto(input.profile);
+  const perfilTexto = [perfilATexto(input.profile), input.notasTexto]
+    .filter(Boolean)
+    .join("\n\n");
   const diarioTexto = diarioATexto(input.reviews);
   const recientesTexto = recientesATexto(input.picksRecientes);
 

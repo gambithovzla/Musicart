@@ -65,7 +65,8 @@ Este pedido MANDA por encima del gusto histórico, el ánimo y los patrones de e
 - Si pide EXPLÍCITAMENTE un artista ("quiero a X", "ponme algo de X"), puedes proponer ese artista aunque salga en "artistas recientes".
 - REFERENCIAS COMO INSPIRACIÓN: si menciona discos o artistas para describir cómo quiere SENTIRSE ("algo que me haga sentir como X", "en la vena de X", "parecido a X", "como Y me hizo sentir"), esos nombres son EJEMPLOS para que te inspires, NO discos para recomendárselos: el oyente YA los conoce de sobra. PROHIBIDO proponer el mismo disco que puso de referencia y, salvo que insista, también su mismo artista. Propón algo DISTINTO que comparta ese nervio, esa emoción o esa escena.
 - IDIOMA IMPLÍCITO: aunque el idioma del día sea "Cualquiera", si el pedido o sus referencias apuntan claramente a un idioma o escena (p. ej. menciona artistas que cantan en español), respeta ese idioma al elegir.
-Sigue siendo OBLIGATORIO que sea un álbum de estudio REAL y bien documentado (regla 2 y 3). En la "reason", conecta el disco con lo que pidió (sin prometer que suena idéntico a sus referencias). Solo si es imposible cumplirlo con un disco real, elige lo más cercano y dilo con honestidad en la "reason".\n`
+Sigue siendo OBLIGATORIO que sea un álbum de estudio REAL y bien documentado (regla 2 y 3). En la "reason", conecta el disco con lo que pidió (sin prometer que suena idéntico a sus referencias).
+- PROHIBIDO ABSOLUTO proponer un disco de OTRO género del que pidió y justificarlo con que "su energía resuena" o "aunque no es un X clásico…". Si pidió un género (bolero, salsa, jazz, metal…), el disco DEBE ser de ese género de verdad — de toda la música grabada existen cientos de discos canónicos de cada género, así que NUNCA es "imposible". Caer en un favorito del perfil que no encaja con el pedido es el peor error que puedes cometer aquí.\n`
     : "";
 
   // Variedad de artistas: si en días recientes ya sonaron ciertos artistas, NO
@@ -147,4 +148,63 @@ Propón el disco de descubrimiento de hoy. Responde el JSON ahora.`;
     year: typeof parsed.year === "number" ? parsed.year : null,
     reason: (parsed.reason ?? "").trim(),
   };
+}
+
+/**
+ * Barrera dura del pedido: cuando el oyente pidió algo concreto hoy ("un bolero",
+ * "rock con energía", "algo en francés"), verificamos con el LLM que el disco
+ * propuesto DE VERDAD cumple ese pedido — no que se le "parezca" o "resuene".
+ *
+ * Por qué existe: el proponedor a veces reconoce que el disco no encaja ("aunque
+ * no es un bolero clásico…") y lo recomienda igual, cayendo en un favorito del
+ * perfil. Los arreglos de prompt no bastaron; esta es la barrera en código,
+ * gemela de la barrera anti-repetición. Si no cumple, quien llama reintenta o cae
+ * al catálogo. Ante la duda devolvemos `true` (no bloqueamos de más): solo
+ * cortamos los desajustes claros (pidió un género y el disco es de otro mundo).
+ *
+ * Las REFERENCIAS de inspiración ("algo tipo Linkin Park", "como me hizo sentir
+ * X") NO son un pedido de ese disco/artista: ahí basta que comparta el espíritu.
+ */
+export async function discoCumplePedido(input: {
+  peticion: string;
+  title: string;
+  artist: string;
+  lang: string | null;
+}): Promise<{ cumple: boolean; motivo: string }> {
+  const system = `Eres un crítico musical estricto que controla la calidad de una recomendación.
+El oyente pidió algo concreto para hoy y otra IA propuso un disco. Tu única tarea: decir si el disco CUMPLE el pedido.
+
+Reglas:
+1. Responde SOLO JSON: {"cumple": true|false, "motivo": "..."} — sin texto extra.
+2. Si el pedido nombra un GÉNERO, ESTILO, ÉPOCA, IDIOMA o ENERGÍA, el disco debe encajar DE VERDAD en eso. Un disco de otro género NO cumple, por bueno que sea. Ejemplo: si pidió "bolero" y el disco es flamenco/pop, "cumple": false.
+3. EXCEPCIÓN — referencias de inspiración: si el pedido usa un artista o disco como ejemplo de cómo quiere SENTIRSE ("algo tipo X", "en la vena de Y", "como me hizo sentir Z"), basta con que el disco comparta ese espíritu, energía o escena; NO hace falta que sea el mismo artista. Ahí sé generoso.
+4. Ante la duda razonable, "cumple": true. Solo marca false cuando el desajuste es CLARO.
+5. Juzga por tu conocimiento musical del disco y el artista, no por lo que diga nadie.`;
+
+  const user = `PEDIDO DEL OYENTE: «${input.peticion.trim()}»${
+    input.lang ? `\nIDIOMA QUE PIDIÓ HOY: ${input.lang}` : ""
+  }
+DISCO PROPUESTO: «${input.title}» de ${input.artist}
+
+¿Este disco cumple el pedido? Responde el JSON ahora.`;
+
+  try {
+    const raw = await llm({
+      system,
+      user,
+      temperature: 0,
+      maxTokens: 120,
+      timeoutMs: LLM_TIMEOUT_MS,
+    });
+    const parsed = extractJson<{ cumple?: boolean; motivo?: string }>(raw);
+    // Sin respuesta clara → no bloqueamos (evita falsos positivos que dejarían
+    // al oyente sin disco fresco por un fallo del verificador).
+    if (typeof parsed.cumple !== "boolean") {
+      return { cumple: true, motivo: "verificador sin respuesta clara" };
+    }
+    return { cumple: parsed.cumple, motivo: (parsed.motivo ?? "").trim() };
+  } catch {
+    // Si el verificador falla, no penalizamos al oyente: dejamos pasar.
+    return { cumple: true, motivo: "verificador no disponible" };
+  }
 }

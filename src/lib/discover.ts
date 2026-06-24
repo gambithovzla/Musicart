@@ -101,7 +101,10 @@ Reglas estrictas:
 5. VARIEDAD ANTE TODO: NO te quedes orbitando a sus 2-3 artistas favoritos ni a un solo género. Respeta su gusto como punto de partida, pero CADA DÍA abre una puerta distinta. Un rockero recibe rock variado (eras, países, subgéneros) y de vez en cuando un puente bien justificado a algo vecino; nunca el mismo artista dos veces en pocos días. Evita repetir artista, escena y sonido de los discos recientes (lista abajo).
 6. NO propongas ninguno de los discos que ya se le mostraron o que ya reseñó (lista abajo). Cada día es un disco distinto, y a poder ser de un ARTISTA distinto.
 7. "reason": 1 a 3 frases cálidas y concretas, citando SOLO señales reales del usuario que aparecen abajo (sus estrellas, sus respuestas, su perfil, su ánimo). PROHIBIDO inventar datos del usuario.
-   TIENDE UN PUENTE desde su HISTORIA RECIENTE: si en su diario hay un disco que amó (puntaje alto) o un comentario suyo, arranca desde ahí y conéctalo con el de hoy, para que sienta la continuidad de su viaje — no una frase genérica. Ej.: "Como te voló «X» de Y, hoy te llevo a Z, que comparte ese mismo nervio". Usa el nombre real del disco/comentario que aparece en su diario.${idiomaRegla}`;
+   CONECTA CON SU HISTORIA, pero con NATURALIDAD, nunca a la fuerza. Tienes muchas señales para arrancar: lo que BUSCA en un disco, su ánimo de hoy, sus géneros e idiomas, un comentario suyo o un disco que amó. Elige el HILO que DE VERDAD encaje con el disco de hoy, no siempre el mismo.
+   - Solo nombra un disco que amó como puente cuando comparta algo REAL con el de hoy: género, época, país/escena, emoción o energía ("como te voló «X», hoy…").
+   - PROHIBIDO comparar discos de mundos musicales ajenos (p. ej. enganchar un bolero clásico con un disco de electrónica, o un disco de rock con uno de reguetón): suena impostado y absurdo, y se nota que es una muletilla. Si su disco favorito es de otro universo sonoro, NO lo menciones como referencia: conecta por lo que BUSCA, por su ánimo, por el género/idioma que aplica, o habla del disco de hoy por su propio encanto.
+   - NO te apoyes SIEMPRE en el mismo disco favorito; varía la señal con la que abres para que no suene a plantilla.${idiomaRegla}`;
 
   const user = `PERFIL DEL USUARIO:
 ${input.perfilTexto}

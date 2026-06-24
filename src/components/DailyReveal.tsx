@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { ImpactoCultural } from "./ImpactoCultural";
 import { DificultadEscucha } from "./DificultadEscucha";
 import { ShareAlbum } from "./ShareAlbum";
+import { DameOtroDisco } from "./DameOtroDisco";
 import type { MadrigueraAlbum } from "@/lib/madriguera";
 import type { AlbumLinks } from "@/lib/types";
 
@@ -30,6 +31,7 @@ export type DailyAlbum = {
   madriguera: MadrigueraAlbum[]; // discos para seguir explorando al terminar
   wowHook?: string | null; // Fase 6.9: curiosidad verificada tras escuchar el disco
   links?: AlbumLinks; // links de streaming directo (Spotify / Apple / YouTube Music)
+  canReroll?: boolean; // oyente con perfil: puede pedir "otro" si no lo encuentra
 };
 
 export function DailyReveal({ album }: { album: DailyAlbum }) {
@@ -166,6 +168,8 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
             subtitle={album.reason ?? album.hook}
           />
         </div>
+
+        {album.canReroll && <DameOtroDisco />}
 
         {album.madriguera.length > 0 && (
           <section className="mt-10">

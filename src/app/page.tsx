@@ -213,6 +213,9 @@ export default async function Home() {
             madriguera,
             wowHook,
             links: albumLinks,
+            // El admin usa "Rehacer"; al resto le ofrecemos "dame otro" si tiene
+            // un disco fabricado a su medida (no en la rotación global genérica).
+            canReroll: Boolean(personal) && !isAdminEmail(session?.user?.email),
           }}
         />
         {initialCuriosityQuestion && (

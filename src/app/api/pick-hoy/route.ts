@@ -31,6 +31,12 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+// Cuántos discos distintos puede fabricarse un oyente por día con "dame otro"
+// (el original + sus reemplazos). Tope para no disparar el costo de IA; el
+// admin con "Rehacer" no tiene este límite. El tope de gasto global (6.6) sigue
+// aplicando por encima de esto.
+const MAX_DISCOS_POR_DIA = 4;
+
 export async function POST(req: Request) {
   try {
     const [session, jar] = await Promise.all([auth(), cookies()]);
@@ -57,16 +63,27 @@ export async function POST(req: Request) {
     // ¿Pidieron rehacer? Solo admins: guardamos el disco actual para no repetirlo.
     // También leemos la instrucción en lenguaje natural ("rock en inglés…") del
     // cuadro de admin, que solo respetamos en el rehacer si quien pide es admin.
-    const { rehacer, instruccion } = await leerCuerpo(req);
+    // rehacer  → control solo-admin (con instrucción libre, sin límite).
+    // otro      → "no lo encontré / dame otro" de cualquier oyente, con tope diario.
+    const { rehacer, otro, instruccion } = await leerCuerpo(req);
     const excluirAlbumIds: string[] = [...vistosHoy];
     // Por defecto manda el pedido del día (del gate); al rehacer lo reemplaza la
     // instrucción que el admin escribió en su cuadro.
     let peticion: string | null = pedidoDelDia;
-    if (rehacer) {
-      if (!isAdminEmail(session?.user?.email)) {
-        return NextResponse.json({ ok: false, reason: "no-admin" }, { status: 403 });
-      }
-      peticion = instruccion ?? pedidoDelDia;
+
+    if (rehacer && !isAdminEmail(session?.user?.email)) {
+      return NextResponse.json({ ok: false, reason: "no-admin" }, { status: 403 });
+    }
+
+    // El oyente no admin que pide "otro" tiene un tope diario de discos fabricados.
+    if (otro && !rehacer && vistosHoy.length >= MAX_DISCOS_POR_DIA) {
+      return NextResponse.json({ ok: false, reason: "limite" });
+    }
+
+    if (rehacer || otro) {
+      // El admin puede dirigir el rehacer con texto libre; el "otro" del oyente
+      // conserva el pedido del día (no inyecta instrucción).
+      if (rehacer) peticion = instruccion ?? pedidoDelDia;
       const previo = await albumIdPickDeHoy(deviceId, userId, tz);
       if (previo) excluirAlbumIds.push(previo);
       await borrarPickDeHoy(deviceId, userId, tz);
@@ -99,16 +116,22 @@ export async function POST(req: Request) {
 
 async function leerCuerpo(
   req: Request,
-): Promise<{ rehacer: boolean; instruccion: string | null }> {
+): Promise<{ rehacer: boolean; otro: boolean; instruccion: string | null }> {
   try {
-    const body = (await req.json()) as { rehacer?: boolean; instruccion?: string };
+    const body = (await req.json()) as {
+      rehacer?: boolean;
+      otro?: boolean;
+      instruccion?: string;
+    };
     const instruccion = body?.instruccion?.trim();
     return {
       rehacer: body?.rehacer === true,
+      otro: body?.otro === true,
       // Cota defensiva: el pedido del admin va a un prompt; lo recortamos.
       instruccion: instruccion ? instruccion.slice(0, 500) : null,
     };
   } catch {
-    return { rehacer: false, instruccion: null }; // sin body (la home dispara sin cuerpo)
+    // sin body (la home dispara la fabricación normal sin cuerpo)
+    return { rehacer: false, otro: false, instruccion: null };
   }
 }

@@ -19,7 +19,7 @@ import {
 } from "./return-ritual";
 import { parseJson, type FactsPayload } from "./types";
 import { formatCuriosities, type CuriosityAnswer } from "./curiosities";
-import { proponerDiscoDescubrimiento } from "./discover";
+import { proponerDiscoDescubrimiento, discoCumplePedido } from "./discover";
 import { curatorVoz } from "./curators";
 import { runDossierPipeline } from "./dossier/pipeline";
 import { LOVED_THRESHOLD, RATING_MAX, DISLIKED_THRESHOLD } from "./review";
@@ -537,6 +537,59 @@ export async function generarPickDelDia(
       // Verificación del segundo intento: si sigue siendo conflictivo, al catálogo.
       if (esPropuestaConflictiva(propuesta)) {
         console.warn(`[recommend] segunda propuesta "${propuesta.title}" también era conflictiva; voy al catálogo.`);
+        return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
+      }
+    }
+
+    // Barrera dura del PEDIDO: si el oyente pidió algo concreto hoy (un género,
+    // un estilo, un idioma), verificamos que el disco DE VERDAD lo cumpla — no
+    // que "resuene". Es la barrera que faltaba: el proponedor a veces reconoce que
+    // el disco no encaja ("aunque no es un bolero…") y lo recomienda igual,
+    // cayendo en un favorito del perfil. Si no cumple, pedimos otro disco una vez
+    // y, si tampoco, caemos al catálogo (que filtra por el pedido). Solo gastamos
+    // este verificador cuando hubo pedido explícito, no en el día normal.
+    if (peticion) {
+      let intentosPeticion = 0;
+      let veredicto = await discoCumplePedido({
+        peticion,
+        title: propuesta.title,
+        artist: propuesta.artist,
+        lang: langPick,
+      });
+      while (!veredicto.cumple && intentosPeticion < 1) {
+        intentosPeticion += 1;
+        console.warn(
+          `[recommend] "${propuesta.title}" de ${propuesta.artist} NO cumple el pedido «${peticion}» (${veredicto.motivo}); pido otro disco.`,
+        );
+        propuesta = await proponerDiscoDescubrimiento({
+          perfilTexto: perfilATexto(parsedProfile),
+          diarioTexto: diarioATexto(reviews),
+          recientesTexto: recientesATexto(picksRecientes),
+          yaConoce: [
+            ...yaConoce,
+            `"${propuesta.title}" de ${propuesta.artist} (rechazado: NO cumple el pedido «${peticion}» — ${veredicto.motivo})`,
+          ],
+          mood: mood ?? null,
+          lang: langPick,
+          esRegreso: Boolean(returnRitual),
+          diasAusente: returnRitual?.absenceDays ?? null,
+          esRehacer: true,
+          voz,
+          patronesTexto,
+          peticion,
+          artistasRecientes,
+        });
+        veredicto = await discoCumplePedido({
+          peticion,
+          title: propuesta.title,
+          artist: propuesta.artist,
+          lang: langPick,
+        });
+      }
+      if (!veredicto.cumple) {
+        console.warn(
+          `[recommend] segunda propuesta tampoco cumple el pedido «${peticion}»; voy al catálogo.`,
+        );
         return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
       }
     }

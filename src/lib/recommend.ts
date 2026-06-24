@@ -559,16 +559,31 @@ export async function generarPickDelDia(
       ? { title: resultAlbum.title, artist: resultAlbum.artist.name }
       : null;
     const obraRepetida = resultObra ? esObraConocida(resultObra, obrasAEvitar) : false;
+
+    // Coherencia propuesta ↔ disco resuelto: el pipeline resuelve título y artista
+    // contra MusicBrainz/iTunes, y a veces ESA búsqueda cae en un disco DISTINTO al
+    // propuesto cuando el título propuesto no existe tal cual (p. ej. "Boleros de
+    // Oro" de Luis Miguel resuelve, por coincidencia de título, a "15 Boleros de
+    // Oro" de Los Cadetes de Linares). Si pasara, la "reason" —escrita sobre la
+    // propuesta— nombraría un disco/artista que NO es el que se muestra, y el
+    // oyente ve "te traigo X de Y" sobre la portada de otro disco. Lo rechazamos y
+    // caemos al catálogo, donde la razón siempre calza con el disco mostrado.
+    const propuestaObra: Obra = { title: propuesta.title, artist: propuesta.artist };
+    const resuelveOtraObra = !resultObra || !mismaObra(resultObra, propuestaObra);
+
     if (
       excluir.has(result.albumId) ||
       memoria.vistosIds.has(result.albumId) ||
-      obraRepetida
+      obraRepetida ||
+      resuelveOtraObra
     ) {
       const por = excluir.has(result.albumId)
         ? "mismo disco excluido"
         : memoria.vistosIds.has(result.albumId)
         ? "disco ya visto en el historial"
-        : "misma obra ya vista (otro id/título)";
+        : obraRepetida
+        ? "misma obra ya vista (otro id/título)"
+        : `disco distinto al propuesto ("${propuesta.title}" de ${propuesta.artist} → "${resultObra?.title ?? "?"}" de ${resultObra?.artist ?? "?"})`;
       console.warn(`[recommend] pipeline devolvió ${por}; elijo otro del catálogo.`);
       return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [result.albumId, ...excluir], peticion);
     }

@@ -741,16 +741,65 @@ async function recomendarYGuardar(
       return excluidasObras.some((o) => mismaObra(obra, o));
     };
     const sinVistos = catalogo.filter(noVisto);
+
+    // Catálogo agotado: el oyente ya vio todo. En vez de dar rienda suelta al LLM
+    // (que siempre elige su "mejor match" = el mismo disco en bucle), aplicamos dos
+    // capas de protección:
+    //   1. Hard: preferimos álbumes que NO aparezcan entre los más recientes de
+    //      memoria.vistosObras (que viene ordenado del más reciente al más antiguo).
+    //      Así forzamos que salga algo que lleve tiempo sin aparecer.
+    //   2. Soft: pasamos el historial al LLM como lista "PROHIBIDO repetir" para que
+    //      elija el que lleve MÁS tiempo sin aparecer si el hard tier está vacío.
+    const catalogoBase = catalogo.filter(
+      (d) =>
+        !excluir.has(d.album.id) &&
+        !memoria.dislikedIds.has(d.album.id) &&
+        !esObraExcluida(d),
+    );
+
+    // "Recientes" = los primeros MAX_RECIENTES de vistosObras (más nuevos primero).
+    // Excluimos hasta el 70% del historial (tope: 90), asegurándonos de dejar al
+    // menos 1 álbum disponible en el tier de recencia para no vaciar el pool.
+    const MAX_RECIENTES = Math.min(
+      90,
+      Math.max(0, Math.floor(memoria.vistosObras.length * 0.7) - 1),
+    );
+    const recientesKeys = new Set(
+      memoria.vistosObras
+        .slice(0, MAX_RECIENTES)
+        .map((o) => `${normalizar(o.artist)}||${nucleoTitulo(o.title)}`),
+    );
+    const noMuyReciente = (d: DossierConAlbum): boolean => {
+      const k = `${normalizar(d.album.artist.name)}||${nucleoTitulo(d.album.title)}`;
+      return !recientesKeys.has(k);
+    };
+    const catalogoConRecencia = catalogoBase.filter(noMuyReciente);
+
     const catalogoFiltrado =
       sinVistos.length > 0
         ? sinVistos
-        : catalogo.filter(
-            (d) =>
-              !excluir.has(d.album.id) &&
-              !memoria.dislikedIds.has(d.album.id) &&
-              !esObraExcluida(d),
-          );
+        : catalogoConRecencia.length > 0
+        ? catalogoConRecencia
+        : catalogoBase;
+
+    if (sinVistos.length === 0) {
+      console.warn(
+        `[recommend] catálogo agotado (${catalogo.length} álbumes, todos vistos); ` +
+          `usando ${catalogoConRecencia.length > 0 ? `recencia (${catalogoConRecencia.length} no recientes)` : "catálogo relajado completo"}.`,
+      );
+    }
+
     if (catalogoFiltrado.length === 0) return null;
+
+    // Cuando el catálogo está agotado, pasamos el historial al LLM para que
+    // evite el bucle "mismo disco siempre" incluso si todos ya se mostraron.
+    const MAX_YA_VISTOS_LLM = 80;
+    const yaVistosHistorial: string[] | undefined =
+      sinVistos.length === 0
+        ? memoria.vistosObras
+            .slice(0, MAX_YA_VISTOS_LLM)
+            .map((o) => `"${o.title}" de ${o.artist}`)
+        : undefined;
 
     const parsedProfile = profile
       ? parseJson<Record<string, unknown>>(profile.answersJson, {})
@@ -779,6 +828,7 @@ async function recomendarYGuardar(
         forzarDistinto: opts.forzarDistinto ?? false,
         patronesTexto,
         peticion: opts.peticion ?? null,
+        yaVistosHistorial,
       });
     } catch (err) {
       // La IA falló: el oyente nunca cae en la rotación global si tenemos sus
@@ -863,6 +913,10 @@ async function elegirConLlm(input: {
   forzarDistinto?: boolean;
   patronesTexto?: string | null;
   peticion?: string | null;
+  /** Historial completo de discos ya vistos/reseñados: se usa cuando el catálogo
+   *  está agotado (todo visto) para que el LLM elija el que lleva MÁS TIEMPO sin
+   *  aparecer, no el que mejor encaja por gusto (evita el bucle del mismo disco). */
+  yaVistosHistorial?: string[];
 }): Promise<{ albumId: string; reason: string }> {
   const catalogoTexto = input.catalogo
     .map((d) => {
@@ -901,6 +955,14 @@ async function elegirConLlm(input: {
     ? `\nLO QUE EL OYENTE PIDIÓ HOY (máxima prioridad): «${input.peticion.trim()}». Elige del catálogo el disco que MÁS se acerque a ese pedido (género, idioma, estilo, energía o escena). Si menciona discos o artistas como referencia de cómo quiere SENTIRSE, NO elijas ese mismo disco: busca otro que comparta ese espíritu. Si nada encaja bien, elige lo más cercano y dilo con honestidad en la "reason".\n`
     : "";
 
+  // Cuando el catálogo está agotado (el oyente ya vio todo) y el LLM recibe una
+  // lista de discos ya vistos, se le pide que evite los más recientes y prefiera
+  // el que lleva más tiempo sin aparecer. Así evitamos el bucle del mismo disco.
+  const yaVistosTexto =
+    input.yaVistosHistorial && input.yaVistosHistorial.length > 0
+      ? `\nDISCOS QUE YA SE LE RECOMENDARON ANTES (PROHIBIDO repetir; elige el que lleve MÁS TIEMPO sin aparecer):\n${input.yaVistosHistorial.map((t) => `- ${t}`).join("\n")}\n`
+      : "";
+
   const system = `Eres el curador musical de Musicart: cercano, melómano, hablas en español y de "tú".
 Tu trabajo: elegir UN disco del catálogo para este usuario hoy, y explicar por qué ese disco, para él/ella, hoy.
 
@@ -909,7 +971,7 @@ Reglas estrictas:
 2. "albumId" debe ser EXACTAMENTE uno de los albumId del catálogo.
 3. "reason": 1 a 3 frases en español, cálidas y concretas, citando SOLO señales reales del usuario que aparecen abajo (sus estrellas, sus respuestas, su perfil, su ánimo de hoy). Ej.: "Le diste 5★ a X…", "dijiste que buscas la historia…".
 4. Sobre el disco solo puedes mencionar lo que aparece en el catálogo (título, artista, año, duración, etiquetas). PROHIBIDO inventar datos del álbum o del usuario.
-5. PROHIBIDO elegir un disco que aparezca en la lista "DISCOS RECOMENDADOS EN DÍAS RECIENTES". El catálogo que ves ya los excluye — si ves uno ahí, es un error de lectura.
+5. PROHIBIDO elegir un disco que aparezca en la lista "DISCOS RECOMENDADOS EN DÍAS RECIENTES" ni en "DISCOS QUE YA SE LE RECOMENDARON ANTES". Si aun así ves que todas las opciones del catálogo están en esas listas, elige el disco que lleve MÁS TIEMPO sin aparecer (el que esté más abajo en "YA SE LE RECOMENDARON ANTES").
 6. Si el usuario indicó su ánimo de hoy, dale prioridad como señal.
 7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.${input.lang ? `\n8. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO elegir un álbum donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Si no hay ninguno en el catálogo que encaje, elige el más cercano y menciónalo en la "reason".` : ""}`;
 
@@ -923,7 +985,7 @@ SU DIARIO (reseñas recientes, de la más nueva a la más vieja):
 ${diarioTexto}
 
 ÁNIMO DE HOY: ${input.mood ?? "(no indicado)"}
-${peticionTexto}${regeneracionTexto}${regresoTexto}
+${peticionTexto}${regeneracionTexto}${regresoTexto}${yaVistosTexto}
 DISCOS RECOMENDADOS EN DÍAS RECIENTES (evítalos si puedes):
 ${recientesTexto}
 

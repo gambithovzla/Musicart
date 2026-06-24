@@ -196,6 +196,26 @@ model DossierChat {
   @@index([listenerKey, albumId, dateKey])
 }
 
+// Memoria personal del oyente: lo que le cuenta al curador sobre lo que escucha
+// ("esta canción me fascina", "odio esto"). Alimenta el prompt del disco diario
+// para conocerlo cada vez mejor. Denormalizamos título/artista para no depender
+// de joins ni de que el álbum siga existiendo. source: "free" (solo memoria,
+// gratis) | "chat" (además pidió la respuesta del melómano, con costo de IA).
+model ListenerNote {
+  id          String   @id @default(cuid())
+  deviceId    String?
+  userId      String?
+  albumId     String? // disco donde lo escribió (referencia suelta, sin relación)
+  albumTitle  String? // denormalizado para el prompt y el export
+  albumArtist String? // denormalizado
+  text        String // el comentario del oyente
+  source      String   @default("free") // free | chat
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([deviceId, createdAt])
+}
+
 // Fase 5.2 — rebobinada mensual: carta cacheada por oyente y mes
 model Rewind {
   id          String   @id @default(cuid())

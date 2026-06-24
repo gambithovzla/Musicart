@@ -38,6 +38,12 @@ export type UserDataExport = {
     reason: string | null;
     mood: string | null;
   }[];
+  notes: {
+    albumTitle: string | null;
+    albumArtist: string | null;
+    text: string;
+    date: string;
+  }[];
 };
 
 function picksWhere(identity: ListenerIdentity) {
@@ -61,7 +67,7 @@ export async function buildUserDataExport(
   const profileFilter = profileWhere(identity);
   const pickFilter = picksWhere(identity);
 
-  const [profile, reviews, picks] = await Promise.all([
+  const [profile, reviews, picks, notes] = await Promise.all([
     profileFilter
       ? prisma.profile.findFirst({ where: profileFilter })
       : Promise.resolve(null),
@@ -77,6 +83,12 @@ export async function buildUserDataExport(
           where: pickFilter,
           include: { album: { include: { artist: true } } },
           orderBy: { date: "desc" },
+        })
+      : Promise.resolve([]),
+    pickFilter
+      ? prisma.listenerNote.findMany({
+          where: pickFilter,
+          orderBy: { createdAt: "desc" },
         })
       : Promise.resolve([]),
   ]);
@@ -114,6 +126,12 @@ export async function buildUserDataExport(
       reason: p.reason,
       mood: p.mood,
     })),
+    notes: notes.map((n) => ({
+      albumTitle: n.albumTitle,
+      albumArtist: n.albumArtist,
+      text: n.text,
+      date: n.createdAt.toISOString(),
+    })),
   };
 }
 
@@ -131,6 +149,7 @@ export async function purgeListenerData(
   }
   if (pickFilter) {
     await prisma.dailyPick.deleteMany({ where: pickFilter });
+    await prisma.listenerNote.deleteMany({ where: pickFilter });
   }
   if (profileFilter) {
     await prisma.profile.deleteMany({ where: profileFilter });

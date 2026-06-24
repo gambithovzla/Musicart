@@ -79,7 +79,7 @@ Sigue siendo OBLIGATORIO que sea un álbum de estudio REAL y bien documentado (r
       : "";
 
   const idiomaRegla = input.lang
-    ? `\n8. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO proponer un disco donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Solo si no existe ningún disco decente en ese idioma puedes elegir el más cercano, y debes mencionarlo en la "reason".`
+    ? `\n8. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO proponer un disco donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Solo si no existe ningún disco decente en ese idioma puedes elegir el más cercano, y debes mencionarlo en la "reason".\n   ATENCIÓN — los idiomas son distintos entre sí: "Español" (castellano, hispanohablante) ≠ "Português" (Brasil, Portugal) ≠ "Français" ≠ "English" ≠ "Italiano". No confundas lenguas romances ni des por válido un disco en portugués cuando pidieron español, ni uno en francés cuando pidieron italiano. Sé estricto: si dudas del idioma principal de un artista, elige otro del que estés seguro.`
     : "";
 
   const vozCurador = input.voz?.trim()

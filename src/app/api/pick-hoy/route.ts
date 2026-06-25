@@ -92,6 +92,9 @@ export async function POST(req: Request) {
     const pick = await generarPickDelDia(deviceId, userId, tz, lang, undefined, {
       excluirAlbumIds,
       peticion,
+      // El admin/dueño no respeta el tope diario: para él la app siempre fabrica
+      // fresco, nunca le repite un disco del catálogo por haberse agotado el tope.
+      omitirPresupuesto: isAdminEmail(session?.user?.email),
     });
 
     // Recordamos lo mostrado hoy (lo previo + el nuevo) para próximos "Rehacer".

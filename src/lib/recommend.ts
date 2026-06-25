@@ -3,7 +3,7 @@
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { todayKey, getTodayPick } from "./daily";
+import { todayKey } from "./daily";
 import { llm, extractJson, hayClaveIA } from "./dossier/llm";
 import {
   type ListenerIdentity,
@@ -294,50 +294,114 @@ async function caerAlCatalogo(
   );
   if (delCatalogo) return delCatalogo;
 
-  const rotacion = await getTodayPick(tz);
-  if (!rotacion) return null;
-  const excluir = new Set(excluirAlbumIds ?? []);
-  if (excluir.has(rotacion.album.id)) {
-    const otro = await prisma.dossier.findFirst({
-      where: {
-        status: "published",
-        locale: "es",
-        albumId: { notIn: [...excluir] },
-      },
+  // Última red: rotación global PERO consciente de la memoria del oyente —
+  // nunca le re-sirve un disco que ya vio (y lo deja guardado para el futuro).
+  return rotacionParaOyente(ctx, date, mood, excluirAlbumIds);
+}
+
+/**
+ * Rotación global consciente de la memoria del oyente. Es la diferencia clave
+ * con `getTodayPick` (rotación ciega): elige un disco publicado que el oyente
+ * NO haya visto nunca, lo GUARDA como su pick de hoy y lo devuelve. Así:
+ *   1. No se le repite un disco ya mostrado (ni por rotación ni por catálogo).
+ *   2. Queda registrado en su historial, para que la dedup lo recuerde mañana
+ *      — el hueco que hacía que un disco "solo visto por rotación" volviera a
+ *      proponerse como si fuera nuevo.
+ * Si ya vio TODO el catálogo, cae a la rotación determinista (mejor mostrar
+ * algo conocido que dejar la home sin disco).
+ */
+async function rotacionParaOyente(
+  ctx: PickCtx,
+  date: string,
+  mood: string | null,
+  excluirAlbumIds?: string[],
+): Promise<PickPersonal | null> {
+  const identity: ListenerIdentity = { deviceId: ctx.deviceId, userId: ctx.userId };
+  const [dossiers, memoria] = await Promise.all([
+    prisma.dossier.findMany({
+      where: { status: "published", locale: "es" },
       include: { album: { include: { artist: true } } },
       orderBy: { id: "asc" },
-    });
-    if (otro) {
-      await saveTodaysPick(ctx, date, {
-        albumId: otro.album.id,
-        reason: null,
-        mood,
-        regenerated: true,
-      });
-      return {
-        dossier: otro,
-        reason: null,
-        mood,
-        regenerated: true,
-        returnPick: false,
-        absenceDays: null,
-      };
-    }
-  }
+    }),
+    cargarMemoriaDiscos(identity, date),
+  ]);
+  if (dossiers.length === 0) return null;
+
+  const excluir = new Set(excluirAlbumIds ?? []);
+  const noVisto = (d: DossierConAlbum): boolean => {
+    const obra: Obra = { title: d.album.title, artist: d.album.artist.name };
+    return (
+      !excluir.has(d.album.id) &&
+      !memoria.vistosIds.has(d.album.id) &&
+      !memoria.vistosObras.some((o) => mismaObra(obra, o))
+    );
+  };
+
+  const noVistos = dossiers.filter(noVisto);
+  // Preferimos lo no visto; si ya vio todo, rotamos sobre el catálogo (excluyendo
+  // al menos lo descartado explícitamente) para no quedarnos sin disco.
+  const pool =
+    noVistos.length > 0
+      ? noVistos
+      : dossiers.filter((d) => !excluir.has(d.album.id));
+  if (pool.length === 0) return null;
+
+  // Elección determinista por día (estable dentro del día, varía entre días).
+  const [y, m, dd] = date.split("-").map(Number);
+  const dias = Math.floor(Date.UTC(y, m - 1, dd) / 86_400_000);
+  const elegido = pool[dias % pool.length];
+
   await saveTodaysPick(ctx, date, {
-    albumId: rotacion.album.id,
+    albumId: elegido.album.id,
     reason: null,
     mood,
-    regenerated: false,
+    regenerated: (excluirAlbumIds?.length ?? 0) > 0,
   });
   return {
-    dossier: rotacion,
+    dossier: elegido,
     reason: null,
     mood,
-    regenerated: false,
+    regenerated: (excluirAlbumIds?.length ?? 0) > 0,
     returnPick: false,
     absenceDays: null,
   };
+}
+
+/**
+ * Pick de rotación para la home cuando el oyente NO puede fabricar disco fresco
+ * (sin IA o sin señales todavía): elige un disco que no haya visto y lo GUARDA,
+ * en vez de mostrar la rotación ciega sin registrarla. Registrar lo mostrado es
+ * lo que evita que ese mismo disco vuelva a "salir como nuevo" más adelante.
+ */
+export async function getRotacionPickGuardada(
+  deviceId: string,
+  userId?: string | null,
+  tz?: string | null,
+): Promise<PickPersonal | null> {
+  const ctx: PickCtx = { deviceId, userId: userId ?? null };
+  if (!ctx.deviceId && !ctx.userId) return null;
+  try {
+    const date = todayKey(tz);
+    // Idempotencia: si ya hay pick de hoy (lo guardó otra pestaña), úsalo.
+    const guardado = await findTodaysPick(ctx, date);
+    if (guardado) {
+      const dossier = await dossierDelAlbum(guardado.albumId);
+      if (dossier) {
+        return {
+          dossier,
+          reason: guardado.reason,
+          mood: guardado.mood,
+          regenerated: guardado.regenerated,
+          returnPick: guardado.returnPick,
+          absenceDays: guardado.absenceDays,
+        };
+      }
+    }
+    return await rotacionParaOyente(ctx, date, null, []);
+  } catch (err) {
+    console.error("[recommend] rotación para la home falló:", err);
+    return null;
+  }
 }
 
 /**

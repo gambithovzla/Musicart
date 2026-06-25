@@ -5,7 +5,11 @@
 import { cookies } from "next/headers";
 import { auth } from "@/auth";
 import { getTodayPick, formatDateEs, todayKey } from "@/lib/daily";
-import { getPersonalizedPick, puedeGenerarPickFresco } from "@/lib/recommend";
+import {
+  getPersonalizedPick,
+  puedeGenerarPickFresco,
+  getRotacionPickGuardada,
+} from "@/lib/recommend";
 import { getMadriguera } from "@/lib/madriguera";
 import { hasProfile } from "@/app/actions";
 import { DEVICE_COOKIE, TZ_COOKIE, LANG_COOKIE, parseTodayLang } from "@/lib/device";
@@ -112,7 +116,15 @@ export default async function Home() {
     }
   }
 
-  const pick = personal?.dossier ?? (await getTodayPick(tz));
+  // Sin pick personalizado caemos a la rotación global, pero a una versión que
+  // GUARDA y REGISTRA el disco mostrado (y evita los que el oyente ya vio): así
+  // ningún disco "solo visto por rotación" vuelve a salir como si fuera nuevo.
+  // Si no hay identidad (ni device ni cuenta) usamos la rotación ciega clásica.
+  const rotacion =
+    !personal && (deviceId || userId)
+      ? await getRotacionPickGuardada(deviceId, userId, tz)
+      : null;
+  const pick = personal?.dossier ?? rotacion?.dossier ?? (await getTodayPick(tz));
 
   if (!pick) {
     return (

@@ -19,7 +19,11 @@ import {
 } from "./return-ritual";
 import { parseJson, type FactsPayload } from "./types";
 import { formatCuriosities, type CuriosityAnswer } from "./curiosities";
-import { proponerDiscoDescubrimiento, discoCumplePedido } from "./discover";
+import {
+  proponerDiscoDescubrimiento,
+  discoCumplePedido,
+  type DiscoPropuesto,
+} from "./discover";
 import { cargarNotasTexto } from "./listener-notes";
 import { curatorVoz } from "./curators";
 import { runDossierPipeline } from "./dossier/pipeline";
@@ -52,6 +56,10 @@ export type GenerarPickOpts = {
    *  energía", "algo tipo Linkin Park"). Lo escribe en el gate del día (o el
    *  admin al rehacer) y manda sobre el gusto al proponer. */
   peticion?: string | null;
+  /** Salta el tope de gasto diario (solo el admin/dueño): para él la app SIEMPRE
+   *  fabrica fresco — el tope existe para no dispararse con testers, no para el
+   *  dueño, a quien repetirle un disco es justo lo que queremos evitar. */
+  omitirPresupuesto?: boolean;
 };
 
 /** AlbumId del pick guardado hoy, si existe. */
@@ -497,7 +505,9 @@ export async function generarPickDelDia(
     // Tope de gasto: si ya fabricamos el máximo de discos nuevos hoy, no gastamos
     // más IA — el oyente recibe un disco del catálogo existente (igual personal,
     // sin costo de generación nueva). Así abrir la app a testers no se dispara.
-    if (!(await hayPresupuestoHoy(date))) {
+    // El admin/dueño está EXENTO: a él nunca le caemos al catálogo por tope (sería
+    // repetirle un disco, justo lo que evitamos).
+    if (!opts?.omitirPresupuesto && !(await hayPresupuestoHoy(date))) {
       console.warn("[recommend] tope de generación diario alcanzado; voy al catálogo.");
       return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
     }
@@ -542,219 +552,171 @@ export async function generarPickDelDia(
       ...new Set(picksRecientes.map((p) => p.album.artist.name)),
     ];
 
-    let propuesta = await proponerDiscoDescubrimiento({
+    // Argumentos comunes del proponedor; lo único que cambia entre intentos es la
+    // lista de rechazos acumulada (para empujar al LLM lejos de lo ya intentado).
+    const argsPropuesta = (extraYaConoce: string[]) => ({
       perfilTexto,
       diarioTexto: diarioATexto(reviews),
       recientesTexto: recientesATexto(picksRecientes),
-      yaConoce,
+      yaConoce: [...yaConoce, ...extraYaConoce],
       mood: mood ?? null,
       lang: langPick,
       esRegreso: Boolean(returnRitual),
       diasAusente: returnRitual?.absenceDays ?? null,
-      esRehacer,
+      // Tras el primer rechazo tratamos cada intento como "rehacer": activa el
+      // texto que le pide al LLM algo DISTINTO de forma explícita.
+      esRehacer: esRehacer || extraYaConoce.length > 0,
       voz,
       patronesTexto,
       peticion,
       artistasRecientes,
     });
 
-    if (esRehacer && esObraConocida(propuesta, excluidasObras)) {
-      console.warn("[recommend] rehacer repitió propuesta; pido otro disco.");
-      propuesta = await proponerDiscoDescubrimiento({
-        perfilTexto,
-        diarioTexto: diarioATexto(reviews),
-        recientesTexto: recientesATexto(picksRecientes),
-        yaConoce: [...yaConoce, `"${propuesta.title}" de ${propuesta.artist} (rechazado: ya fue hoy)`],
-        mood: mood ?? null,
-        lang: langPick,
-        esRegreso: false,
-        diasAusente: null,
-        esRehacer: true,
-        voz,
-        patronesTexto,
-        peticion,
-        artistasRecientes,
-      });
-      if (esObraConocida(propuesta, excluidasObras)) {
-        return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
-      }
-    }
-
-    // Red de seguridad: el LLM a veces ignora la lista "yaConoce". Si propuso
-    // un disco que ya se le mostró en los últimos días O que ya reseñó (la MISMA
-    // obra, aunque el título no calce letra a letra), pedimos otro explícitamente.
-    // Si el segundo intento también falla, vamos al catálogo.
-    const esPropuestaConflictiva = (p: Obra) => esObraConocida(p, obrasAEvitar);
-
-    if (esPropuestaConflictiva(propuesta)) {
-      console.warn(`[recommend] propuesta "${propuesta.title}" era pick reciente o ya reseñada; pidiendo disco distinto.`);
-      propuesta = await proponerDiscoDescubrimiento({
-        perfilTexto,
-        diarioTexto: diarioATexto(reviews),
-        recientesTexto: recientesATexto(picksRecientes),
-        yaConoce: [
-          ...yaConoce,
-          `"${propuesta.title}" de ${propuesta.artist} (rechazado: ya conocido, PROHIBIDO repetir)`,
-        ],
-        mood: mood ?? null,
-        lang: langPick,
-        esRegreso: Boolean(returnRitual),
-        diasAusente: returnRitual?.absenceDays ?? null,
-        esRehacer: true,
-        voz,
-        patronesTexto,
-        peticion,
-        artistasRecientes,
-      });
-      // Verificación del segundo intento: si sigue siendo conflictivo, al catálogo.
-      if (esPropuestaConflictiva(propuesta)) {
-        console.warn(`[recommend] segunda propuesta "${propuesta.title}" también era conflictiva; voy al catálogo.`);
-        return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
-      }
-    }
-
-    // Barrera dura del PEDIDO: si el oyente pidió algo concreto hoy (un género,
-    // un estilo, un idioma), verificamos que el disco DE VERDAD lo cumpla — no
-    // que "resuene". Es la barrera que faltaba: el proponedor a veces reconoce que
-    // el disco no encaja ("aunque no es un bolero…") y lo recomienda igual,
-    // cayendo en un favorito del perfil. Si no cumple, pedimos otro disco una vez
-    // y, si tampoco, caemos al catálogo (que filtra por el pedido). Solo gastamos
-    // este verificador cuando hubo pedido explícito, no en el día normal.
-    if (peticion) {
-      let intentosPeticion = 0;
-      let veredicto = await discoCumplePedido({
-        peticion,
-        title: propuesta.title,
-        artist: propuesta.artist,
-        lang: langPick,
-      });
-      while (!veredicto.cumple && intentosPeticion < 1) {
-        intentosPeticion += 1;
-        console.warn(
-          `[recommend] "${propuesta.title}" de ${propuesta.artist} NO cumple el pedido «${peticion}» (${veredicto.motivo}); pido otro disco.`,
-        );
-        propuesta = await proponerDiscoDescubrimiento({
-          perfilTexto,
-          diarioTexto: diarioATexto(reviews),
-          recientesTexto: recientesATexto(picksRecientes),
-          yaConoce: [
-            ...yaConoce,
-            `"${propuesta.title}" de ${propuesta.artist} (rechazado: NO cumple el pedido «${peticion}» — ${veredicto.motivo})`,
-          ],
-          mood: mood ?? null,
-          lang: langPick,
-          esRegreso: Boolean(returnRitual),
-          diasAusente: returnRitual?.absenceDays ?? null,
-          esRehacer: true,
-          voz,
-          patronesTexto,
-          peticion,
-          artistasRecientes,
-        });
-        veredicto = await discoCumplePedido({
-          peticion,
-          title: propuesta.title,
-          artist: propuesta.artist,
-          lang: langPick,
-        });
-      }
-      if (!veredicto.cumple) {
-        console.warn(
-          `[recommend] segunda propuesta tampoco cumple el pedido «${peticion}»; voy al catálogo.`,
-        );
-        return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
-      }
-    }
-
-    // El pipeline investiga, narra, verifica y publica (o reutiliza si ya existe).
-    const result = await runDossierPipeline(propuesta.title, propuesta.artist, {
-      publish: true,
-    });
-
-    // Post-pipeline: rechazar si el resultado es el disco a excluir o CUALQUIER
-    // disco que ya se le recomendó/reseñó alguna vez (memoria completa) — aunque
-    // el pipeline lo devuelva como "reused". Comparamos por id Y por obra: el
-    // pipeline puede devolver una fila distinta (mbid/iTunes) que en realidad es
-    // el mismo disco que ya vio.
-    const resultAlbum = await prisma.album.findUnique({
-      where: { id: result.albumId },
-      include: { artist: true },
-    });
-    const resultObra: Obra | null = resultAlbum
-      ? { title: resultAlbum.title, artist: resultAlbum.artist.name }
-      : null;
-    const obraRepetida = resultObra ? esObraConocida(resultObra, obrasAEvitar) : false;
-
-    // Coherencia propuesta ↔ disco resuelto: el pipeline resuelve título y artista
-    // contra MusicBrainz/iTunes, y a veces ESA búsqueda cae en un disco DISTINTO al
-    // propuesto cuando el título propuesto no existe tal cual (p. ej. "Boleros de
-    // Oro" de Luis Miguel resuelve, por coincidencia de título, a "15 Boleros de
-    // Oro" de Los Cadetes de Linares). Si pasara, la "reason" —escrita sobre la
-    // propuesta— nombraría un disco/artista que NO es el que se muestra, y el
-    // oyente ve "te traigo X de Y" sobre la portada de otro disco. Lo rechazamos y
-    // caemos al catálogo, donde la razón siempre calza con el disco mostrado.
-    const propuestaObra: Obra = { title: propuesta.title, artist: propuesta.artist };
-    const resuelveOtraObra = !resultObra || !mismaObra(resultObra, propuestaObra);
-
-    if (
-      excluir.has(result.albumId) ||
-      memoria.vistosIds.has(result.albumId) ||
-      obraRepetida ||
-      resuelveOtraObra
-    ) {
-      const por = excluir.has(result.albumId)
-        ? "mismo disco excluido"
-        : memoria.vistosIds.has(result.albumId)
-        ? "disco ya visto en el historial"
-        : obraRepetida
-        ? "misma obra ya vista (otro id/título)"
-        : `disco distinto al propuesto ("${propuesta.title}" de ${propuesta.artist} → "${resultObra?.title ?? "?"}" de ${resultObra?.artist ?? "?"})`;
-      console.warn(`[recommend] pipeline devolvió ${por}; elijo otro del catálogo.`);
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [result.albumId, ...excluir], peticion);
-    }
-
-    // Solo consume presupuesto un disco fabricado de verdad; reutilizar es gratis.
-    if (!result.reused) await registrarGeneracion(date);
-
-    // Solo mostramos lo verificado. Si quedó en borrador, caemos al catálogo.
-    if (result.status !== "published") {
-      console.warn(
-        `[recommend] "${propuesta.title}" de ${propuesta.artist} no pasó verificación; voy al catálogo.`,
-      );
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
-    }
-
-    const dossier = await dossierDelAlbum(result.albumId);
-    if (!dossier) {
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
-    }
-
-    let reason = propuesta.reason?.trim().slice(0, 600) || null;
-    if (returnRitual && (!reason || reason.length < 40)) {
-      reason = fallbackReturnReason(
-        returnRitual.absenceDays,
-        dossier.album.title,
-        dossier.album.artist.name,
-      );
-    }
-
-    await saveTodaysPick(ctx, date, {
-      albumId: dossier.album.id,
-      reason,
-      mood: mood ?? null,
-      regenerated: esRehacer,
-      returnPick: Boolean(returnRitual),
-      absenceDays: returnRitual?.absenceDays ?? null,
-    });
-
-    return {
-      dossier,
-      reason,
-      mood: mood ?? null,
-      regenerated: esRehacer,
-      returnPick: Boolean(returnRitual),
-      absenceDays: returnRitual?.absenceDays ?? null,
+    // Discos que el LLM ya propuso (o que el pipeline resolvió) y rechazamos en
+    // ESTA fabricación. Se acumulan intento a intento para empujar al proponedor
+    // hacia un disco genuinamente nuevo. Para un oyente con historial rico —o el
+    // dueño, cuyo catálogo publicado ES básicamente su propio historial— un solo
+    // reintento no basta: el LLM gravita a los mismos discos canónicos y, al
+    // rendirse pronto, caíamos al catálogo… que para él es justo una repetición.
+    const rechazados: string[] = [];
+    const rechazar = (p: Obra, motivo: string) => {
+      rechazados.push(`"${p.title}" de ${p.artist} (rechazado: ${motivo} — PROHIBIDO repetir)`);
     };
+
+    // Una propuesta es conflictiva si es una obra ya vista (memoria completa) o,
+    // al rehacer, uno de los discos excluidos hoy.
+    const esConflictiva = (p: Obra) =>
+      esObraConocida(p, obrasAEvitar) || (esRehacer && esObraConocida(p, excluidasObras));
+
+    // Consigue una PROPUESTA que pase los filtros baratos (no repetida + cumple el
+    // pedido) en pocas llamadas del proponedor (texto, baratas). Así el pipeline
+    // (caro) solo corre sobre un disco que YA sabemos nuevo y acorde al pedido.
+    const MAX_PROPUESTAS = 6;
+    const conseguirPropuesta = async (): Promise<DiscoPropuesto | null> => {
+      for (let i = 0; i < MAX_PROPUESTAS; i++) {
+        const p = await proponerDiscoDescubrimiento(argsPropuesta(rechazados));
+        if (esConflictiva(p)) {
+          console.warn(
+            `[recommend] propuesta "${p.title}" de ${p.artist} ya conocida; pido otra (${i + 1}/${MAX_PROPUESTAS}).`,
+          );
+          rechazar(p, "ya conocido");
+          continue;
+        }
+        if (peticion) {
+          const v = await discoCumplePedido({
+            peticion,
+            title: p.title,
+            artist: p.artist,
+            lang: langPick,
+          });
+          if (!v.cumple) {
+            console.warn(
+              `[recommend] "${p.title}" de ${p.artist} NO cumple el pedido «${peticion}» (${v.motivo}); pido otra.`,
+            );
+            rechazar(p, `no cumple el pedido «${peticion}» — ${v.motivo}`);
+            continue;
+          }
+        }
+        return p;
+      }
+      return null;
+    };
+
+    // Varias pasadas COMPLETAS (propuesta → pipeline → verificación post-pipeline).
+    // Solo si TODAS fallan caemos al catálogo, que para el oyente principal sería
+    // una repetición. Acotamos las pasadas de pipeline (son caras) pero damos
+    // margen para encontrar de verdad un disco fresco antes de rendirnos.
+    const MAX_PIPELINE = 3;
+    for (let intento = 0; intento < MAX_PIPELINE; intento++) {
+      const propuesta = await conseguirPropuesta();
+      if (!propuesta) break; // el proponedor no logró nada nuevo → catálogo
+
+      // El pipeline investiga, narra, verifica y publica (o reutiliza si ya existe).
+      const result = await runDossierPipeline(propuesta.title, propuesta.artist, {
+        publish: true,
+      });
+
+      // Post-pipeline: comparamos por id Y por obra. El pipeline resuelve título y
+      // artista contra MusicBrainz/iTunes y puede caer en (a) un disco que ya vio
+      // —aunque venga como "reused" con otro id/título—, (b) una obra DISTINTA a la
+      // propuesta (la "reason" hablaría de otro disco), o (c) un borrador que no
+      // pasó verificación. En cualquiera de esos casos NO lo servimos: anotamos el
+      // rechazo y volvemos a intentar fabricar algo nuevo.
+      const resultAlbum = await prisma.album.findUnique({
+        where: { id: result.albumId },
+        include: { artist: true },
+      });
+      const resultObra: Obra | null = resultAlbum
+        ? { title: resultAlbum.title, artist: resultAlbum.artist.name }
+        : null;
+      const obraRepetida = resultObra ? esObraConocida(resultObra, obrasAEvitar) : false;
+      const propuestaObra: Obra = { title: propuesta.title, artist: propuesta.artist };
+      const resuelveOtraObra = !resultObra || !mismaObra(resultObra, propuestaObra);
+
+      if (
+        excluir.has(result.albumId) ||
+        memoria.vistosIds.has(result.albumId) ||
+        obraRepetida ||
+        resuelveOtraObra ||
+        result.status !== "published"
+      ) {
+        const por = excluir.has(result.albumId)
+          ? "mismo disco excluido"
+          : memoria.vistosIds.has(result.albumId)
+          ? "disco ya visto en el historial"
+          : obraRepetida
+          ? "misma obra ya vista (otro id/título)"
+          : resuelveOtraObra
+          ? `disco distinto al propuesto ("${propuesta.title}" de ${propuesta.artist} → "${resultObra?.title ?? "?"}" de ${resultObra?.artist ?? "?"})`
+          : "no pasó verificación (quedó en borrador)";
+        console.warn(
+          `[recommend] intento ${intento + 1}/${MAX_PIPELINE}: pipeline devolvió ${por}; reintento.`,
+        );
+        // Que ni la propuesta ni el disco resuelto vuelvan a salir en próximos intentos.
+        rechazar(propuestaObra, por);
+        if (resultObra) rechazar(resultObra, por);
+        continue;
+      }
+
+      // Solo consume presupuesto un disco fabricado de verdad; reutilizar es gratis.
+      if (!result.reused) await registrarGeneracion(date);
+
+      const dossier = await dossierDelAlbum(result.albumId);
+      if (!dossier) break; // raro: publicado pero sin dossier → catálogo
+
+      let reason = propuesta.reason?.trim().slice(0, 600) || null;
+      if (returnRitual && (!reason || reason.length < 40)) {
+        reason = fallbackReturnReason(
+          returnRitual.absenceDays,
+          dossier.album.title,
+          dossier.album.artist.name,
+        );
+      }
+
+      await saveTodaysPick(ctx, date, {
+        albumId: dossier.album.id,
+        reason,
+        mood: mood ?? null,
+        regenerated: esRehacer,
+        returnPick: Boolean(returnRitual),
+        absenceDays: returnRitual?.absenceDays ?? null,
+      });
+
+      return {
+        dossier,
+        reason,
+        mood: mood ?? null,
+        regenerated: esRehacer,
+        returnPick: Boolean(returnRitual),
+        absenceDays: returnRitual?.absenceDays ?? null,
+      };
+    }
+
+    // Agotamos los intentos de fabricar algo nuevo: última red, el catálogo.
+    console.warn(
+      "[recommend] no logré fabricar un disco nuevo tras varios intentos; voy al catálogo.",
+    );
+    return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
   } catch (err) {
     console.error("[recommend] disco fresco falló, voy al catálogo:", err);
     try {

@@ -603,7 +603,7 @@ export async function generarPickDelDia(
     // Consigue una PROPUESTA que pase los filtros baratos (no repetida + cumple el
     // pedido) en pocas llamadas del proponedor (texto, baratas). Así el pipeline
     // (caro) solo corre sobre un disco que YA sabemos nuevo y acorde al pedido.
-    const MAX_PROPUESTAS = 6;
+    const MAX_PROPUESTAS = 8;
     const conseguirPropuesta = async (): Promise<DiscoPropuesto | null> => {
       for (let i = 0; i < MAX_PROPUESTAS; i++) {
         const p = await proponerDiscoDescubrimiento(argsPropuesta(rechazados));
@@ -637,11 +637,17 @@ export async function generarPickDelDia(
     // Varias pasadas COMPLETAS (propuesta → pipeline → verificación post-pipeline).
     // Solo si TODAS fallan caemos al catálogo, que para el oyente principal sería
     // una repetición. Acotamos las pasadas de pipeline (son caras) pero damos
-    // margen para encontrar de verdad un disco fresco antes de rendirnos.
-    const MAX_PIPELINE = 3;
+    // margen para encontrar de verdad un disco fresco antes de rendirnos: con
+    // millones de discos en el mundo y solo unas decenas que evitar, rendirse y
+    // repetir es el peor resultado posible.
+    const MAX_PIPELINE = 4;
     for (let intento = 0; intento < MAX_PIPELINE; intento++) {
       const propuesta = await conseguirPropuesta();
-      if (!propuesta) break; // el proponedor no logró nada nuevo → catálogo
+      // El proponedor solo nombró discos ya vistos en esta ronda. NO nos rendimos:
+      // la lista de rechazos (`rechazados`) creció, así que el siguiente intento
+      // empuja al proponedor MÁS LEJOS de sus favoritos canónicos (que son justo
+      // los que el oyente ya conoce). Rendirse aquí = caer al catálogo = repetir.
+      if (!propuesta) continue;
 
       // El pipeline investiga, narra, verifica y publica (o reutiliza si ya existe).
       const result = await runDossierPipeline(propuesta.title, propuesta.artist, {

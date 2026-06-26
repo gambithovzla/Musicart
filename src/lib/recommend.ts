@@ -346,12 +346,24 @@ async function rotacionParaOyente(
   };
 
   const noVistos = dossiers.filter(noVisto);
-  // Preferimos lo no visto; si ya vio todo, rotamos sobre el catálogo (excluyendo
-  // al menos lo descartado explícitamente) para no quedarnos sin disco.
-  const pool =
-    noVistos.length > 0
-      ? noVistos
-      : dossiers.filter((d) => !excluir.has(d.album.id));
+  // Preferimos lo no visto. Si ya vio TODO, no rotamos a ciegas sobre el catálogo
+  // (ahí volvería a tocarle un disco recién mostrado): nos quedamos con el tercio
+  // que lleva MÁS TIEMPO sin aparecer y elegimos determinista dentro de ese
+  // grupo. Así, por agotamiento, nunca le re-servimos el disco de ayer.
+  let pool: DossierConAlbum[];
+  if (noVistos.length > 0) {
+    pool = noVistos;
+  } else {
+    const disponibles = dossiers.filter((d) => !excluir.has(d.album.id));
+    const rango = rangoPorRecencia(memoria.vistosObras);
+    pool = [...disponibles]
+      .sort(
+        (a, b) =>
+          rango({ title: b.album.title, artist: b.album.artist.name }) -
+          rango({ title: a.album.title, artist: a.album.artist.name }),
+      )
+      .slice(0, Math.max(1, Math.ceil(disponibles.length * 0.3)));
+  }
   if (pool.length === 0) return null;
 
   // Elección determinista por día (estable dentro del día, varía entre días).
@@ -879,12 +891,27 @@ async function recomendarYGuardar(
     };
     const catalogoConRecencia = catalogoBase.filter(noMuyReciente);
 
+    // Última red cuando ya vio TODO el catálogo y hasta el filtro de recencia se
+    // quedó vacío (catálogo pequeño, como el del dueño): en vez de reabrir TODO
+    // el catálogo —donde volvería a colarse un disco recién mostrado, el clásico
+    // "me repite el mismo cada vez"— nos quedamos con el tercio que lleva MÁS
+    // TIEMPO sin aparecer. Así, por agotamiento, sale lo más viejo, nunca lo de
+    // ayer.
+    const rango = rangoPorRecencia(memoria.vistosObras);
+    const colaPorRecencia = [...catalogoBase]
+      .sort(
+        (a, b) =>
+          rango({ title: b.album.title, artist: b.album.artist.name }) -
+          rango({ title: a.album.title, artist: a.album.artist.name }),
+      )
+      .slice(0, Math.max(1, Math.ceil(catalogoBase.length * 0.3)));
+
     const catalogoFiltrado =
       sinVistos.length > 0
         ? sinVistos
         : catalogoConRecencia.length > 0
         ? catalogoConRecencia
-        : catalogoBase;
+        : colaPorRecencia;
 
     if (sinVistos.length === 0) {
       console.warn(
@@ -1327,6 +1354,26 @@ function mismaObra(a: { title: string; artist: string }, b: { title: string; art
   const nucA = nucleoTitulo(a.title);
   const nucB = nucleoTitulo(b.title);
   return nucA.length > 0 && nucA === nucB;
+}
+
+// Antigüedad de cada obra: su posición en la lista de vistos (0 = el más
+// reciente, números mayores = hace más tiempo; nunca visto = el más viejo de
+// todos). Cuando el oyente ya recorrió TODO el catálogo (caso típico del dueño,
+// cuyo catálogo publicado ES su propio historial), esto nos deja preferir
+// SIEMPRE el disco que lleva más tiempo sin aparecer y nunca re-servir el de
+// ayer por agotamiento. Espera `vistosObras` ordenado del más reciente al más
+// antiguo (como lo entrega cargarMemoriaDiscos).
+function rangoPorRecencia(
+  vistosObras: Obra[],
+): (a: { title: string; artist: string }) => number {
+  const rank = new Map<string, number>();
+  vistosObras.forEach((o, i) => {
+    const k = `${normalizar(o.artist)}||${nucleoTitulo(o.title)}`;
+    if (!rank.has(k)) rank.set(k, i);
+  });
+  return (a) =>
+    rank.get(`${normalizar(a.artist)}||${nucleoTitulo(a.title)}`) ??
+    Number.MAX_SAFE_INTEGER;
 }
 
 function elegirPorGusto(input: {

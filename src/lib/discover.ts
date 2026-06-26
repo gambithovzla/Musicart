@@ -4,7 +4,7 @@
 // gusto, su diario y su ánimo. Luego el pipeline (facts → narra → verifica) lo
 // fabrica. Así cada día nace un disco nuevo, personalizado — no uno "sembrado".
 
-import { llm, extractJson } from "./dossier/llm";
+import { llm, llmGeneration, extractJson } from "./dossier/llm";
 
 const LLM_TIMEOUT_MS = 12_000;
 
@@ -123,7 +123,13 @@ ${input.recientesTexto}
 
 Propón el disco de descubrimiento de hoy. Responde el JSON ahora.`;
 
-  const raw = await llm({
+  // Elegir QUÉ disco proponer de entre TODA la música es el paso que más
+  // conocimiento musical exige: el modelo barato gravita a los mismos 15-20
+  // discos megafamosos (justo los que el oyente ya conoce) y nos empuja a
+  // repetir. Por eso el proponedor usa GENERATION_MODEL (premium) si está
+  // configurado; sin esa variable, sigue con el modelo barato de runtime — el
+  // costo por defecto no cambia, pero el dueño tiene la palanca para más variedad.
+  const raw = await llmGeneration({
     system,
     user,
     temperature: 0.8, // más variedad: cada día un disco distinto

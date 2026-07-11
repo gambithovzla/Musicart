@@ -38,6 +38,7 @@ export default async function RutaTematicaPage({
       year: true,
       coverUrl: true,
       impact: true,
+      difficulty: true,
       factsJson: true,
       artist: { select: { name: true } },
     },

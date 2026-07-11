@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { prisma } from "@/lib/db";
-import { THEMATIC_ROUTES } from "@/lib/thematic-routes";
+import { THEMATIC_ROUTES, MIN_ALBUMS_RUTA } from "@/lib/thematic-routes";
 import { matchRouteAlbums } from "@/lib/thematic-match";
 
 export const dynamic = "force-dynamic";
@@ -20,16 +20,20 @@ export default async function ExplorarPage() {
       year: true,
       coverUrl: true,
       impact: true,
+      difficulty: true,
       factsJson: true,
       artist: { select: { name: true } },
     },
     orderBy: { id: "desc" }, // id es cuid (ordenable por tiempo): más nuevos primero
   });
 
+  // Solo rutas con suficientes discos reales: una colección se siente colección
+  // con al menos MIN_ALBUMS_RUTA discos. Las demás se ocultan hasta que el
+  // catálogo crezca (nada de rutas de relleno).
   const routes = THEMATIC_ROUTES.map((route) => {
     const matched = matchRouteAlbums(route, catalog);
     return { route, count: matched.length, preview: matched.slice(0, 3) };
-  }).filter((r) => r.count > 0);
+  }).filter((r) => r.count >= MIN_ALBUMS_RUTA);
 
   return (
     <main className="px-6 pb-10 pt-12">
@@ -89,8 +93,11 @@ export default async function ExplorarPage() {
       </div>
 
       {routes.length === 0 && (
-        <p className="mt-10 text-center text-sm text-dim">
-          El catálogo aún crece — vuelve pronto para ver las rutas.
+        <p className="mt-8 rounded-2xl border border-white/10 bg-surface p-5 text-sm leading-relaxed text-dim">
+          Las rutas se arman solas: cada una aparece cuando el catálogo reúne al
+          menos {MIN_ALBUMS_RUTA} discos de un mismo mundo (un género, los de más
+          impacto, los más exigentes…). Sigue descubriendo discos y se irán
+          llenando. Mientras, tienes toda la biblioteca aquí abajo.
         </p>
       )}
 

@@ -30,6 +30,8 @@ model Album {
   linksJson   String  @default("{}") // { spotify, appleMusic, youtubeMusic }
   paletteJson String? // swatches extraídos de la portada
   factsJson   String  @default("{}") // facts payload con fuentes (grounding IA)
+  showcase    Boolean @default(false) // en la vitrina del curador (favoritos del admin)
+  showcaseAt  DateTime? // cuándo se puso en la vitrina (orden de exhibición)
 
   artistId   String
   artist     Artist      @relation(fields: [artistId], references: [id])
@@ -38,6 +40,8 @@ model Album {
   dailyPicks   DailyPick[]
   dossierViews DossierView[]
   duetPicks    DuetPick[]
+
+  @@index([showcase, showcaseAt])
 }
 
 model Dossier {

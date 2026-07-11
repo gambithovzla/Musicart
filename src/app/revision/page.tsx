@@ -14,6 +14,8 @@ import { AnalyticsPanel } from "./AnalyticsPanel";
 import { TtsControls } from "./TtsControls";
 import { GenerarDiscoForm } from "./GenerarDiscoForm";
 import { RecalcularImpactos } from "./RecalcularImpactos";
+import { BuscarYCrear } from "./BuscarYCrear";
+import { CuradorAlbumes, type AlbumCurable } from "./CuradorAlbumes";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -63,6 +65,33 @@ export default async function RevisionPage() {
   const generadosHoy = await generacionesHoy(todayKey());
   const topeDiario = dailyGenerationBudget();
 
+  // Lista de curaduría: un disco por álbum publicado, con el puntaje del curador
+  // y si está en la vitrina. Deduplicamos por álbum (puede haber >1 dossier).
+  const adminUserId = session.user.id;
+  const vistosAlbum = new Set<string>();
+  const albumesUnicos = publicados.filter((d) => {
+    if (vistosAlbum.has(d.albumId)) return false;
+    vistosAlbum.add(d.albumId);
+    return true;
+  });
+  const misReviews = adminUserId
+    ? await prisma.review.findMany({
+        where: { userId: adminUserId, albumId: { in: albumesUnicos.map((d) => d.albumId) } },
+        select: { albumId: true, rating: true },
+      })
+    : [];
+  const ratingPorAlbum = new Map(misReviews.map((r) => [r.albumId, r.rating]));
+  const curables: AlbumCurable[] = albumesUnicos.map((d) => ({
+    albumId: d.albumId,
+    title: d.album.title,
+    artist: d.album.artist.name,
+    year: d.album.year,
+    coverUrl: d.album.coverUrl,
+    showcase: d.album.showcase,
+    rating: ratingPorAlbum.get(d.albumId) ?? null,
+  }));
+  const enVitrina = curables.filter((a) => a.showcase).length;
+
   const ttsRows = publicados.map((d) => ({
     id: d.id,
     albumId: d.albumId,
@@ -83,6 +112,16 @@ export default async function RevisionPage() {
       <AnalyticsPanel metrics={metrics} />
 
       <section className="mt-10">
+        <h2 className="font-serif text-xl">Buscar y crear</h2>
+        <p className="mt-1 text-sm text-dim">
+          Busca un disco o artista, tócalo y la IA fabrica su dossier completo
+          —historia, anécdotas, notas canción por canción, verificado. Luego
+          puntúalo y ponlo en tu vitrina.
+        </p>
+        <BuscarYCrear />
+      </section>
+
+      <section className="mt-12">
         <h2 className="font-serif text-xl">Crear un disco</h2>
         <p className="mt-1 text-sm text-dim">
           Toca el botón y la IA elige y crea un disco nuevo para el catálogo —las
@@ -162,6 +201,27 @@ export default async function RevisionPage() {
               </div>
             ))}
           </div>
+        )}
+      </section>
+
+      <section className="mt-12">
+        <h2 className="font-serif text-xl">
+          Tu vitrina{" "}
+          <span className="text-base text-dim">({enVitrina} en exhibición)</span>
+        </h2>
+        <p className="mt-1 text-sm text-dim">
+          Puntúa tus discos y elige cuáles se exhiben en{" "}
+          <Link href="/vitrina" className="text-album underline underline-offset-2">
+            la vitrina pública
+          </Link>
+          . Marca ★ los que atesoras.
+        </p>
+        {curables.length === 0 ? (
+          <p className="mt-5 rounded-2xl bg-surface p-5 text-sm text-dim">
+            Aún no hay discos publicados para curar. Crea uno arriba.
+          </p>
+        ) : (
+          <CuradorAlbumes albums={curables} />
         )}
       </section>
 

@@ -1,70 +1,115 @@
 "use client";
 
-// Vista "estantería": cada disco es un lomo de vinilo, coloreado con la paleta
-// de su portada, con el título y el artista en vertical. Al pasar/tocar, el lomo
-// se asoma como si lo sacaras del estante. El conjunto descansa sobre una repisa.
+// Vista "estantería": cada disco es un VINILO en su funda. Por encima asoma el
+// disco negro con sus surcos y su etiqueta central (teñida con la paleta). La
+// funda muestra el título en vertical con brillo de plástico. Al tocar, el
+// vinilo se levanta y se abre el visor de admiración.
 
-import Link from "next/link";
+import { useState } from "react";
 import type { VitrinaAlbum } from "@/lib/vitrina";
+import { AlbumLightbox } from "./AlbumLightbox";
 
 export function Estanteria({ albums }: { albums: VitrinaAlbum[] }) {
+  const [activo, setActivo] = useState<VitrinaAlbum | null>(null);
+
   return (
-    <div className="relative">
-      <div className="flex flex-wrap items-end gap-[3px] px-1">
-        {albums.map((a) => (
-          <Lomo key={a.id} album={a} />
-        ))}
+    <>
+      <div className="relative">
+        <div className="flex flex-wrap items-end gap-[3px] px-1 pt-8">
+          {albums.map((a) => (
+            <Vinilo key={a.id} album={a} onOpen={() => setActivo(a)} />
+          ))}
+        </div>
+        {/* Repisa de madera bajo los vinilos. */}
+        <div className="h-2.5 rounded-b-sm bg-gradient-to-b from-[#4a3824] via-[#2e2314] to-[#160f08] shadow-[0_8px_18px_rgba(0,0,0,0.6)]" />
+        <div className="h-1 bg-black/40" />
       </div>
-      {/* Repisa de madera bajo los lomos. */}
-      <div className="mt-0 h-2 rounded-b-sm bg-gradient-to-b from-[#3a2c1c] to-[#1c150d] shadow-[0_6px_14px_rgba(0,0,0,0.5)]" />
-    </div>
+
+      <AlbumLightbox album={activo} onClose={() => setActivo(null)} />
+    </>
   );
 }
 
-function Lomo({ album }: { album: VitrinaAlbum }) {
+function Vinilo({ album, onOpen }: { album: VitrinaAlbum; onOpen: () => void }) {
   const oscuro = album.palette?.darkVibrant ?? album.palette?.darkMuted ?? "#2a2218";
   const vivo = album.palette?.vibrant ?? album.palette?.lightVibrant ?? "#c8a24a";
   const texto = album.palette?.lightVibrant ?? "#f3eee6";
 
-  // Ancho variable sutil para que se vea como discos de distinto grosor.
-  const ancho = 30 + ((album.title.length * 7) % 12);
+  // Grosor variable sutil: unos vinilos más gruesos que otros.
+  const ancho = 34 + ((album.title.length * 7) % 12);
+  // Desde el canto solo asoma la CÚPULA superior del disco (mismo ancho que la
+  // funda, para no solaparse con los vecinos).
+  const disco = ancho;
+  const peek = Math.round(ancho * 0.5); // cuánto asoma por encima de la funda
 
   return (
-    <Link
-      href={`/album/${album.id}`}
+    <button
+      type="button"
+      onClick={onOpen}
       title={`${album.title} — ${album.artist}`}
-      className="group relative block h-[200px] shrink-0 overflow-hidden rounded-t-[3px] shadow-md transition-transform duration-300 hover:-translate-y-3"
-      style={{
-        width: ancho,
-        background: `linear-gradient(90deg, ${oscuro} 0%, ${vivo} 50%, ${oscuro} 100%)`,
-      }}
+      className="group relative block shrink-0"
+      style={{ width: ancho, height: 210 }}
     >
-      {/* Brillo del canto. */}
+      {/* Disco negro con surcos, asomando por encima de la funda. */}
       <span
         aria-hidden
-        className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-white/20"
-      />
-      <span
-        className="absolute inset-0 flex items-center justify-center px-1 py-3"
+        className="absolute left-1/2 z-0 -translate-x-1/2 rounded-full transition-transform duration-300 ease-out group-hover:-translate-y-2"
         style={{
-          writingMode: "vertical-rl",
-          textOrientation: "mixed",
-          color: texto,
+          top: 0,
+          width: disco,
+          height: disco,
+          background: `repeating-radial-gradient(circle at 50% 50%, #060606 0px, #060606 1px, #1e1e1e 2.2px, #101010 3.2px)`,
+          boxShadow: "0 4px 10px rgba(0,0,0,0.55)",
+          // Solo se ve la cúpula superior; el resto queda tras la funda.
+          clipPath: `inset(0 0 ${disco - peek}px 0)`,
+        }}
+      />
+      {/* Brillo del disco. */}
+      <span
+        aria-hidden
+        className="absolute left-1/2 z-0 -translate-x-1/2 rounded-full opacity-40 transition-transform duration-300 group-hover:-translate-y-2"
+        style={{
+          top: 0,
+          width: disco,
+          height: disco,
+          background:
+            "linear-gradient(120deg, transparent 35%, rgba(255,255,255,0.35) 48%, transparent 60%)",
+          clipPath: `inset(0 0 ${disco - peek}px 0)`,
+        }}
+      />
+
+      {/* Funda del vinilo. */}
+      <span
+        className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-center overflow-hidden rounded-t-[3px] shadow-[2px_0_6px_rgba(0,0,0,0.4)] transition-transform duration-300 group-hover:-translate-y-2"
+        style={{
+          height: 210 - peek + 6,
+          background: `linear-gradient(90deg, ${oscuro} 0%, ${vivo} 52%, ${oscuro} 100%)`,
         }}
       >
-        <span className="truncate text-[11px] font-semibold tracking-wide">
-          {album.title}
-        </span>
-        <span className="mt-1 truncate text-[9px] opacity-80">{album.artist}</span>
-      </span>
-      {album.rating != null && (
+        {/* Reflejo de plástico. */}
         <span
-          className="absolute inset-x-0 bottom-1 text-center text-[8px] font-bold"
-          style={{ color: texto }}
+          aria-hidden
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(100deg, transparent 42%, rgba(255,255,255,0.22) 50%, transparent 58%)",
+          }}
+        />
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-[3px] w-px bg-white/25"
+        />
+        {/* Título en vertical. */}
+        <span
+          className="relative flex items-center justify-center gap-2 px-1 py-3"
+          style={{ writingMode: "vertical-rl", textOrientation: "mixed", color: texto }}
         >
-          {album.rating}
+          <span className="truncate text-[11px] font-semibold tracking-wide">
+            {album.title}
+          </span>
+          <span className="truncate text-[9px] opacity-80">{album.artist}</span>
         </span>
-      )}
-    </Link>
+      </span>
+    </button>
   );
 }

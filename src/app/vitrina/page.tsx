@@ -2,8 +2,11 @@
 // con la paleta de cada portada. La pieza de marca para coleccionistas.
 
 import Link from "next/link";
+import { auth } from "@/auth";
+import { isAdminEmail } from "@/lib/admin";
 import { getVitrinaEstantes } from "@/lib/vitrina";
 import { VitrinaVistas } from "./VitrinaVistas";
+import { BuscarYCrear } from "../revision/BuscarYCrear";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +17,9 @@ export const metadata = {
 };
 
 export default async function VitrinaPage() {
-  const estantes = await getVitrinaEstantes();
+  const [estantes, session] = await Promise.all([getVitrinaEstantes(), auth()]);
   const total = estantes.reduce((n, e) => n + e.albums.length, 0);
+  const isAdmin = isAdminEmail(session?.user?.email);
 
   return (
     <main className="px-6 pb-16 pt-14">
@@ -27,6 +31,26 @@ export default async function VitrinaPage() {
           vista. Tócala para leer su historia.
         </p>
       </header>
+
+      {isAdmin && (
+        <details className="mt-8 rounded-2xl border border-album/20 bg-album/5 p-4" open={total === 0}>
+          <summary className="cursor-pointer list-none text-sm font-medium text-album-light">
+            🔍 Buscar un disco y añadirlo a tu vitrina
+          </summary>
+          <p className="mt-2 text-xs text-dim">
+            Escribe un disco o artista, tócalo y la IA lo fabrica. Al terminar,
+            púntualo y mándalo a la vitrina. También puedes marcar ★ cualquier
+            disco desde su propia página, abajo del todo.
+          </p>
+          <BuscarYCrear />
+          <Link
+            href="/revision"
+            className="mt-4 inline-block text-xs text-dim underline underline-offset-4"
+          >
+            Abrir el panel completo del curador →
+          </Link>
+        </details>
+      )}
 
       <div className="mt-10">
         {total === 0 ? (

@@ -1,10 +1,10 @@
 "use client";
 
-// Orquesta la vitrina pública: alterna entre "Galería" (carátulas grandes) y
-// "Estantería" (lomos de vinilo), agrupando por estantes temáticos. El botón de
-// compartir vive aquí arriba.
+// Orquesta la vitrina pública: alterna entre "Galería" (todas las piezas juntas,
+// como pared de museo) y "Estantería" (vinilos agrupados por estante temático).
+// El botón de compartir vive aquí arriba.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import type { VitrinaEstante } from "@/lib/vitrina";
 import { VitrinaGaleria } from "./VitrinaGaleria";
@@ -15,7 +15,18 @@ type Vista = "galeria" | "estanteria";
 
 export function VitrinaVistas({ estantes }: { estantes: VitrinaEstante[] }) {
   const [vista, setVista] = useState<Vista>("galeria");
-  // Header de estante solo si hay más de un grupo o el grupo tiene nombre.
+
+  // Galería: TODAS las piezas juntas, sin estantes. Las mejor puntuadas primero
+  // (las sin puntuar, al final), como un coleccionista muestra sus joyas.
+  const todos = useMemo(
+    () =>
+      estantes
+        .flatMap((e) => e.albums)
+        .sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1)),
+    [estantes],
+  );
+
+  // Estantería: los estantes con nombre solo se rotulan si aportan agrupación.
   const mostrarHeaders =
     estantes.length > 1 || (estantes[0]?.shelf ?? null) !== null;
 
@@ -33,32 +44,32 @@ export function VitrinaVistas({ estantes }: { estantes: VitrinaEstante[] }) {
         <ShareVitrina />
       </div>
 
-      <div className="flex flex-col gap-10">
-        {estantes.map((e, i) => (
-          <motion.section
-            key={e.shelf ?? "__sin_estante__"}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: Math.min(i * 0.06, 0.4), duration: 0.4 }}
-          >
-            {mostrarHeaders && (
-              <h2 className="mb-4 flex items-baseline gap-2">
-                <span className="font-serif text-xl">
-                  {e.shelf ?? "Más de la colección"}
-                </span>
-                <span className="text-xs text-dim">
-                  {e.albums.length} {e.albums.length === 1 ? "disco" : "discos"}
-                </span>
-              </h2>
-            )}
-            {vista === "galeria" ? (
-              <VitrinaGaleria albums={e.albums} />
-            ) : (
+      {vista === "galeria" ? (
+        <VitrinaGaleria albums={todos} />
+      ) : (
+        <div className="flex flex-col gap-12">
+          {estantes.map((e, i) => (
+            <motion.section
+              key={e.shelf ?? "__sin_estante__"}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(i * 0.06, 0.4), duration: 0.4 }}
+            >
+              {mostrarHeaders && (
+                <h2 className="mb-1 flex items-baseline gap-2">
+                  <span className="font-serif text-xl">
+                    {e.shelf ?? "Más de la colección"}
+                  </span>
+                  <span className="text-xs text-dim">
+                    {e.albums.length} {e.albums.length === 1 ? "disco" : "discos"}
+                  </span>
+                </h2>
+              )}
               <Estanteria albums={e.albums} />
-            )}
-          </motion.section>
-        ))}
-      </div>
+            </motion.section>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

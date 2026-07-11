@@ -408,6 +408,22 @@ integra más profundamente con la escucha real.
   `musicart_pedido` y manda al fabricar (antes era solo-admin). El rehacer del
   admin sigue con su propio cuadro.
 
+- [x] **7.6 Curaduría del dueño + Vitrina** — el admin busca un disco o artista
+  (buscador visual con portadas vía Deezer, `/api/albums`), lo toca y la IA
+  fabrica su dossier completo (`generarAlbumAhora`, reutilizado). Desde el panel
+  puntúa cualquier disco (1-10) y lo marca ★ para exhibirlo. **La vitrina**
+  (`/vitrina`, pública, en la nav) es una galería de las carátulas que el curador
+  atesora, cada una con la paleta de su portada como halo y el sello con su
+  puntaje. Favoritos en `Album.showcase`/`showcaseAt`; la vitrina lee la reseña
+  del admin para mostrar puntaje y canción favorita (`src/lib/vitrina.ts`,
+  `src/app/revision/BuscarYCrear.tsx` + `CuradorControls.tsx` + `CuradorAlbumes.tsx`).
+  La vitrina suma tres pulidos de coleccionista: **estantes temáticos**
+  (`Album.showcaseShelf`, agrupa por "Jazz nocturno", etc.; editor con datalist
+  en el panel), **compartir** (Web Share + `opengraph-image` con colage de
+  carátulas) y **dos vistas** con toggle: galería de carátulas y **estantería de
+  lomos de vinilo** coloreados con la paleta de cada disco (`VitrinaVistas`,
+  `Estanteria`, `ShareVitrina`).
+
 ### Criterios de aceptación
 
 - [ ] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones

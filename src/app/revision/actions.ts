@@ -242,6 +242,104 @@ export async function generarDiscoSugerido(): Promise<GenerarAlbumResult> {
   }
 }
 
+/**
+ * Pone o quita un disco de la vitrina del curador (Album.showcase). Solo admin.
+ * Al ponerlo, guarda la fecha para ordenar la exhibición por lo más reciente.
+ */
+export async function toggleVitrina(
+  albumId: string,
+): Promise<{ ok: boolean; showcase: boolean; message: string }> {
+  await requireAdmin();
+  if (!albumId) return { ok: false, showcase: false, message: "Falta el id del disco." };
+  const album = await prisma.album.findUnique({
+    where: { id: albumId },
+    select: { showcase: true, title: true },
+  });
+  if (!album) return { ok: false, showcase: false, message: "Ese disco ya no existe." };
+
+  const nuevo = !album.showcase;
+  await prisma.album.update({
+    where: { id: albumId },
+    data: { showcase: nuevo, showcaseAt: nuevo ? new Date() : null },
+  });
+  revalidatePath("/vitrina");
+  revalidatePath("/revision");
+  revalidatePath(`/album/${albumId}`);
+  return {
+    ok: true,
+    showcase: nuevo,
+    message: nuevo
+      ? `«${album.title}» entró a la vitrina.`
+      : `«${album.title}» salió de la vitrina.`,
+  };
+}
+
+/**
+ * Asigna (o quita) el estante temático de un disco en la vitrina. Solo admin.
+ * Un texto vacío lo deja sin estante. Poner estante también lo mete a la vitrina
+ * (si no lo estaba), porque agrupar algo implica exhibirlo.
+ */
+export async function setEstante(
+  albumId: string,
+  shelf: string,
+): Promise<{ ok: boolean; shelf: string | null; message: string }> {
+  await requireAdmin();
+  if (!albumId) return { ok: false, shelf: null, message: "Falta el id del disco." };
+  const limpio = shelf.trim().slice(0, 60) || null;
+
+  const album = await prisma.album.findUnique({
+    where: { id: albumId },
+    select: { showcase: true },
+  });
+  if (!album) return { ok: false, shelf: null, message: "Ese disco ya no existe." };
+
+  await prisma.album.update({
+    where: { id: albumId },
+    data: {
+      showcaseShelf: limpio,
+      // Si le pones estante y no estaba en la vitrina, entra.
+      ...(limpio && !album.showcase ? { showcase: true, showcaseAt: new Date() } : {}),
+    },
+  });
+  revalidatePath("/vitrina");
+  revalidatePath("/revision");
+  return {
+    ok: true,
+    shelf: limpio,
+    message: limpio ? `Estante: «${limpio}».` : "Sin estante.",
+  };
+}
+
+/**
+ * Puntúa un disco como curador (1-10) desde el panel. Reutiliza el modelo
+ * Review con el userId del admin, conservando el comentario/canción favorita si
+ * ya existía una reseña. Es el mismo puntaje que se muestra en el dossier y la
+ * vitrina.
+ */
+export async function puntuarAlbumAdmin(
+  albumId: string,
+  rating: number,
+): Promise<{ ok: boolean; rating: number; message: string }> {
+  const session = await requireAdmin();
+  const userId = session.user?.id;
+  if (!userId) return { ok: false, rating: 0, message: "Sesión sin id de usuario." };
+  if (!albumId) return { ok: false, rating: 0, message: "Falta el id del disco." };
+
+  const r = Math.min(10, Math.max(1, Math.round(rating)));
+  const existing = await prisma.review.findFirst({ where: { userId, albumId } });
+  if (existing) {
+    await prisma.review.update({ where: { id: existing.id }, data: { rating: r } });
+  } else {
+    await prisma.review.create({
+      data: { deviceId: `admin-${userId}`, userId, albumId, rating: r, answersJson: "{}" },
+    });
+  }
+  revalidatePath("/vitrina");
+  revalidatePath("/revision");
+  revalidatePath(`/album/${albumId}`);
+  return { ok: true, rating: r, message: `Puntuaste «${r}/10».` };
+}
+
 export async function generateDossierTts(
   dossierId: string,
 ): Promise<{ message: string; ok: boolean }> {

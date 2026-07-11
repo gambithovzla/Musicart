@@ -422,7 +422,10 @@ integra más profundamente con la escucha real.
   en el panel), **compartir** (Web Share + `opengraph-image` con colage de
   carátulas) y **dos vistas** con toggle: galería de carátulas y **estantería de
   lomos de vinilo** coloreados con la paleta de cada disco (`VitrinaVistas`,
-  `Estanteria`, `ShareVitrina`).
+  `Estanteria`, `ShareVitrina`). Descubribilidad: los controles de curador
+  (puntaje + ★ vitrina + estante) viven ahora en la **propia página del disco**
+  (`CuradorAlbumPanel`, solo admin) y el **buscador con lupa** está también en la
+  Vitrina para el admin —no solo en `/revision`.
 
 ### Criterios de aceptación
 

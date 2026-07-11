@@ -34,7 +34,7 @@ import { FeedbackCurador } from "@/components/FeedbackCurador";
 import { Narrator, type NarratorSection } from "@/components/Narrator";
 import { FuentesVerificadas } from "@/components/FuentesVerificadas";
 import { SaltoInteractivo } from "@/components/SaltoInteractivo";
-import { BorrarDiscoAdmin } from "@/components/BorrarDiscoAdmin";
+import { CuradorAlbumPanel } from "@/components/CuradorAlbumPanel";
 import { getChatQuota } from "@/lib/album-chat";
 
 export const dynamic = "force-dynamic";
@@ -130,6 +130,33 @@ export default async function AlbumPage({
     );
     return { jump, albumId: destino?.id ?? null, coverUrl: destino?.coverUrl ?? null };
   });
+
+  // Datos del panel de curador (solo si el que mira es admin): su puntaje, si el
+  // disco está en la vitrina, su estante y los estantes ya existentes.
+  const isAdmin = isAdminEmail(session?.user?.email);
+  let adminRating: number | null = null;
+  let estantesExistentes: string[] = [];
+  if (isAdmin) {
+    const uid = session?.user?.id;
+    const [rev, shelves] = await Promise.all([
+      uid
+        ? prisma.review.findFirst({
+            where: { userId: uid, albumId: album.id },
+            select: { rating: true },
+          })
+        : Promise.resolve(null),
+      prisma.album.findMany({
+        where: { showcase: true, showcaseShelf: { not: null } },
+        select: { showcaseShelf: true },
+        distinct: ["showcaseShelf"],
+        orderBy: { showcaseShelf: "asc" },
+      }),
+    ]);
+    adminRating = rev?.rating ?? null;
+    estantesExistentes = shelves
+      .map((s) => s.showcaseShelf?.trim())
+      .filter((x): x is string => !!x);
+  }
 
   const notedTracks = dossier.trackNotes.filter((t) => t.note);
   const narratorSections: NarratorSection[] = [
@@ -379,8 +406,15 @@ export default async function AlbumPage({
 
         <FuentesVerificadas facts={facts} />
 
-        {isAdminEmail(session?.user?.email) && (
-          <BorrarDiscoAdmin albumId={album.id} title={album.title} />
+        {isAdmin && (
+          <CuradorAlbumPanel
+            albumId={album.id}
+            title={album.title}
+            rating={adminRating}
+            showcase={album.showcase}
+            shelf={album.showcaseShelf?.trim() || null}
+            estantes={estantesExistentes}
+          />
         )}
       </div>
     </main>

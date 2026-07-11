@@ -3,9 +3,9 @@
 // Controles del curador reutilizables: puntuar un disco (1-10) y ponerlo/quitarlo
 // de la vitrina. Se usan en el buscador y en la lista de gestión del panel.
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { ratingCaption } from "@/lib/review";
-import { puntuarAlbumAdmin, toggleVitrina } from "./actions";
+import { puntuarAlbumAdmin, setEstante, toggleVitrina } from "./actions";
 
 export function EstrellasCurador({
   albumId,
@@ -85,5 +85,59 @@ export function VitrinaToggle({
       <span aria-hidden>{enVitrina ? "★" : "☆"}</span>
       {enVitrina ? "En la vitrina" : "A la vitrina"}
     </button>
+  );
+}
+
+export function EstanteEditor({
+  albumId,
+  inicial,
+  sugerencias,
+}: {
+  albumId: string;
+  inicial: string | null;
+  sugerencias: string[];
+}) {
+  const [valor, setValor] = useState(inicial ?? "");
+  const [guardado, setGuardado] = useState(inicial ?? "");
+  const [pending, startTransition] = useTransition();
+  const [ok, setOk] = useState(false);
+  const listId = useId();
+
+  function guardar() {
+    if (valor.trim() === guardado.trim()) return;
+    startTransition(async () => {
+      const r = await setEstante(albumId, valor);
+      if (r.ok) {
+        setGuardado(r.shelf ?? "");
+        setValor(r.shelf ?? "");
+        setOk(true);
+        setTimeout(() => setOk(false), 1500);
+      }
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        value={valor}
+        onChange={(e) => setValor(e.target.value)}
+        onBlur={guardar}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        list={listId}
+        placeholder="Estante (p. ej. Jazz nocturno)"
+        disabled={pending}
+        className="flex-1 rounded-lg border border-white/10 bg-surface px-3 py-1.5 text-xs outline-none placeholder:text-dim focus:border-album/50 disabled:opacity-50"
+      />
+      <datalist id={listId}>
+        {sugerencias.map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
+      <span className="w-4 text-xs text-album-light">
+        {pending ? "…" : ok ? "✓" : ""}
+      </span>
+    </div>
   );
 }

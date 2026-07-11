@@ -2,8 +2,8 @@
 // con la paleta de cada portada. La pieza de marca para coleccionistas.
 
 import Link from "next/link";
-import { getVitrinaAlbums } from "@/lib/vitrina";
-import { VitrinaGaleria } from "./VitrinaGaleria";
+import { getVitrinaEstantes } from "@/lib/vitrina";
+import { VitrinaVistas } from "./VitrinaVistas";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,8 @@ export const metadata = {
 };
 
 export default async function VitrinaPage() {
-  const albums = await getVitrinaAlbums();
+  const estantes = await getVitrinaEstantes();
+  const total = estantes.reduce((n, e) => n + e.albums.length, 0);
 
   return (
     <main className="px-6 pb-16 pt-14">
@@ -28,7 +29,7 @@ export default async function VitrinaPage() {
       </header>
 
       <div className="mt-10">
-        {albums.length === 0 ? (
+        {total === 0 ? (
           <div className="rounded-3xl border border-white/10 bg-surface p-10 text-center">
             <p className="text-4xl">🖼️</p>
             <p className="mt-4 font-serif text-lg">La vitrina se está montando</p>
@@ -46,9 +47,9 @@ export default async function VitrinaPage() {
         ) : (
           <>
             <p className="mb-6 text-center text-xs uppercase tracking-[0.2em] text-dim">
-              {albums.length} {albums.length === 1 ? "disco" : "discos"} en exhibición
+              {total} {total === 1 ? "disco" : "discos"} en exhibición
             </p>
-            <VitrinaGaleria albums={albums} />
+            <VitrinaVistas estantes={estantes} />
           </>
         )}
       </div>

@@ -7,7 +7,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { EstrellasCurador, VitrinaToggle } from "./CuradorControls";
+import { EstanteEditor, EstrellasCurador, VitrinaToggle } from "./CuradorControls";
 
 export type AlbumCurable = {
   albumId: string;
@@ -17,9 +17,16 @@ export type AlbumCurable = {
   coverUrl: string | null;
   showcase: boolean;
   rating: number | null;
+  shelf: string | null;
 };
 
-export function CuradorAlbumes({ albums }: { albums: AlbumCurable[] }) {
+export function CuradorAlbumes({
+  albums,
+  estantes,
+}: {
+  albums: AlbumCurable[];
+  estantes: string[];
+}) {
   const [q, setQ] = useState("");
   const [soloVitrina, setSoloVitrina] = useState(false);
 
@@ -92,6 +99,11 @@ export function CuradorAlbumes({ albums }: { albums: AlbumCurable[] }) {
                   <div className="mt-3 flex flex-col gap-3">
                     <EstrellasCurador albumId={a.albumId} rating={a.rating} />
                     <VitrinaToggle albumId={a.albumId} inicial={a.showcase} />
+                    <EstanteEditor
+                      albumId={a.albumId}
+                      inicial={a.shelf}
+                      sugerencias={estantes}
+                    />
                   </div>
                 </div>
               </div>

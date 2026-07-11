@@ -32,6 +32,7 @@ model Album {
   factsJson   String  @default("{}") // facts payload con fuentes (grounding IA)
   showcase    Boolean @default(false) // en la vitrina del curador (favoritos del admin)
   showcaseAt  DateTime? // cuándo se puso en la vitrina (orden de exhibición)
+  showcaseShelf String? // estante temático de la vitrina (p. ej. "Jazz nocturno")
 
   artistId   String
   artist     Artist      @relation(fields: [artistId], references: [id])

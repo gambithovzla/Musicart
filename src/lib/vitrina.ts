@@ -20,6 +20,14 @@ export type VitrinaAlbum = {
   rating: number | null;
   /** Canción favorita del curador para este disco, si la anotó. */
   favoriteSong: string | null;
+  /** Estante temático al que pertenece en la vitrina, o null. */
+  shelf: string | null;
+};
+
+export type VitrinaEstante = {
+  /** Nombre del estante, o null para "el resto de la colección". */
+  shelf: string | null;
+  albums: VitrinaAlbum[];
 };
 
 /**
@@ -73,8 +81,56 @@ export async function getVitrinaAlbums(): Promise<VitrinaAlbum[]> {
       impact: a.impact,
       rating: curador?.rating ?? null,
       favoriteSong: curador?.favoriteSong ?? null,
+      shelf: a.showcaseShelf?.trim() || null,
     };
   });
+}
+
+/**
+ * La vitrina agrupada en estantes temáticos. Los estantes con nombre van
+ * primero (ordenados por la adición más reciente); los discos sin estante caen
+ * en un grupo final (shelf=null). Si nada tiene estante, devuelve un solo grupo
+ * sin nombre (la galería se muestra plana como siempre).
+ */
+export async function getVitrinaEstantes(): Promise<VitrinaEstante[]> {
+  const albums = await getVitrinaAlbums();
+  if (albums.length === 0) return [];
+
+  const conNombre = new Map<string, VitrinaAlbum[]>();
+  const sinNombre: VitrinaAlbum[] = [];
+  for (const a of albums) {
+    if (a.shelf) {
+      const lista = conNombre.get(a.shelf) ?? [];
+      lista.push(a);
+      conNombre.set(a.shelf, lista);
+    } else {
+      sinNombre.push(a);
+    }
+  }
+
+  // Los álbumes ya vienen ordenados por showcaseAt desc; el primero de cada
+  // estante es su adición más reciente, así que el orden de inserción del Map
+  // (primer álbum visto) refleja "estante tocado más recientemente primero".
+  const estantes: VitrinaEstante[] = [...conNombre.entries()].map(
+    ([shelf, list]) => ({ shelf, albums: list }),
+  );
+  if (sinNombre.length > 0) {
+    estantes.push({ shelf: null, albums: sinNombre });
+  }
+  return estantes;
+}
+
+/** Nombres de estantes existentes (para el datalist del panel). */
+export async function getEstantesExistentes(): Promise<string[]> {
+  const rows = await prisma.album.findMany({
+    where: { showcase: true, showcaseShelf: { not: null } },
+    select: { showcaseShelf: true },
+    distinct: ["showcaseShelf"],
+    orderBy: { showcaseShelf: "asc" },
+  });
+  return rows
+    .map((r) => r.showcaseShelf?.trim())
+    .filter((s): s is string => !!s);
 }
 
 export async function vitrinaCount(): Promise<number> {

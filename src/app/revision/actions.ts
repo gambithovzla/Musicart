@@ -275,6 +275,42 @@ export async function toggleVitrina(
 }
 
 /**
+ * Asigna (o quita) el estante temático de un disco en la vitrina. Solo admin.
+ * Un texto vacío lo deja sin estante. Poner estante también lo mete a la vitrina
+ * (si no lo estaba), porque agrupar algo implica exhibirlo.
+ */
+export async function setEstante(
+  albumId: string,
+  shelf: string,
+): Promise<{ ok: boolean; shelf: string | null; message: string }> {
+  await requireAdmin();
+  if (!albumId) return { ok: false, shelf: null, message: "Falta el id del disco." };
+  const limpio = shelf.trim().slice(0, 60) || null;
+
+  const album = await prisma.album.findUnique({
+    where: { id: albumId },
+    select: { showcase: true },
+  });
+  if (!album) return { ok: false, shelf: null, message: "Ese disco ya no existe." };
+
+  await prisma.album.update({
+    where: { id: albumId },
+    data: {
+      showcaseShelf: limpio,
+      // Si le pones estante y no estaba en la vitrina, entra.
+      ...(limpio && !album.showcase ? { showcase: true, showcaseAt: new Date() } : {}),
+    },
+  });
+  revalidatePath("/vitrina");
+  revalidatePath("/revision");
+  return {
+    ok: true,
+    shelf: limpio,
+    message: limpio ? `Estante: «${limpio}».` : "Sin estante.",
+  };
+}
+
+/**
  * Puntúa un disco como curador (1-10) desde el panel. Reutiliza el modelo
  * Review con el userId del admin, conservando el comentario/canción favorita si
  * ya existía una reseña. Es el mismo puntaje que se muestra en el dossier y la

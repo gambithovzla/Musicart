@@ -417,6 +417,12 @@ integra más profundamente con la escucha real.
   puntaje. Favoritos en `Album.showcase`/`showcaseAt`; la vitrina lee la reseña
   del admin para mostrar puntaje y canción favorita (`src/lib/vitrina.ts`,
   `src/app/revision/BuscarYCrear.tsx` + `CuradorControls.tsx` + `CuradorAlbumes.tsx`).
+  La vitrina suma tres pulidos de coleccionista: **estantes temáticos**
+  (`Album.showcaseShelf`, agrupa por "Jazz nocturno", etc.; editor con datalist
+  en el panel), **compartir** (Web Share + `opengraph-image` con colage de
+  carátulas) y **dos vistas** con toggle: galería de carátulas y **estantería de
+  lomos de vinilo** coloreados con la paleta de cada disco (`VitrinaVistas`,
+  `Estanteria`, `ShareVitrina`).
 
 ### Criterios de aceptación
 

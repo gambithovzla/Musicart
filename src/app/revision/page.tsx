@@ -89,8 +89,16 @@ export default async function RevisionPage() {
     coverUrl: d.album.coverUrl,
     showcase: d.album.showcase,
     rating: ratingPorAlbum.get(d.albumId) ?? null,
+    shelf: d.album.showcaseShelf?.trim() || null,
   }));
   const enVitrina = curables.filter((a) => a.showcase).length;
+  const estantesExistentes = [
+    ...new Set(
+      curables
+        .map((a) => a.shelf)
+        .filter((s): s is string => !!s),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
 
   const ttsRows = publicados.map((d) => ({
     id: d.id,
@@ -221,7 +229,7 @@ export default async function RevisionPage() {
             Aún no hay discos publicados para curar. Crea uno arriba.
           </p>
         ) : (
-          <CuradorAlbumes albums={curables} />
+          <CuradorAlbumes albums={curables} estantes={estantesExistentes} />
         )}
       </section>
 

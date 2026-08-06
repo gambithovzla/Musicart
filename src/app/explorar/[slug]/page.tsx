@@ -4,6 +4,9 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { findRoute } from "@/lib/thematic-routes";
 import { matchRouteAlbums } from "@/lib/thematic-match";
+import { deriveGenres } from "@/lib/genres";
+import { parseJson, type FactsPayload } from "@/lib/types";
+import { GenreTags } from "@/components/GenreTags";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +91,15 @@ export default async function RutaTematicaPage({
               <p className="truncate text-sm text-dim">
                 {a.artist.name} · {a.year}
               </p>
+              <div className="mt-1">
+                <GenreTags
+                  genres={deriveGenres(
+                    parseJson<Partial<FactsPayload>>(a.factsJson, {}).tags,
+                    1,
+                  )}
+                  size="xs"
+                />
+              </div>
             </div>
           </Link>
         ))}

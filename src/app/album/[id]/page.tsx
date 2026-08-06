@@ -13,6 +13,7 @@ import { getListenerIdentity } from "@/lib/identity";
 import { stripeConfigured } from "@/lib/stripe";
 import { albumThemeStyle } from "@/lib/theme";
 import { queueKey } from "@/lib/curator";
+import { deriveGenres } from "@/lib/genres";
 import {
   parseJson,
   type AlbumLinks,
@@ -35,6 +36,7 @@ import { Narrator, type NarratorSection } from "@/components/Narrator";
 import { FuentesVerificadas } from "@/components/FuentesVerificadas";
 import { SaltoInteractivo } from "@/components/SaltoInteractivo";
 import { CuradorAlbumPanel } from "@/components/CuradorAlbumPanel";
+import { GenreTags } from "@/components/GenreTags";
 import { getChatQuota } from "@/lib/album-chat";
 
 export const dynamic = "force-dynamic";
@@ -102,6 +104,7 @@ export default async function AlbumPage({
   const stripeReady = stripeConfigured();
   const links = parseJson<AlbumLinks>(album.linksJson, {});
   const facts = parseJson<FactsPayload | null>(album.factsJson, null);
+  const genres = deriveGenres(facts?.tags);
   const questions = parseJson<string[]>(dossier.questionsJson, []);
   const wowFacts = parseJson<string[]>(dossier.wowFactsJson, []);
   const audio = parseJson<DossierAudio | null>(dossier.audioJson, null);
@@ -240,6 +243,11 @@ export default async function AlbumPage({
           <p className="mt-1 text-lg text-dim">
             {album.artist.name} · {album.year}
           </p>
+          {genres.length > 0 && (
+            <div className="mt-3">
+              <GenreTags genres={genres} />
+            </div>
+          )}
           <div className="mt-4 flex flex-wrap items-start gap-x-5 gap-y-2 text-sm text-dim">
             {album.durationMin && <span className="pt-px">{album.durationMin} min</span>}
             <DificultadEscucha value={album.difficulty} />

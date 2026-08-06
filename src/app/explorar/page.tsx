@@ -3,6 +3,9 @@ import Image from "next/image";
 import { prisma } from "@/lib/db";
 import { THEMATIC_ROUTES, MIN_ALBUMS_RUTA } from "@/lib/thematic-routes";
 import { matchRouteAlbums } from "@/lib/thematic-match";
+import { deriveGenres } from "@/lib/genres";
+import { parseJson, type FactsPayload } from "@/lib/types";
+import { LibraryExplorer, type LibraryAlbum } from "@/components/LibraryExplorer";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +37,17 @@ export default async function ExplorarPage() {
     const matched = matchRouteAlbums(route, catalog);
     return { route, count: matched.length, preview: matched.slice(0, 3) };
   }).filter((r) => r.count >= MIN_ALBUMS_RUTA);
+
+  // Etiquetas de género visibles: derivadas de las tags reales de cada disco
+  // (ver src/lib/genres.ts), no hace falta ningún campo nuevo ni backfill.
+  const libraryAlbums: LibraryAlbum[] = catalog.map((a) => ({
+    id: a.id,
+    title: a.title,
+    year: a.year,
+    coverUrl: a.coverUrl,
+    artistName: a.artist.name,
+    genres: deriveGenres(parseJson<Partial<FactsPayload>>(a.factsJson, {}).tags),
+  }));
 
   return (
     <main className="px-6 pb-10 pt-12">
@@ -117,35 +131,7 @@ export default async function ExplorarPage() {
             quedará guardado.
           </p>
         ) : (
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {catalog.map((a) => (
-              <Link
-                key={a.id}
-                href={`/album/${a.id}`}
-                className="group rounded-2xl border border-white/10 bg-surface p-3 transition-transform active:scale-[0.98]"
-              >
-                <div className="relative aspect-square w-full overflow-hidden rounded-lg">
-                  {a.coverUrl ? (
-                    <Image
-                      src={a.coverUrl}
-                      alt={`Portada de ${a.title}`}
-                      fill
-                      sizes="(max-width: 640px) 45vw, 30vw"
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-album-dark">
-                      <span className="font-serif text-2xl text-album-light">♪</span>
-                    </div>
-                  )}
-                </div>
-                <p className="mt-2 truncate text-sm font-medium">{a.title}</p>
-                <p className="truncate text-xs text-dim">
-                  {a.artist.name} · {a.year}
-                </p>
-              </Link>
-            ))}
-          </div>
+          <LibraryExplorer albums={libraryAlbums} />
         )}
       </section>
     </main>

@@ -9,6 +9,7 @@ import { ImpactoCultural } from "./ImpactoCultural";
 import { DificultadEscucha } from "./DificultadEscucha";
 import { ShareAlbum } from "./ShareAlbum";
 import { DameOtroDisco } from "./DameOtroDisco";
+import { GenreTags } from "./GenreTags";
 import type { MadrigueraAlbum } from "@/lib/madriguera";
 import type { AlbumLinks } from "@/lib/types";
 
@@ -32,6 +33,7 @@ export type DailyAlbum = {
   wowHook?: string | null; // Fase 6.9: curiosidad verificada tras escuchar el disco
   links?: AlbumLinks; // links de streaming directo (Spotify / Apple / YouTube Music)
   canReroll?: boolean; // oyente con perfil: puede pedir "otro" si no lo encuentra
+  genres?: string[]; // etiquetas de género derivadas de las tags reales del disco
 };
 
 export function DailyReveal({ album }: { album: DailyAlbum }) {
@@ -88,6 +90,12 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
         <p className="mt-1 text-lg text-dim">
           {album.artist} · {album.year}
         </p>
+
+        {album.genres && album.genres.length > 0 && (
+          <div className="mt-3 flex justify-center">
+            <GenreTags genres={album.genres} />
+          </div>
+        )}
 
         <div className="mt-5 flex flex-wrap items-start justify-center gap-x-5 gap-y-2 text-sm text-dim">
           {album.durationMin && <span className="pt-px">{album.durationMin} min</span>}

@@ -15,7 +15,8 @@ import { hasProfile } from "@/app/actions";
 import { DEVICE_COOKIE, TZ_COOKIE, LANG_COOKIE, parseTodayLang } from "@/lib/device";
 import { searchLinks } from "@/lib/sources/odesli";
 import { albumThemeStyle } from "@/lib/theme";
-import { parseJson, type AlbumLinks, type Palette } from "@/lib/types";
+import { deriveGenres } from "@/lib/genres";
+import { parseJson, type AlbumLinks, type FactsPayload, type Palette } from "@/lib/types";
 import { isAdminEmail } from "@/lib/admin";
 import { DailyReveal } from "@/components/DailyReveal";
 import { Onboarding } from "@/components/Onboarding";
@@ -188,6 +189,8 @@ export default async function Home() {
     }));
   const wowFacts = parseJson<string[]>(pick.wowFactsJson ?? "[]", []);
   const wowHook = yaResenoHoy && wowFacts.length > 0 ? wowFacts[0] : null;
+  const pickFacts = parseJson<Partial<FactsPayload>>(pick.album.factsJson, {});
+  const genres = deriveGenres(pickFacts.tags);
 
   return (
     <main style={albumThemeStyle(palette)}>
@@ -225,6 +228,7 @@ export default async function Home() {
             madriguera,
             wowHook,
             links: albumLinks,
+            genres,
             // El admin usa "Rehacer"; al resto le ofrecemos "dame otro" si tiene
             // un disco fabricado a su medida (no en la rotación global genérica).
             canReroll: Boolean(personal) && !isAdminEmail(session?.user?.email),

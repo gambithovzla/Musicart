@@ -267,8 +267,14 @@ export async function gatherAlbumFacts(
 
   // ── 5. Portada y links de escucha ────────────────────────────────────────
   log("Resolviendo portada y links de escucha…");
+  // Cover Art Archive va ligada al mbid exacto que MusicBrainz ya confirmó
+  // (mismo álbum que el título/año verificados arriba) — es la fuente fiable.
+  // iTunes busca por texto ("artista + álbum") y puede matchear otro disco del
+  // mismo artista cuando el buscado no aparece entre sus primeros resultados
+  // (cae a `albumes[0]`, ver src/lib/sources/itunes.ts); por eso solo se usa
+  // como respaldo cuando no hay mbid o CAA no tiene portada para ese release.
   const caaCover = mbid ? await getCoverUrl(mbid).catch(() => null) : null;
-  const coverUrl = itunes.coverUrl ?? caaCover;
+  const coverUrl = caaCover ?? itunes.coverUrl;
 
   let links: AlbumLinks = searchLinks(title!, artist!);
   if (itunes.appleMusicUrl) {

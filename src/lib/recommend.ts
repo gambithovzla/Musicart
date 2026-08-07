@@ -1115,7 +1115,8 @@ Reglas estrictas:
 4. Sobre el disco solo puedes mencionar lo que aparece en el catálogo (título, artista, año, duración, etiquetas). PROHIBIDO inventar datos del álbum o del usuario.
 5. PROHIBIDO elegir un disco que aparezca en la lista "DISCOS RECOMENDADOS EN DÍAS RECIENTES" ni en "DISCOS QUE YA SE LE RECOMENDARON ANTES". Si aun así ves que todas las opciones del catálogo están en esas listas, elige el disco que lleve MÁS TIEMPO sin aparecer (el que esté más abajo en "YA SE LE RECOMENDARON ANTES").
 6. Si el usuario indicó su ánimo de hoy, dale prioridad como señal.
-7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.${input.lang ? `\n8. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO elegir un álbum donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Si no hay ninguno en el catálogo que encaje, elige el más cercano y menciónalo en la "reason".\n   ATENCIÓN — los idiomas son distintos: "Español" (castellano) ≠ "Português" (Brasil, Portugal) ≠ "Français" ≠ "English" ≠ "Italiano". No confundas lenguas romances; un disco en portugués NO es válido cuando pidieron español.` : ""}`;
+7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.
+8. NO REPITAS EL MISMO GANCHO: en "DISCOS RECOMENDADOS EN DÍAS RECIENTES" abajo, junto a cada disco reciente, verás la razón que le diste ese día. PROHIBIDO abrir la razón de HOY con la misma anécdota, dato o escena que ya usaste ahí. Elige un ángulo distinto del perfil, el diario o el ánimo de hoy.${input.lang ? `\n9. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO elegir un álbum donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Si no hay ninguno en el catálogo que encaje, elige el más cercano y menciónalo en la "reason".\n   ATENCIÓN — los idiomas son distintos: "Español" (castellano) ≠ "Português" (Brasil, Portugal) ≠ "Français" ≠ "English" ≠ "Italiano". No confundas lenguas romances; un disco en portugués NO es válido cuando pidieron español.` : ""}`;
 
   const user = `CATÁLOGO DISPONIBLE (elige uno por su albumId):
 ${catalogoTexto}
@@ -1251,7 +1252,13 @@ function diarioATexto(reviews: ReviewConAlbum[]): string {
 function recientesATexto(picks: PickConAlbum[]): string {
   if (picks.length === 0) return "(ninguno)";
   return picks
-    .map((p) => `- ${p.date}: "${p.album.title}" de ${p.album.artist.name}`)
+    .map((p, i) => {
+      // Solo los últimos 3 llevan su razón: para que el LLM vea qué anécdota o
+      // dato ya usó y no la repita (evita la "muletilla" del mismo gancho).
+      const razon =
+        i < 3 && p.reason ? ` — razón que le dimos: "${p.reason.slice(0, 160)}"` : "";
+      return `- ${p.date}: "${p.album.title}" de ${p.album.artist.name}${razon}`;
+    })
     .join("\n");
 }
 

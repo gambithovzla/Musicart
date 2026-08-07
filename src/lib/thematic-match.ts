@@ -44,10 +44,13 @@ function matchesTags(a: AlbumRow, routeRegexes: RegExp[]): boolean {
 // impacto, dificultad, época). Un disco entra si cumple TODOS los criterios
 // definidos en la ruta. Sin listas fijas: la ruta refleja el catálogo real y se
 // actualiza sola cuando entran discos nuevos que encajan.
-export function matchRouteAlbums(
+// Genérica sobre T (con T al menos AlbumRow) para que quien llame pueda pasar
+// filas con campos extra (p. ej. el impactNote del dossier) y conservarlos en
+// el resultado sin perder el tipado.
+export function matchRouteAlbums<T extends AlbumRow>(
   route: ThematicRoute,
-  catalog: AlbumRow[],
-): AlbumRow[] {
+  catalog: T[],
+): T[] {
   const routeRegexes = (route.tags ?? []).map((t) => tagRegex(norm(t)));
 
   const matched = catalog.filter((a) => {

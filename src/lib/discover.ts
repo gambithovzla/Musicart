@@ -80,7 +80,7 @@ Sigue siendo OBLIGATORIO que sea un álbum de estudio REAL y bien documentado (r
       : "";
 
   const idiomaRegla = input.lang
-    ? `\n8. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO proponer un disco donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Solo si no existe ningún disco decente en ese idioma puedes elegir el más cercano, y debes mencionarlo en la "reason".\n   ATENCIÓN — los idiomas son distintos entre sí: "Español" (castellano, hispanohablante) ≠ "Português" (Brasil, Portugal) ≠ "Français" ≠ "English" ≠ "Italiano". No confundas lenguas romances ni des por válido un disco en portugués cuando pidieron español, ni uno en francés cuando pidieron italiano. Sé estricto: si dudas del idioma principal de un artista, elige otro del que estés seguro.`
+    ? `\n9. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO proponer un disco donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Solo si no existe ningún disco decente en ese idioma puedes elegir el más cercano, y debes mencionarlo en la "reason".\n   ATENCIÓN — los idiomas son distintos entre sí: "Español" (castellano, hispanohablante) ≠ "Português" (Brasil, Portugal) ≠ "Français" ≠ "English" ≠ "Italiano". No confundas lenguas romances ni des por válido un disco en portugués cuando pidieron español, ni uno en francés cuando pidieron italiano. Sé estricto: si dudas del idioma principal de un artista, elige otro del que estés seguro.`
     : "";
 
   const vozCurador = input.voz?.trim()
@@ -105,7 +105,8 @@ Reglas estrictas:
    CONECTA CON SU HISTORIA, pero con NATURALIDAD, nunca a la fuerza. Tienes muchas señales para arrancar: lo que BUSCA en un disco, su ánimo de hoy, sus géneros e idiomas, un comentario suyo o un disco que amó. Elige el HILO que DE VERDAD encaje con el disco de hoy, no siempre el mismo.
    - Solo nombra un disco que amó como puente cuando comparta algo REAL con el de hoy: género, época, país/escena, emoción o energía ("como te voló «X», hoy…").
    - PROHIBIDO comparar discos de mundos musicales ajenos (p. ej. enganchar un bolero clásico con un disco de electrónica, o un disco de rock con uno de reguetón): suena impostado y absurdo, y se nota que es una muletilla. Si su disco favorito es de otro universo sonoro, NO lo menciones como referencia: conecta por lo que BUSCA, por su ánimo, por el género/idioma que aplica, o habla del disco de hoy por su propio encanto.
-   - NO te apoyes SIEMPRE en el mismo disco favorito; varía la señal con la que abres para que no suene a plantilla.${idiomaRegla}`;
+   - NO te apoyes SIEMPRE en el mismo disco favorito; varía la señal con la que abres para que no suene a plantilla.
+8. NO REPITAS EL MISMO GANCHO: en "DISCOS DE DÍAS RECIENTES" abajo, junto a cada disco reciente, verás la razón que le diste ese día. PROHIBIDO abrir la razón de HOY con la misma anécdota, dato o escena que ya usaste ahí (p. ej. si en un día reciente hablaste de que maneja por la montaña, HOY queda prohibida esa imagen). Revisa esas razones y elige un ángulo distinto del perfil, el diario o el ánimo de hoy.${idiomaRegla}`;
 
   const user = `PERFIL DEL USUARIO:
 ${input.perfilTexto}

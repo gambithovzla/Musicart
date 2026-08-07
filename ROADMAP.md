@@ -427,6 +427,21 @@ integra más profundamente con la escucha real.
   (`CuradorAlbumPanel`, solo admin) y el **buscador con lupa** está también en la
   Vitrina para el admin —no solo en `/revision`.
 
+- [x] **7.7 Anti-muletilla + el hito del día** — dos ajustes de fondo pedidos
+  por el dueño. (a) El prompt que arma la "reason" del disco fresco (y su
+  respaldo del catálogo) no veía qué le había dicho en días recientes, así que
+  una imagen vívida del perfil se repetía como muletilla sin que el modelo lo
+  supiera; ahora `recientesATexto` incluye la razón de los últimos 3 días y
+  ambos prompts (`discover.ts`, `elegirConLlm` en `recommend.ts`) prohíben
+  reabrir con el mismo gancho. (b) La ruta `/explorar/hitos` ("Hitos que lo
+  cambiaron todo") ya filtraba por impacto cultural pero solo mostraba
+  portada/artista/año; ahora destaca **un "hito del día"** que rota solo
+  (misma rotación determinista que el disco del día global, `pickForDate` en
+  `src/lib/daily.ts`) mostrando el **por qué** ya verificado
+  (`Dossier.impactNote`) — sin IA nueva, sin costo. Cada fila de la lista suma
+  también un extracto de su nota. Si ningún disco tiene su nota todavía, la
+  sección se omite sin romper la página.
+
 ### Criterios de aceptación
 
 - [ ] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones

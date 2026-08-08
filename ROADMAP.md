@@ -442,6 +442,20 @@ integra más profundamente con la escucha real.
   también un extracto de su nota. Si ningún disco tiene su nota todavía, la
   sección se omite sin romper la página.
 
+- [x] **7.8 Anti-muletilla, ahora en código** — la 7.7 lo intentó solo con
+  prompt y no bastó: el curador seguía abriendo cada día con la misma imagen
+  del perfil ("tu amor por las montañas", día tras día). Nueva barrera dura en
+  `src/lib/reason-guard.ts`, hermana de `discoCumplePedido`: `ganchosQuemados()`
+  saca de las razones de los últimos 5 días las palabras con carga (fuera
+  conectores, vocabulario musical genérico y nombres de género — repetir "rock"
+  con un rockero no es pereza) y veta las que usó ayer o dos veces o más. Esa
+  lista viaja a los dos prompts (`discover.ts` y `elegirConLlm`) como prohibición
+  explícita —gratis, sin llamada extra— y, ya escrita la razón, `afinarRazon()`
+  la revisa: si reincide, pide **una** reescritura barata con las palabras
+  vetadas. Si la reescritura falla o no mejora, se queda la original (la app
+  nunca se cae por la IA). Ambos prompts dejan claro además que un detalle
+  REAL suyo repetido dos días seguidos ya es muletilla, aunque sea verdad.
+
 ### Criterios de aceptación
 
 - [ ] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones

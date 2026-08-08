@@ -42,6 +42,10 @@ export async function proponerDiscoDescubrimiento(input: {
   /** Artistas recomendados en días recientes: NO repetir el mismo artista
    *  (variedad), salvo que el oyente lo pida explícitamente. */
   artistasRecientes?: string[];
+  /** Palabras e imágenes que ya usó en las razones de días recientes: van
+   *  vetadas para que un detalle del perfil no se vuelva muletilla
+   *  (`src/lib/reason-guard.ts`). */
+  ganchosTexto?: string | null;
 }): Promise<DiscoPropuesto> {
   const evitarTexto =
     input.yaConoce.length > 0
@@ -106,7 +110,8 @@ Reglas estrictas:
    - Solo nombra un disco que amó como puente cuando comparta algo REAL con el de hoy: género, época, país/escena, emoción o energía ("como te voló «X», hoy…").
    - PROHIBIDO comparar discos de mundos musicales ajenos (p. ej. enganchar un bolero clásico con un disco de electrónica, o un disco de rock con uno de reguetón): suena impostado y absurdo, y se nota que es una muletilla. Si su disco favorito es de otro universo sonoro, NO lo menciones como referencia: conecta por lo que BUSCA, por su ánimo, por el género/idioma que aplica, o habla del disco de hoy por su propio encanto.
    - NO te apoyes SIEMPRE en el mismo disco favorito; varía la señal con la que abres para que no suene a plantilla.
-8. NO REPITAS EL MISMO GANCHO: en "DISCOS DE DÍAS RECIENTES" abajo, junto a cada disco reciente, verás la razón que le diste ese día. PROHIBIDO abrir la razón de HOY con la misma anécdota, dato, imagen inventada o escena que ya usaste ahí. Revisa esas razones y elige un ángulo distinto del perfil, el diario o el ánimo de hoy — y recuerda que ninguna razón, ni la de hoy ni las anteriores, puede inventarle hábitos o escenas de vida (regla 7).${idiomaRegla}`;
+8. NO REPITAS EL MISMO GANCHO: en "DISCOS DE DÍAS RECIENTES" abajo, junto a cada disco reciente, verás la razón que le diste ese día. PROHIBIDO abrir la razón de HOY con la misma anécdota, dato, imagen inventada o escena que ya usaste ahí. Revisa esas razones y elige un ángulo distinto del perfil, el diario o el ánimo de hoy — y recuerda que ninguna razón, ni la de hoy ni las anteriores, puede inventarle hábitos o escenas de vida (regla 7).
+   OJO: un detalle REAL suyo (un interés, una frase de su perfil, un disco que amó) usado dos días seguidos YA es una muletilla, aunque sea verdad. Al final del mensaje verás la lista de PALABRAS E IMÁGENES vetadas hoy porque ya se las dijiste: respétala al pie de la letra, incluyendo sinónimos y la misma idea contada de otra forma.${idiomaRegla}`;
 
   const user = `PERFIL DEL USUARIO:
 ${input.perfilTexto}
@@ -121,7 +126,7 @@ ${evitarTexto}
 
 DISCOS DE DÍAS RECIENTES (tampoco los repitas):
 ${input.recientesTexto}
-
+${input.ganchosTexto ?? ""}
 Propón el disco de descubrimiento de hoy. Responde el JSON ahora.`;
 
   // Elegir QUÉ disco proponer de entre TODA la música es el paso que más

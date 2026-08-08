@@ -82,6 +82,9 @@ src/lib/recommend.ts     Motor (Fase 1 + 3.3 + 5.6 + 6.4): getPersonalizedPick (
 src/lib/discover.ts      Fase 6.4: la IA PROPONE un disco real de toda la música
                          para descubrir hoy (title+artist+reason) → pipeline.
 src/lib/budget.ts        Fase 6.6: tope de discos nuevos/día (DAILY_GENERATION_BUDGET).
+src/lib/reason-guard.ts  Fase 7.8: barrera anti-muletilla de la razón del día —
+                         veta las palabras que ya usó en días recientes y, si
+                         reincide, reescribe la razón (nunca rompe: deja la original).
 src/lib/review.ts        Claves del comentario libre y canción favorita; escala
                          1-10 (RATING_MAX, LOVED_THRESHOLD, splitAnswers).
 src/lib/musical-thread.ts Fase 5.4: conecta reseñas del diario entre sí (cacheada).

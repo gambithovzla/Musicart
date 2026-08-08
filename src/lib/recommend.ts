@@ -29,6 +29,7 @@ import { curatorVoz } from "./curators";
 import { runDossierPipeline } from "./dossier/pipeline";
 import { LOVED_THRESHOLD, RATING_MAX, DISLIKED_THRESHOLD } from "./review";
 import { hayPresupuestoHoy, registrarGeneracion } from "./budget";
+import { afinarRazon, ganchosQuemados, textoGanchosProhibidos } from "./reason-guard";
 
 const MAX_REVIEWS = 10;
 const MAX_RECENT_PICKS = 14;
@@ -563,6 +564,11 @@ export async function generarPickDelDia(
     const artistasRecientes = [
       ...new Set(picksRecientes.map((p) => p.album.artist.name)),
     ];
+    // Ganchos ya gastados en las razones de días recientes: van vetados en el
+    // prompt para que un detalle real de su perfil (un interés, una frase suya)
+    // no se convierta en la muletilla de todos los días.
+    const ganchos = ganchosQuemados(picksRecientes.map((p) => p.reason));
+    const ganchosTexto = textoGanchosProhibidos(ganchos);
 
     // Argumentos comunes del proponedor; lo único que cambia entre intentos es la
     // lista de rechazos acumulada (para empujar al LLM lejos de lo ya intentado).
@@ -582,6 +588,7 @@ export async function generarPickDelDia(
       patronesTexto,
       peticion,
       artistasRecientes,
+      ganchosTexto,
     });
 
     // Discos que el LLM ya propuso (o que el pipeline resolvió) y rechazamos en
@@ -709,6 +716,23 @@ export async function generarPickDelDia(
           dossier.album.title,
           dossier.album.artist.name,
         );
+      } else if (!returnRitual) {
+        // Barrera anti-muletilla: si aun con el veto en el prompt volvió a
+        // apoyarse en el mismo gancho de días recientes, se reescribe. La
+        // razón de regreso tras una ausencia queda fuera: su calidez
+        // ("te guardé algo") es justo lo que no queremos reescribir.
+        reason = (
+          await afinarRazon({
+            razon: reason,
+            razonesPrevias: picksRecientes.map((p) => p.reason),
+            title: dossier.album.title,
+            artist: dossier.album.artist.name,
+            year: dossier.album.year,
+            perfilTexto,
+            mood: mood ?? null,
+            voz,
+          })
+        )?.slice(0, 600) ?? null;
       }
 
       await saveTodaysPick(ctx, date, {
@@ -948,7 +972,15 @@ async function recomendarYGuardar(
         : null;
 
     const patronesTexto = patronesDeEscucha(reviews, picksRecientes);
+    // Anti-muletilla: lo que ya le dijimos estos días queda vetado hoy.
+    const ganchos = ganchosQuemados(picksRecientes.map((p) => p.reason));
+    const voz = curatorVoz(
+      typeof parsedProfile?.curator === "string" ? parsedProfile.curator : undefined,
+    );
 
+    // Si la IA se cae elegimos por gusto (sin IA): esa razón es de plantilla y
+    // no tiene sentido mandarla a reescribir.
+    let razonDeIa = true;
     let eleccion: { albumId: string; reason: string };
     try {
       eleccion = await elegirConLlm({
@@ -967,8 +999,10 @@ async function recomendarYGuardar(
         peticion: opts.peticion ?? null,
         yaVistosHistorial,
         notasTexto,
+        ganchosTexto: textoGanchosProhibidos(ganchos),
       });
     } catch (err) {
+      razonDeIa = false;
       // La IA falló: el oyente nunca cae en la rotación global si tenemos sus
       // gustos. Elegimos por afinidad (géneros, artistas, diario) sin IA.
       if (returnRitual) {
@@ -1010,6 +1044,22 @@ async function recomendarYGuardar(
         dossier.album.title,
         dossier.album.artist.name,
       );
+    } else if (razonDeIa && !returnRitual) {
+      // Barrera anti-muletilla, igual que en el disco fresco.
+      reason = (
+        await afinarRazon({
+          razon: reason,
+          razonesPrevias: picksRecientes.map((p) => p.reason),
+          title: dossier.album.title,
+          artist: dossier.album.artist.name,
+          year: dossier.album.year,
+          perfilTexto: [perfilATexto(parsedProfile), notasTexto]
+            .filter(Boolean)
+            .join("\n\n"),
+          mood: opts.mood,
+          voz,
+        })
+      )?.slice(0, 600) ?? null;
     }
 
     await saveTodaysPick(ctx, date, {
@@ -1057,6 +1107,8 @@ async function elegirConLlm(input: {
   yaVistosHistorial?: string[];
   /** Memoria personal del oyente (lo que le contó al curador). */
   notasTexto?: string | null;
+  /** Palabras e imágenes ya gastadas en razones recientes (anti-muletilla). */
+  ganchosTexto?: string | null;
 }): Promise<{ albumId: string; reason: string }> {
   const catalogoTexto = input.catalogo
     .map((d) => {
@@ -1116,7 +1168,7 @@ Reglas estrictas:
 5. PROHIBIDO elegir un disco que aparezca en la lista "DISCOS RECOMENDADOS EN DÍAS RECIENTES" ni en "DISCOS QUE YA SE LE RECOMENDARON ANTES". Si aun así ves que todas las opciones del catálogo están en esas listas, elige el disco que lleve MÁS TIEMPO sin aparecer (el que esté más abajo en "YA SE LE RECOMENDARON ANTES").
 6. Si el usuario indicó su ánimo de hoy, dale prioridad como señal.
 7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.
-8. NO REPITAS EL MISMO GANCHO: en "DISCOS RECOMENDADOS EN DÍAS RECIENTES" abajo, junto a cada disco reciente, verás la razón que le diste ese día. PROHIBIDO abrir la razón de HOY con la misma anécdota, dato o escena que ya usaste ahí. Elige un ángulo distinto del perfil, el diario o el ánimo de hoy.${input.lang ? `\n9. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO elegir un álbum donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Si no hay ninguno en el catálogo que encaje, elige el más cercano y menciónalo en la "reason".\n   ATENCIÓN — los idiomas son distintos: "Español" (castellano) ≠ "Português" (Brasil, Portugal) ≠ "Français" ≠ "English" ≠ "Italiano". No confundas lenguas romances; un disco en portugués NO es válido cuando pidieron español.` : ""}`;
+8. NO REPITAS EL MISMO GANCHO: en "DISCOS RECOMENDADOS EN DÍAS RECIENTES" abajo, junto a cada disco reciente, verás la razón que le diste ese día. PROHIBIDO abrir la razón de HOY con la misma anécdota, dato o escena que ya usaste ahí. Elige un ángulo distinto del perfil, el diario o el ánimo de hoy. Un detalle REAL suyo (un interés, una frase de su perfil, un disco que amó) usado dos días seguidos YA es una muletilla, aunque sea verdad: al final del mensaje verás la lista de palabras vetadas hoy y debes respetarla, incluidos sinónimos y la misma idea dicha de otra forma.${input.lang ? `\n9. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO elegir un álbum donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Si no hay ninguno en el catálogo que encaje, elige el más cercano y menciónalo en la "reason".\n   ATENCIÓN — los idiomas son distintos: "Español" (castellano) ≠ "Português" (Brasil, Portugal) ≠ "Français" ≠ "English" ≠ "Italiano". No confundas lenguas romances; un disco en portugués NO es válido cuando pidieron español.` : ""}`;
 
   const user = `CATÁLOGO DISPONIBLE (elige uno por su albumId):
 ${catalogoTexto}
@@ -1131,7 +1183,7 @@ ${diarioTexto}
 ${peticionTexto}${regeneracionTexto}${regresoTexto}${yaVistosTexto}
 DISCOS RECOMENDADOS EN DÍAS RECIENTES (evítalos si puedes):
 ${recientesTexto}
-
+${input.ganchosTexto ?? ""}
 Responde el JSON ahora.`;
 
   const raw = await llm({

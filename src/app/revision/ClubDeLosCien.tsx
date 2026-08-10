@@ -46,13 +46,13 @@ export function ClubDeLosCien({
     });
   }
 
+  // Con el índice vacío no hay cima que gobernar: lo único que toca es
+  // levantarlo, y de eso se encarga el botón de arriba (`LevantarSalon`).
   if (total === 0) {
     return (
       <p className="mt-5 rounded-2xl bg-surface p-5 text-sm leading-relaxed text-dim">
-        El índice del canon está vacío. Constrúyelo con{" "}
-        <code className="rounded bg-black/40 px-1.5 py-0.5 text-xs">npm run canon</code>{" "}
-        (o <code className="rounded bg-black/40 px-1.5 py-0.5 text-xs">--limite 150</code>{" "}
-        para una prueba corta) con la <code>DATABASE_URL</code> de Railway.
+        Cuando el canon tenga discos, aquí podrás fijar puntajes a mano y meter
+        los clásicos que el índice no trajo.
       </p>
     );
   }

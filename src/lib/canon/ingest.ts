@@ -15,6 +15,7 @@
 // significa "este disco está por encima del 94% del canon".
 
 import { prisma } from "../db";
+import { parseJson } from "../types";
 import { buscarAlbumesCanonicos, premiosDeAlbumes } from "../sources/wikidata";
 import { getAlbumInfo } from "../sources/lastfm";
 import { searchAlbums } from "../sources/deezer";
@@ -52,25 +53,42 @@ export type ResumenIngesta = {
   actualizados: number;
   conPremios: number;
   recalibrados: number;
+  /** Se acabó el tiempo antes de recorrer todos los candidatos (corrida web). */
+  incompleta: boolean;
 };
 
 /**
  * Construye o refresca el índice. Idempotente: correrlo dos veces no duplica
  * nada (la clave es "artista|título") y respeta los puntajes que el curador
  * haya fijado a mano.
+ *
+ * `presupuestoMs` existe para poder correr esto desde una función de Vercel sin
+ * que la corten a medias: al agotarse, deja de meter discos nuevos pero SIEMPRE
+ * termina enlazando y recalibrando, así que el índice queda coherente aunque
+ * esté a medio llenar. Los candidatos vienen ordenados por documentación, o sea
+ * que lo que entra primero es lo más canónico.
  */
 export async function construirIndice(opciones: {
   limite?: number;
   minSitelinks?: number;
   conOyentes?: boolean;
+  presupuestoMs?: number;
+  /** Solo meter lo que falta (para crecer el índice a ratos, sin repetir trabajo). */
+  soloNuevos?: boolean;
   log?: (msg: string) => void;
 } = {}): Promise<ResumenIngesta> {
   const {
     limite = 1000,
     minSitelinks = 15,
     conOyentes = true,
+    presupuestoMs,
+    soloNuevos = false,
     log = () => {},
   } = opciones;
+
+  const arranque = Date.now();
+  const sinTiempo = () =>
+    presupuestoMs !== undefined && Date.now() - arranque > presupuestoMs;
 
   log(`Pidiendo a Wikidata hasta ${limite} discos (≥${minSitelinks} ediciones de Wikipedia)…`);
   const candidatos = await buscarAlbumesCanonicos(limite, minSitelinks);
@@ -82,19 +100,48 @@ export async function construirIndice(opciones: {
     );
   }
 
-  log("Pidiendo los premios de cada disco…");
-  const premios = await premiosDeAlbumes(
-    candidatos.map((c) => c.wikidataId),
-    200,
-    log,
+  // Los premios son varias consultas más. Si la corrida va con prisa y ya se
+  // gastó media hora de reloj buscando candidatos, se saltan: es mejor un índice
+  // sin premios hoy (los añade la siguiente corrida) que ninguno.
+  const premiosPedidos =
+    presupuestoMs === undefined || Date.now() - arranque <= presupuestoMs / 2;
+  let premios = new Map<string, string[]>();
+  if (premiosPedidos) {
+    log("Pidiendo los premios de cada disco…");
+    premios = await premiosDeAlbumes(candidatos.map((c) => c.wikidataId), 200, log);
+    log(`${premios.size} discos tienen al menos un premio registrado.`);
+  } else {
+    log("Sin tiempo para los premios en esta corrida: los añade la siguiente.");
+  }
+
+  // Lo que ya hay, de una sola consulta: así el bucle escribe con un `upsert`
+  // en vez de preguntar disco por disco si existe (la mitad de viajes a la base,
+  // que es lo que decide si esto cabe o no en una corrida desde la web).
+  const previas = new Map(
+    (
+      await prisma.canonAlbum.findMany({
+        select: { key: true, genresJson: true, signalsJson: true },
+      })
+    ).map((p) => [p.key, p]),
   );
-  log(`${premios.size} discos tienen al menos un premio registrado.`);
 
   let nuevos = 0;
   let actualizados = 0;
+  let incompleta = false;
 
   for (const c of candidatos) {
+    if (sinTiempo()) {
+      incompleta = true;
+      log(
+        `Se acabó el tiempo de esta corrida: entraron ${nuevos + actualizados} de ` +
+          `${candidatos.length} discos. Vuelve a correrla para seguir donde quedó.`,
+      );
+      break;
+    }
+
     const key = canonKey(c.title, c.artist);
+    const previa = previas.get(key);
+    if (soloNuevos && previa) continue;
 
     // Oyentes: señal débil y opcional. Si no hay LASTFM_API_KEY, `getAlbumInfo`
     // devuelve null y seguimos sin ella — el puntaje se sostiene igual.
@@ -110,9 +157,22 @@ export async function construirIndice(opciones: {
       }
     }
 
+    // Una corrida rápida (sin Last.fm) NO puede borrar lo que trajo una lenta:
+    // si el disco ya tenía oyentes y géneros, se conservan tal cual.
+    const previos = previa
+      ? parseJson<Partial<CanonSignals>>(previa.signalsJson, {})
+      : null;
+    if (!conOyentes && typeof previos?.listeners === "number") {
+      listeners = previos.listeners;
+    }
+
     const signals: CanonSignals = {
       sitelinks: c.sitelinks,
-      awards: premios.get(c.wikidataId) ?? [],
+      // Si esta corrida no llegó a preguntar por los premios, se conservan los
+      // que ya tenía: saltarse una consulta no es motivo para borrar un Grammy.
+      awards:
+        premios.get(c.wikidataId) ??
+        (premiosPedidos ? [] : (previos?.awards ?? [])),
       listeners,
       ratingVotes: null,
     };
@@ -120,7 +180,12 @@ export async function construirIndice(opciones: {
     // Mismos géneros canónicos que ya usa el catálogo, derivados de etiquetas
     // reales: si Last.fm no conoce el disco, se queda sin género antes que
     // inventarle uno.
-    const generos = deriveGenres(tags);
+    const generosNuevos = deriveGenres(tags);
+    const generosPrevios = previa
+      ? parseJson<string[]>(previa.genresJson, [])
+      : [];
+    const generos =
+      generosNuevos.length > 0 ? generosNuevos : generosPrevios;
 
     const datos = {
       title: c.title,
@@ -136,14 +201,13 @@ export async function construirIndice(opciones: {
       genresJson: JSON.stringify(generos),
     };
 
-    const existente = await prisma.canonAlbum.findUnique({ where: { key } });
-    if (existente) {
-      await prisma.canonAlbum.update({ where: { key }, data: datos });
-      actualizados++;
-    } else {
-      await prisma.canonAlbum.create({ data: { key, ...datos } });
-      nuevos++;
-    }
+    await prisma.canonAlbum.upsert({
+      where: { key },
+      create: { key, ...datos },
+      update: datos,
+    });
+    if (previa) actualizados++;
+    else nuevos++;
   }
 
   log(`Índice: ${nuevos} discos nuevos, ${actualizados} actualizados.`);
@@ -157,6 +221,7 @@ export async function construirIndice(opciones: {
     actualizados,
     conPremios: premios.size,
     recalibrados,
+    incompleta,
   };
 }
 
@@ -240,7 +305,9 @@ export async function enlazarConCatalogo(
 export async function rellenarPortadas(
   max = 200,
   log: (msg: string) => void = () => {},
+  presupuestoMs?: number,
 ): Promise<number> {
+  const arranque = Date.now();
   const pendientes = await prisma.canonAlbum.findMany({
     where: { coverUrl: null },
     orderBy: { score: "desc" },
@@ -250,6 +317,7 @@ export async function rellenarPortadas(
 
   let puestas = 0;
   for (const p of pendientes) {
+    if (presupuestoMs !== undefined && Date.now() - arranque > presupuestoMs) break;
     try {
       const [mejor] = await searchAlbums(`${p.artist} ${p.title}`, 1);
       if (mejor?.cover) {
@@ -267,4 +335,98 @@ export async function rellenarPortadas(
 
   log(`Portadas: ${puestas} de ${pendientes.length} intentadas.`);
   return puestas;
+}
+
+// ─── Levantar el Salón sin terminal (9.10) ───────────────────────────────────
+//
+// El índice se construía solo con `npm run canon`, y eso dejaba el Salón vacío
+// hasta que el dueño se sentara delante de una computadora. Aquí abajo está lo
+// que arregla eso: UNA operación que hace "lo siguiente que haga falta" y cabe
+// en el tiempo que le des. La llaman dos sitios: el botón del panel de revisión
+// (desde el teléfono, a trozos) y el worker de Railway (de noche, entero).
+
+/** A cuántos discos aspira el índice. Con mil, el 100 es ~0,4%: 4-7 discos. */
+export const OBJETIVO_INDICE = 1000;
+
+export type AvanceSalon = {
+  paso: "indice" | "portadas" | "al-dia";
+  /** Frase para el dueño, en cristiano: qué acaba de pasar. */
+  mensaje: string;
+  /** ¿Hay que volver a darle? (el botón lo dice sin tecnicismos) */
+  quedaTrabajo: boolean;
+  total: number;
+  sinPortada: number;
+};
+
+/**
+ * Da un paso de construcción del Salón y cuenta qué hizo. Idempotente y
+ * reanudable: si se acaba el tiempo, lo que entró se queda y la siguiente
+ * corrida sigue donde esta lo dejó.
+ */
+export async function avanzarSalon(opciones: {
+  presupuestoMs?: number;
+  conOyentes?: boolean;
+  log?: (msg: string) => void;
+} = {}): Promise<AvanceSalon> {
+  const { presupuestoMs, conOyentes = false, log = () => {} } = opciones;
+  const arranque = Date.now();
+  const restante = () =>
+    presupuestoMs === undefined ? undefined : presupuestoMs - (Date.now() - arranque);
+
+  let total = await prisma.canonAlbum.count();
+  let arrastre = ""; // lo que ya contó el paso del índice, si pasó al siguiente
+
+  // 1. Lo primero es que haya canon. Mientras falten discos, el resto espera.
+  if (total < OBJETIVO_INDICE) {
+    const resumen = await construirIndice({
+      limite: OBJETIVO_INDICE,
+      conOyentes,
+      // Crecer a ratos: no rehacemos los que ya están, así cada corrida avanza.
+      soloNuevos: true,
+      presupuestoMs: restante(),
+      log,
+    });
+    const previo = total;
+    total = await prisma.canonAlbum.count();
+
+    // Wikidata no dio ni uno nuevo teniendo tiempo de sobra: el índice llegó a
+    // su techo (hay menos discos con ese nivel de documentación que el objetivo).
+    // No es un fallo ni algo que repetir: se sigue con las portadas.
+    const enSuTecho = !resumen.incompleta && resumen.nuevos === 0;
+    if (!enSuTecho) {
+      const sinPortada = await prisma.canonAlbum.count({ where: { coverUrl: null } });
+      return {
+        paso: "indice",
+        mensaje:
+          previo === 0
+            ? `El Salón ya está en pie: entraron ${resumen.nuevos} discos al canon.`
+            : `Entraron ${resumen.nuevos} discos más: el canon va por ${total}.`,
+        quedaTrabajo: resumen.incompleta || total < OBJETIVO_INDICE || sinPortada > 0,
+        total,
+        sinPortada,
+      };
+    }
+    arrastre = `El canon está completo con ${total} discos. `;
+  }
+
+  // 2. Con el canon en pie, lo que falta son caras: las portadas.
+  if ((await prisma.canonAlbum.count({ where: { coverUrl: null } })) > 0) {
+    const puestas = await rellenarPortadas(300, log, restante());
+    const sinPortada = await prisma.canonAlbum.count({ where: { coverUrl: null } });
+    return {
+      paso: "portadas",
+      mensaje: `${arrastre}${puestas} carátulas nuevas. Faltan ${sinPortada} por buscar.`,
+      quedaTrabajo: sinPortada > 0,
+      total,
+      sinPortada,
+    };
+  }
+
+  return {
+    paso: "al-dia",
+    mensaje: `${arrastre}El Salón está al día: ${total} discos, todos con carátula.`,
+    quedaTrabajo: false,
+    total,
+    sinPortada: 0,
+  };
 }

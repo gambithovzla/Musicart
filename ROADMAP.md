@@ -562,6 +562,19 @@ discos; lo valioso es **el porqué del orden**.
   caminos desde `/revision` (como la Vitrina de 7.6) y un camino se puede
   compartir con OG image. En su propia sección esto es natural; cosido al ritual
   no lo era.
+- [x] **8.7 Que trazar un camino no falle** (ago 2026, tras el reporte del dueño:
+  «puse salsa y me da error en rojo») — la propuesta de 5 discos con sus puentes
+  es la generación más larga que hacemos en runtime (~1.500 tokens de español) y
+  se estaba pidiendo con **30 s de espera y 1.400 tokens de tope**: si el modelo
+  tardaba un poco más o se pasaba de largo, la respuesta llegaba cortada, el JSON
+  no parseaba y el oyente veía "no pude trazar este camino". Ahora espera 75 s
+  (y la route pasó a `maxDuration` 300 para que quepa el reintento), cabe en
+  2.200 tokens, **reintenta una vez** si vuelve
+  incompleta y solo acepta el camino con sus 5 pasos —cuatro pasos sin cima no
+  son un camino—. Además el error dice qué pasó ("tardó demasiado, dale otra
+  vez" ≠ "la IA está caída, vuelve luego") y, si quien lo ve es el curador, se
+  le enseña el error técnico: un fallo en producción ya no es invisible desde el
+  teléfono.
 
 ### Criterios de aceptación
 
@@ -649,8 +662,9 @@ Musicart YA tenía un número 1-100: el impacto cultural (`Album.impact`, 6.5).
   disco de 95", personalizado por afinidad y sin repetir lo ya escuchado), pisos
   navegables, canon con acento (país y género), `/salon/lista` con filtros y
   `/salon/disco/[id]` con los recibos del puntaje. Enlace en `BottomNav`.
-- [ ] **9.6 Primera corrida real del índice** (pendiente del dueño) —
-  `npm run canon` con la `DATABASE_URL` de Railway. Ver "Pendiente del dueño".
+- [ ] **9.6 Primera corrida real del índice** — ya no hace falta terminal (ver
+  9.10): o le das al botón de `/revision`, o esperas al worker de la noche.
+  Queda por marcar hasta que el índice esté de verdad levantado en producción.
 - [x] **9.7 Curaduría del club de los 100** — la fórmula ordena mil discos bien,
   pero la cima es donde un error se ve más y donde el criterio del dueño vale
   más que cualquier señal. Ahora puede **fijar un puntaje a mano** (`locked`: la
@@ -674,12 +688,29 @@ Musicart YA tenía un número 1-100: el impacto cultural (`Album.impact`, 6.5).
   queda encendida mientras estás dentro de cualquiera de ellas.
 - [ ] **9.9 Compartir el Salón** — OG image del Salón y de cada disco del canon
   ("soy un 96/100"), al estilo de la de la Vitrina en 7.6.
+- [x] **9.10 El Salón se levanta solo** (ago 2026, tras el reporte del dueño:
+  «me metí en el Salón y no aparece absolutamente nada») — el índice dependía de
+  que alguien corriera `npm run canon` **en una terminal**, y el dueño anda en el
+  teléfono: la pestaña se quedaba en "El Salón se está levantando" para siempre y
+  desde la app no había manera de arreglarlo. Ahora la ingesta se puede dar por
+  tramos (`avanzarSalon`, con presupuesto de tiempo y reanudable: lo que entró se
+  queda y la siguiente corrida sigue) y la llaman dos sitios:
+  **(a)** un botón en `/revision` — "Levantar el Salón" — que avanza lo que quepa
+  en una función de Vercel y te dice cuántos discos entraron y si hay que volver
+  a darle; **(b)** el **worker de Railway**, que cada noche termina lo que falte,
+  refresca el índice cada 7 días y busca carátulas, sin que nadie mire y sin
+  gastar IA. Detalles que importan: una corrida rápida (sin Last.fm) ya no borra
+  los oyentes ni los géneros que trajo una lenta, saltarse los premios por falta
+  de tiempo no borra los que ya estaban, y el índice **siempre** termina
+  recalibrado — a medio llenar, pero coherente. Y si el que ve el Salón vacío es
+  el curador, el mensaje le dice dónde está el botón.
 
 ### Pendiente del dueño (una sola vez)
 
-- [ ] Correr `npm run canon` con la `DATABASE_URL` pública de Railway. Tarda
-  bastante (habla con tres APIs con pausas de cortesía). Para probar primero:
-  `npm run canon -- --limite 150`.
+- [ ] Levantar el índice: entra a `/revision` y dale a **"Levantar el Salón"**
+  (tarda unos minutos y puede pedir más de un toque). Si no lo tocas, el worker
+  de Railway lo hace igual esa misma noche. La terminal ya no hace falta:
+  `npm run canon` sigue existiendo para corridas grandes de mantenimiento.
 - [ ] Opcional: `LASTFM_API_KEY` para que el índice tenga oyentes y géneros. Sin
   ella el puntaje se calcula igual, solo con menos matices.
 

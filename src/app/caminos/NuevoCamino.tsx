@@ -35,6 +35,7 @@ export function NuevoCamino({ primero }: { primero: boolean }) {
   const [tema, setTema] = useState("");
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detalle, setDetalle] = useState<string | null>(null);
   const [frase, setFrase] = useState(0);
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export function NuevoCamino({ primero }: { primero: boolean }) {
     if (!limpio || cargando) return;
     setCargando(true);
     setError(null);
+    setDetalle(null);
     setFrase(0);
     try {
       const res = await fetch("/api/caminos/crear", {
@@ -57,18 +59,29 @@ export function NuevoCamino({ primero }: { primero: boolean }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tema: limpio }),
       });
-      const data = (await res.json()) as { ok?: boolean; caminoId?: string; reason?: string };
+      const data = (await res.json()) as {
+        ok?: boolean;
+        caminoId?: string;
+        reason?: string;
+        detalle?: string;
+      };
       if (data.ok && data.caminoId) {
         router.push(`/caminos/${data.caminoId}`);
         return;
       }
+      // Cada fallo pide una cosa distinta: volver a darle ahora, volver luego o
+      // arreglar el perfil. Decírselo evita que el oyente se quede sin salida.
       setError(
-        data.reason === "sin-ia"
+        data.reason === "tiempo"
+          ? "Tardó demasiado en trazarse. Vuelve a darle: casi siempre sale a la segunda."
+          : data.reason === "sin-ia" || data.reason === "ia"
           ? "Ahora mismo no puedo trazar caminos. Inténtalo en un rato."
           : data.reason === "sin-identidad"
           ? "Necesito conocerte un poco antes. Completa tu perfil y vuelve."
           : "No pude trazar este camino. Prueba otra vez o con otras palabras.",
       );
+      // Solo llega si eres el curador: la app no le enseña esto a nadie más.
+      if (data.detalle) setDetalle(data.detalle);
     } catch {
       setError("Se cortó la conexión. Inténtalo de nuevo.");
     }
@@ -151,6 +164,11 @@ export function NuevoCamino({ primero }: { primero: boolean }) {
       </form>
 
       {error && <p className="mt-3 text-xs text-red-300">{error}</p>}
+      {detalle && (
+        <p className="mt-1.5 font-mono text-[11px] leading-relaxed text-dim">
+          {detalle}
+        </p>
+      )}
     </div>
   );
 }

@@ -77,7 +77,7 @@ src/app/diario/          Historial de escuchas con racha + hilo musical (5.4).
 src/app/rebobinada/      Carta mensual del mes musical (5.2).
 src/app/caminos/         Fase 8: pestaña propia de los Caminos (lista + crear, y
                          /caminos/[id] con sus pasos). Las dos operaciones caras
-                         viven en /api/caminos/crear (maxDuration 120) y
+                         viven en /api/caminos/crear (maxDuration 300) y
                          /api/caminos/paso (300), como el disco del día.
 src/app/salon/           Fase 9: El Salón de la Fama. Muro de los 100/100, el
                          DIAL ("dame un disco de 95"), pisos, canon con acento
@@ -85,6 +85,8 @@ src/app/salon/           Fase 9: El Salón de la Fama. Muro de los 100/100, el
                          /salon/disco/[id] con los recibos del puntaje. La
                          fabricación del dossier vive en /api/salon/abrir
                          (maxDuration 300), como el disco del día.
+                         /api/salon/construir (9.10, maxDuration 300): levanta el
+                         índice por tramos desde el panel, sin terminal.
                          admin-actions.ts + CuradorCanon (9.7): fijar/soltar un
                          puntaje a mano (locked), añadir al canon lo que el
                          índice no trajo, quitar lo que se coló. Vista de
@@ -137,8 +139,10 @@ src/lib/canon/           Fase 9: el Salón de la Fama. AQUÍ NO ENTRA NINGÚN LL
                            el defecto de Album.impact: ese no es comparable entre
                            discos, este sí.
   ingest.ts                construirIndice() (Wikidata → señales → prestigio →
-                           recalibrar), recalibrar(), enlazarConCatalogo() y
-                           rellenarPortadas(). Corre por script, nunca en runtime.
+                           recalibrar), recalibrar(), enlazarConCatalogo(),
+                           rellenarPortadas() y avanzarSalon() (9.10: un tramo
+                           de construcción con presupuesto de tiempo, reanudable
+                           — lo llaman el botón de /revision y el worker).
   consulta.ts              Lectura de la pestaña: muro, pisos, listarCanon con
                            filtros, discoDePuntaje() (el dial, personalizado sin
                            IA) y progresoDelOyente(). Sin import del pipeline.
@@ -179,7 +183,9 @@ src/components/          BottomNav (9.8: SOLO 4 pestañas — Hoy · Explorar ·
                          DuetPanel, PushToggle, ProfileForm, InstallPrompt…
 src/app/explorar/        Rutas temáticas (Fase 4.4).
 scripts/dossier.ts       CLI: npm run dossier -- "Álbum" "Artista" --publish
-scripts/worker.ts        Worker del catálogo (cron Railway): npm run worker
+scripts/worker.ts        Worker del catálogo (cron Railway): npm run worker.
+                         Además mantiene el Salón (9.10): levanta/termina el
+                         índice, lo refresca cada 7 días y busca portadas.
 ```
 
 ## Comandos
@@ -241,7 +247,10 @@ npm run push                                     # envío Web Push del disco del
   mismo. No los mezcles ni los sincronices sin pensarlo: miden cosas distintas.
 - **`npm run canon` no corre en Vercel ni en sandboxes sin red**: habla con
   Wikidata, Last.fm y Deezer, y tarda minutos. Es un script de mantenimiento
-  (como el worker), no una ruta. El índice se refresca cuando tú lo corres.
+  (como el worker), no una ruta. Desde la app el índice se levanta **a tramos**
+  (botón "Levantar el Salón" en `/revision` → `/api/salon/construir`, con
+  presupuesto de tiempo) y el worker de Railway lo termina de noche: el Salón ya
+  no depende de que alguien tenga una terminal delante.
 - **Escalas:** dificultad del álbum 1-5 (estrellas); impacto cultural 1-100
   (honesto, con leyenda + `impactNote` clicleable); puntaje del usuario 1-10
   (umbral "loved" = 8). Migraciones ya reescalaron datos viejos.

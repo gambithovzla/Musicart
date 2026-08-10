@@ -3,6 +3,9 @@
 //   npm run worker -- --batch 2 --propose 5
 //
 // Cada corrida:
+//   0. Mantiene el Salón de la Fama (Fase 9): levanta el índice del canon si
+//      falta, lo refresca cada semana y le busca carátulas. Sin IA y sin que
+//      nadie corra `npm run canon` a mano. Se salta con `--sin-salon`.
 //   1. Si la cola tiene pocos pendientes, el curador IA propone más álbumes.
 //   2. Toma N items por prioridad y los genera con el pipeline anti-alucinación
 //      (publica solo si la verificación queda limpia; si no, queda draft).
@@ -12,8 +15,15 @@
 import { prisma } from "../src/lib/db";
 import { proposeNextAlbums, bootstrapCatalogQueue } from "../src/lib/curator";
 import { runDossierPipeline } from "../src/lib/dossier/pipeline";
+import {
+  avanzarSalon,
+  construirIndice,
+  OBJETIVO_INDICE,
+} from "../src/lib/canon/ingest";
 
 const MAX_ATTEMPTS = 3; // un item que falla 3 veces deja de reintentarse
+const DIAS_ENTRE_REFRESCOS = 7; // cada cuánto se vuelve a preguntar a Wikidata
+const TRAMOS_SALON = 6; // tope de tramos por corrida (índice + portadas)
 
 function assertWorkerEnv(): void {
   const dbUrl = process.env.DATABASE_URL ?? "";
@@ -52,10 +62,54 @@ async function feedQueue(minPendientes: number, log: (msg: string) => void) {
   await bootstrapCatalogQueue(minPendientes - pendientes, log);
 }
 
+/**
+ * El Salón de la Fama se mantiene solo (9.10).
+ *
+ * Antes el índice del canon dependía de que alguien corriera `npm run canon` en
+ * una terminal, y mientras tanto la pestaña `/salon` se veía vacía. Aquí, que ya
+ * es una máquina con red y sin prisa, se levanta y se mantiene sin que nadie
+ * mire: llena lo que falte del índice y le pone carátulas.
+ *
+ * Nunca tumba la corrida del catálogo: si Wikidata está caído, se avisa y ya.
+ */
+async function mantenerSalon(log: (msg: string) => void) {
+  try {
+    const total = await prisma.canonAlbum.count();
+
+    // Refresco periódico: los premios y los oyentes cambian, la documentación
+    // de Wikipedia también. Solo cuando el índice ya está completo — si está a
+    // medias, lo urgente es terminarlo, no repasarlo.
+    if (total >= OBJETIVO_INDICE) {
+      const ultimo = await prisma.canonAlbum.aggregate({ _max: { updatedAt: true } });
+      const dias = ultimo._max.updatedAt
+        ? (Date.now() - ultimo._max.updatedAt.getTime()) / 86_400_000
+        : Infinity;
+      if (dias >= DIAS_ENTRE_REFRESCOS) {
+        log(`Índice de ${total} discos con ${Math.floor(dias)} días: refrescando…`);
+        const r = await construirIndice({ conOyentes: true, log });
+        log(`Refresco: ${r.nuevos} nuevos, ${r.actualizados} actualizados.`);
+      }
+    }
+
+    // Y lo que falte (terminar el índice, buscar carátulas), por tramos.
+    for (let i = 0; i < TRAMOS_SALON; i++) {
+      const avance = await avanzarSalon({ conOyentes: true, log });
+      log(avance.mensaje);
+      if (!avance.quedaTrabajo) break;
+    }
+  } catch (err) {
+    log(`⚠ El Salón no avanzó en esta corrida: ${(err as Error).message}`);
+  }
+}
+
 function argNum(flag: string, fallback: number): number {
   const idx = process.argv.indexOf(flag);
   const val = idx !== -1 ? Number(process.argv[idx + 1]) : NaN;
   return Number.isFinite(val) && val > 0 ? val : fallback;
+}
+
+function tieneFlag(flag: string): boolean {
+  return process.argv.includes(flag);
 }
 
 async function main() {
@@ -64,6 +118,16 @@ async function main() {
   const minPendientes = argNum("--propose", 5);
 
   console.log(`\n🎵 Musicart — worker de catálogo (batch ${batch})\n`);
+
+  // 0. El Salón de la Fama, primero: no gasta IA y es lo que hace que la
+  //    pestaña deje de estar vacía. Va antes que el catálogo porque más abajo
+  //    hay salidas tempranas (cola vacía, corrida fallida) y esto tiene que
+  //    correr todos los días pase lo que pase.
+  if (!tieneFlag("--sin-salon")) {
+    console.log("🏛  Salón de la Fama:");
+    await mantenerSalon((msg) => console.log(`   ${msg}`));
+    console.log("");
+  }
 
   // 1. Mantener la cola alimentada.
   await feedQueue(minPendientes, (msg) => console.log(`   ${msg}`));

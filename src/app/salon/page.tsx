@@ -6,6 +6,8 @@
 // sentido.
 
 import Link from "next/link";
+import { auth } from "@/auth";
+import { isAdminEmail } from "@/lib/admin";
 import { getListenerIdentity, hasListener } from "@/lib/identity";
 import {
   getMuro,
@@ -37,8 +39,11 @@ export default async function SalonPage() {
     : null;
 
   // Índice vacío: la ingesta todavía no ha corrido. Se dice claro, sin
-  // maquillarlo con datos de mentira.
+  // maquillarlo con datos de mentira. Al curador, además, se le dice dónde está
+  // el botón que lo arregla: si no, ve lo mismo que el oyente y no puede hacer nada.
   if (muro.length === 0) {
+    const sesion = await auth();
+    const esCurador = isAdminEmail(sesion?.user?.email);
     return (
       <main className="px-6 pb-16 pt-14">
         <Cabecera />
@@ -49,6 +54,18 @@ export default async function SalonPage() {
             El índice del canon aún no se ha construido. Cuando esté, aquí
             estarán los discos con los que se cuenta la historia de la música.
           </p>
+          {esCurador && (
+            <p className="mx-auto mt-5 max-w-xs text-sm leading-relaxed text-dim">
+              Como curador puedes levantarlo ahora mismo desde{" "}
+              <Link
+                href="/revision"
+                className="text-album underline underline-offset-4"
+              >
+                Revisión
+              </Link>
+              .
+            </p>
+          )}
         </div>
       </main>
     );

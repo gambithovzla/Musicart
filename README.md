@@ -83,7 +83,8 @@ Los MP3 quedan en `public/audio/{dossierId}/` (local/CLI) o en **Vercel Blob**
 
 Un **curador IA** decide qué álbumes faltan (clásicos imprescindibles, huecos de
 género/época/idioma, afinidades con lo que los usuarios puntúan alto) y los
-encola en `GenerationQueue`. Un **worker** (`npm run worker`) toma la cola,
+encola en `GenerationQueue`. Un **worker** (`npm run worker`) mantiene de paso el
+índice del Salón de la Fama (ver más abajo; eso no gasta IA), toma la cola,
 genera con el pipeline anti-alucinación y publica solo lo verificado; lo que no
 pasa queda en `draft`. Si el curador IA falla, un **bootstrap de clásicos**
 llena la cola automáticamente. Los **saltos** de cada dossier publicado también
@@ -120,6 +121,17 @@ consagración, no popularidad)— y después se calibra **por percentil contra t
 el índice**. Por eso un 91 significa siempre lo mismo, y por eso el 100 es
 rarísimo (~0,4% del índice). Cada número se abre y enseña de dónde salió.
 
+### Cómo se llena (sin terminal)
+
+- **Desde el teléfono:** en `/revision`, el botón **"Levantar el Salón"**. Cada
+  toque construye un tramo del canon (o busca carátulas que falten) y te dice
+  cuántos discos entraron y si hay que volver a darle. Es reanudable: lo que
+  entró se queda.
+- **Solo, de noche:** el worker de Railway lo mantiene en cada corrida — termina
+  el índice si está a medias, lo refresca cada 7 días y busca portadas. Se salta
+  con `npm run worker -- --sin-salon`.
+- **A mano, para corridas grandes:**
+
 ```bash
 npm run canon                  # construye/refresca el índice (~1000 discos)
 npm run canon -- --limite 150  # corrida corta para probar
@@ -127,10 +139,10 @@ npm run canon -- --portadas 200  # solo carátulas pendientes
 npm run canon -- --recalibrar    # solo recalcular puntajes (sin red)
 ```
 
-Corre **fuera de Vercel** (en local o en Railway, como el worker): tarda minutos
-y habla con varias APIs públicas. Necesita `DATABASE_URL`; `LASTFM_API_KEY` es
-opcional (sin ella el índice se construye igual, con menos matices). **No
-necesita clave de IA.**
+La ingesta completa corre **fuera de Vercel** (en local o en Railway, como el
+worker): tarda minutos y habla con varias APIs públicas. Necesita `DATABASE_URL`;
+`LASTFM_API_KEY` es opcional (sin ella el índice se construye igual, con menos
+matices). **No necesita clave de IA.**
 
 > `CanonAlbum.score` y `Album.impact` son dos números de 1-100 **distintos**: el
 > primero es comparable entre discos, el segundo (el impacto que la IA escribe

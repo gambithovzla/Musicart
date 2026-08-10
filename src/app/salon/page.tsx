@@ -20,6 +20,7 @@ import {
   progresoDelOyente,
   filtrosDisponibles,
 } from "@/lib/canon/consulta";
+import { LevantarSalon } from "@/components/LevantarSalon";
 import { Dial } from "./Dial";
 import { GaleriaCanon } from "./GaleriaCanon";
 import { SelloPuntaje } from "./SelloPuntaje";
@@ -56,8 +57,9 @@ export default async function SalonPage() {
     : null;
 
   // Índice vacío: la ingesta todavía no ha corrido. Se dice claro, sin
-  // maquillarlo con datos de mentira. Al curador, además, se le dice dónde está
-  // el botón que lo arregla: si no, ve lo mismo que el oyente y no puede hacer nada.
+  // maquillarlo con datos de mentira. Al curador, además, se le da AQUÍ MISMO el
+  // botón que lo arregla — antes esto era un enlace a /revision y el curador
+  // acababa en su perfil sin haber levantado nada (ver LevantarSalon).
   if (muro.length === 0) {
     const sesion = await auth();
     const esCurador = isAdminEmail(sesion?.user?.email);
@@ -76,9 +78,15 @@ export default async function SalonPage() {
             estarán los discos con los que se cuenta la historia de la música.
           </p>
           {esCurador && (
-            <Link href="/revision" className="sello mt-6">
-              Levantarlo ahora
-            </Link>
+            <div className="mt-2 flex flex-col items-center">
+              <LevantarSalon total={0} enmarcado={false} />
+              <Link
+                href="/revision"
+                className="dato pulsable mt-6 flex min-h-[44px] items-center text-[11px] uppercase tracking-[0.14em] text-tinta-suave underline underline-offset-4"
+              >
+                Ir al panel de revisión
+              </Link>
+            </div>
           )}
         </div>
       </main>

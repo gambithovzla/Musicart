@@ -26,7 +26,17 @@ export async function POST() {
   try {
     await requireAdmin();
   } catch {
-    return NextResponse.json({ ok: false, mensaje: "Solo el curador." }, { status: 403 });
+    // El mensaje importa: este botón también vive en /salon, y ahí un fallo mudo
+    // deja al curador sin saber si falló el permiso o la ingesta.
+    return NextResponse.json(
+      {
+        ok: false,
+        mensaje:
+          "Esto solo lo puede hacer el curador. Vuelve a entrar con tu cuenta " +
+          "de administrador e inténtalo otra vez.",
+      },
+      { status: 403 },
+    );
   }
 
   try {

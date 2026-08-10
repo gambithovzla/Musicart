@@ -17,7 +17,7 @@ import { RecalcularImpactos } from "./RecalcularImpactos";
 import { BuscarYCrear } from "./BuscarYCrear";
 import { CuradorAlbumes, type AlbumCurable } from "./CuradorAlbumes";
 import { ClubDeLosCien } from "./ClubDeLosCien";
-import { LevantarSalon } from "./LevantarSalon";
+import { LevantarSalon } from "@/components/LevantarSalon";
 import { getCanonCurado } from "@/lib/canon/consulta";
 
 export const dynamic = "force-dynamic";

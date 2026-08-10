@@ -726,11 +726,103 @@ Musicart YA tenía un número 1-100: el impacto cultural (`Album.impact`, 6.5).
 
 ---
 
+## ✅ Fase 10 — La imprenta (COMPLETADA · ago 2026)
+
+Encargo directo del dueño, fuera del orden de fases: *"todas las apps que se
+hacen últimamente son exactamente iguales, se reconoce al instante que las hizo
+una IA, como los flyers de ChatGPT. No quiero eso. Haz algo distinto, sal de tus
+plantillas, reinvéntate"*.
+
+**El diagnóstico.** El parecido no era casualidad ni mala suerte: era un
+repertorio concreto y repetido de gestos. Esquinas redondeadas, tarjetas
+flotando con `border-white/10` sobre `bg-white/[0.03]`, botones en pastilla, un
+acento dorado con halo difuminado, iconitos de línea, emojis haciendo de iconos,
+todo centrado e Inter. Musicart los tenía **todos**. Nombrarlos era la mitad del
+trabajo: son lo que hay que matar.
+
+**La idea.** Musicart no es una app, es una **publicación**: una revista musical
+que sale todos los días con un disco dentro. Todo el sistema sirve a eso — y
+como el producto ya era curaduría narrativa con voz de crítico, el disfraz de
+app era lo que le quedaba mal, no al revés.
+
+**Las siete reglas** (íntegras y con su porqué en la cabecera de `globals.css`;
+en vivo, con especímenes, en la ruta `/prensa`): cero esquinas redondeadas ·
+cero tarjetas (estructuran las reglas tipográficas, no las cajas) · dos
+**ediciones** en vez de dos "modos" · la tipografía es la interfaz (Fraunces
+display · Archivo texto · IBM Plex Mono para los datos) · los botones son sellos
+que se hunden contra el papel · nada de emojis · lo que se numera, se numera.
+
+### Tareas
+
+- [x] **10.1 El sistema** (`globals.css`) — tokens de tinta y papel en las dos
+  ediciones, y las clases que sustituyen a la plantilla: `.rotulo`, `.dato`,
+  `.cifra`, `.regla`/`.filete`, `.cabecera-seccion`, `.puntos`, `.sello`,
+  `.sello-hueco`, `.recuadro`, `.capitular`, `.calderon`. Con dos barridos
+  globales que arrastran a las pantallas todavía sin rehacer: se anula el
+  redondeo en toda la app y se reinterpretan `border-white/*` y `bg-white/*`
+  como filete y papel. **Un rediseño a medias se ve peor que no hacerlo.**
+- [x] **10.2 El acento imprimible** — la paleta de la portada estaba pensada
+  para brillar sobre negro y desaparecía sobre papel claro. `--acento` deriva de
+  la portada (cada disco sigue tiñendo su página) pero se entinta según la
+  edición. `text-album` apunta ahí, así que las decenas de usos que ya había se
+  arreglaron solos.
+- [x] **10.3 El folio corrido** (`Cabecera`) — todas las pantallas abren con el
+  nombre, el número de edición (el día del año) y la fecha, sobre filete doble.
+  Ninguna app se abre así; todas las revistas, sí.
+- [x] **10.4 El pie de imprenta** (`BottomNav`) — la barra de cuatro iconitos con
+  la pastilla de color era, junto con las tarjetas, la firma más reconocible de
+  la plantilla. Ahora son cuatro secciones numeradas en romanos, en versalitas, y
+  la activa se **entinta** (papel sobre tinta). Sin un solo icono.
+- [x] **10.5 La primera plana** (`DailyReveal`) — la carátula pasa a ser una
+  **lámina** con marco y pie de figura; el titular va a la izquierda y enorme;
+  la ficha técnica es una tira de datos entre reglas; la razón del día es un
+  **destacado** al margen y no una cajita ámbar; escuchar es una línea de
+  créditos, no tres pastillas con puntitos de color.
+- [x] **10.6 Caminos** — el selector de género deja de ser doce pastillas
+  idénticas y se compone como el **índice** que en realidad es (numerado, con
+  puntos conductores). Y mientras se traza no hay ruedita girando: hay una
+  **prensa imprimiendo**.
+- [x] **10.7 El Salón** — el sello dorado con halo (que además mentía: ese
+  número es un dato calibrado, no una medalla) se vuelve **cifra grabada**, con
+  la altura legible por el peso de la tinta. El muro deja de ser rejilla de
+  carátulas y se vuelve **escalafón** en columna. El dial gana una **regla
+  graduada** en lugar del slider del sistema.
+- [x] **10.8 El sumario** (`PuertasExplorar`) — las tres puertas con emoji
+  pasan a ser el sumario de la publicación, con romanos y su frase
+  diferenciadora (que era justo lo que la Fase 8 pedía y en una etiqueta de 11px
+  no cabía).
+- [x] **10.9 `/prensa`, el libro de estilo en vivo** — las siete reglas y sus
+  especímenes, en las dos ediciones. Existe sobre todo como **defensa**: el
+  riesgo de un sistema con carácter es que la siguiente sesión, por inercia,
+  vuelva a meter una tarjeta redondeada. No toca la base de datos, así que
+  siempre renderiza.
+
+### Lo que falta (deuda consciente, no olvido)
+
+- [ ] **10.10 Rehacer a mano el resto de pantallas** — dossier del álbum,
+  diario, perfil, onboarding, revisión, vitrina, rebobinada y dueto heredan
+  paleta, tipografías y el barrido de esquinas, pero conservan la estructura de
+  la época de la plantilla. Se van componiendo con el sistema a medida que se
+  toquen.
+
+### Criterios de aceptación
+
+- [x] Ninguna esquina redondeada, ninguna tarjeta flotante, ningún emoji-icono
+  y ninguna pastilla en las pantallas rehechas.
+- [x] Las dos ediciones son legibles: el acento se entinta y no se pierde sobre
+  papel claro.
+- [x] Un desconocido no puede señalar el gesto de plantilla que delata la app,
+  porque no queda ninguno en la ruta principal.
+
+---
+
 ## Estado actual (agosto 2026)
 
-**Fases 0–7 completas; Fase 8 casi cerrada (falta 8.6) y Fase 9 EN CURSO**
-(ago 2026). La 8.6 quedó pendiente por decisión del dueño, que priorizó el
-Salón de la Fama.
+**Fases 0–7 completas; Fase 8 casi cerrada (falta 8.6), Fase 9 EN CURSO y Fase
+10 (el rediseño "La imprenta") completada** (ago 2026). La 8.6 quedó pendiente
+por decisión del dueño, que priorizó el Salón de la Fama; la 10 fue un encargo
+transversal suyo y no altera el orden de las fases de producto: **la fase de
+trabajo sigue siendo la 9**.
 
 ---
 

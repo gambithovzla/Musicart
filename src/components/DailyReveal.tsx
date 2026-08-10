@@ -1,6 +1,22 @@
 "use client";
 
-// El revelado teatral del álbum del día: como destapar un vinilo.
+// LA PORTADA DEL DÍA — antes: todo centrado, la carátula flotando con halo de
+// neón, la razón dentro de una cajita ámbar redondeada y un botón en pastilla.
+// O sea: la portada de cualquier app.
+//
+// Ahora es la PRIMERA PLANA de la edición de hoy, y está compuesta como tal:
+//
+//   · La carátula se presenta como una LÁMINA (un fotograbado con su marco de
+//     tinta y su pie de figura numerado), no como una tarjeta con sombra.
+//   · El titular va a la izquierda y enorme, no centrado. Centrar todo es de
+//     presentación de diapositivas; una portada tiene eje izquierdo.
+//   · La ficha técnica (duración, dificultad, impacto) es una TIRA DE DATOS
+//     separada por reglas, como el pie de una ficha de catálogo.
+//   · El "por qué este disco, para ti, hoy" es un DESTACADO: comilla de
+//     apertura grande y regla al margen. Es la cita de la página.
+//   · Escuchar no es tres pastillas con puntitos de color: es una línea de
+//     pie —"ESCÚCHALO EN: Spotify · Apple Music · YT Music"— como el pie de
+//     créditos de un artículo.
 
 import Image from "next/image";
 import Link from "next/link";
@@ -37,138 +53,137 @@ export type DailyAlbum = {
 };
 
 export function DailyReveal({ album }: { album: DailyAlbum }) {
+  const tieneEnlaces =
+    album.links &&
+    (album.links.spotify || album.links.appleMusic || album.links.youtubeMusic);
+
   return (
-    <div className="flex min-h-[calc(100dvh-6rem)] flex-col px-6 pt-12">
+    <div className="px-5 pb-10 pt-6">
+      {/* ── Antetítulo de la edición ───────────────────────────────────── */}
       <motion.header
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.6 }}
-        className="text-center"
+        transition={{ duration: 0.5 }}
+        className="cabecera-seccion"
       >
-        <p className="text-xs uppercase tracking-[0.3em] text-dim">{album.dateLabel}</p>
-        <h1 className="font-serif mt-2 text-lg italic text-album-light">
+        <span className="rotulo">
           {album.returnWelcome
             ? "Bienvenido de vuelta"
             : album.personalized
-              ? "Tu álbum de hoy"
-              : "El álbum de hoy"}
-        </h1>
+              ? "Tu disco de hoy"
+              : "El disco de hoy"}
+        </span>
+        <span className="dato text-[10px] text-tinta-suave">{album.dateLabel}</span>
       </motion.header>
 
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9, filter: "blur(12px)" }}
-        animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-        transition={{ duration: 0.9, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        className="relative mx-auto mt-8 aspect-square w-full max-w-xs overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/10"
-        style={{ boxShadow: "0 25px 60px -12px var(--album-dark)" }}
+      {/* ── La lámina ──────────────────────────────────────────────────── */}
+      <motion.figure
+        initial={{ opacity: 0, clipPath: "inset(0 0 100% 0)" }}
+        animate={{ opacity: 1, clipPath: "inset(0 0 0% 0)" }}
+        transition={{ duration: 0.85, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        className="mt-6"
       >
-        {album.coverUrl ? (
-          <Image
-            src={album.coverUrl}
-            alt={`Portada de ${album.title}`}
-            fill
-            sizes="320px"
-            priority
-            className="object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-album-dark">
-            <span className="font-serif text-5xl text-album-light">♪</span>
-          </div>
-        )}
-      </motion.div>
+        <div className="relative aspect-square w-full border border-tinta bg-papel-alto">
+          {album.coverUrl ? (
+            <Image
+              src={album.coverUrl}
+              alt={`Portada de ${album.title}`}
+              fill
+              sizes="(max-width: 512px) 100vw, 512px"
+              priority
+              className="object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <span className="font-serif text-6xl text-album">♪</span>
+            </div>
+          )}
+        </div>
+        {/* Pie de figura: lo que convierte una imagen en una lámina. */}
+        <figcaption className="dato mt-1.5 flex items-baseline justify-between gap-3 text-[9px] uppercase tracking-[0.14em] text-tinta-suave">
+          <span className="truncate">Lám. I · {album.artist}</span>
+          <span className="shrink-0">{album.year}</span>
+        </figcaption>
+      </motion.figure>
 
+      {/* ── El titular ─────────────────────────────────────────────────── */}
       <motion.div
-        initial={{ opacity: 0, y: 24 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7, delay: 1.1 }}
-        className="mt-8 text-center"
+        transition={{ duration: 0.6, delay: 0.75 }}
       >
-        <h2 className="font-serif text-3xl font-semibold leading-tight">
+        <h1 className="font-serif mt-6 text-[2.6rem] font-semibold leading-[0.94]">
           {album.title}
-        </h2>
-        <p className="mt-1 text-lg text-dim">
+        </h1>
+        <p className="dato mt-2.5 text-[11px] uppercase tracking-[0.18em] text-tinta-suave">
           {album.artist} · {album.year}
         </p>
 
         {album.genres && album.genres.length > 0 && (
-          <div className="mt-3 flex justify-center">
+          <div className="mt-3">
             <GenreTags genres={album.genres} />
           </div>
         )}
 
-        <div className="mt-5 flex flex-wrap items-start justify-center gap-x-5 gap-y-2 text-sm text-dim">
-          {album.durationMin && <span className="pt-px">{album.durationMin} min</span>}
+        {/* Tira de datos: la ficha técnica del disco. */}
+        <div className="filete mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-regla py-2.5 text-[12px] text-tinta-suave">
+          {album.durationMin && (
+            <span className="dato text-[11px]">{album.durationMin} min</span>
+          )}
           <DificultadEscucha value={album.difficulty} />
           <ImpactoCultural value={album.impact} note={album.impactNote} />
         </div>
 
+        {/* El destacado: la cita de la página. */}
         {album.reason ? (
-          <div className="mx-auto mt-6 max-w-sm rounded-2xl border border-album/30 bg-album/10 px-5 py-4">
-            <p className="text-[0.65rem] uppercase tracking-[0.25em] text-album-light">
+          <div className="mt-6 border-l-2 border-album pl-4">
+            <p className="rotulo !text-album">
               {album.returnWelcome ? "Te guardé algo especial" : "Para ti, hoy"}
             </p>
-            <p className="font-serif mt-2 text-base italic leading-relaxed text-foreground/90">
+            <p className="font-serif mt-2 text-[17px] leading-snug">
               {album.reason}
             </p>
           </div>
         ) : (
-          <p className="font-serif mx-auto mt-6 max-w-sm text-base italic leading-relaxed text-foreground/90">
-            “{album.hook}”
+          <p className="font-serif relative mt-7 pl-7 text-[19px] leading-snug">
+            <span
+              aria-hidden
+              className="font-serif absolute left-0 top-[-0.35em] text-[3.2rem] leading-none text-album"
+            >
+              “
+            </span>
+            {album.hook}
           </p>
         )}
       </motion.div>
 
+      {/* ── Acciones ───────────────────────────────────────────────────── */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.6, delay: 1.7 }}
-        className="mt-auto pb-8 pt-10"
+        transition={{ duration: 0.5, delay: 1.15 }}
+        className="mt-8"
       >
-        {album.links && (album.links.spotify || album.links.appleMusic || album.links.youtubeMusic) && (
-          <div className="mb-4 flex flex-wrap justify-center gap-2">
-            {album.links.spotify && (
-              <a
-                href={album.links.spotify}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm font-medium transition-transform active:scale-95"
-              >
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#1DB954]" />
-                Spotify
-              </a>
-            )}
-            {album.links.appleMusic && (
-              <a
-                href={album.links.appleMusic}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm font-medium transition-transform active:scale-95"
-              >
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#FA586A]" />
-                Apple Music
-              </a>
-            )}
-            {album.links.youtubeMusic && (
-              <a
-                href={album.links.youtubeMusic}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 rounded-full border border-white/15 bg-surface px-4 py-2.5 text-sm font-medium transition-transform active:scale-95"
-              >
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#FF0000]" />
-                YT Music
-              </a>
-            )}
-          </div>
-        )}
-        <Link
-          href={`/album/${album.albumId}`}
-          className="block rounded-2xl bg-album px-6 py-4 text-center text-base font-semibold text-black shadow-lg shadow-album/30 transition-transform active:scale-[0.98]"
-        >
-          Descubrir este disco
+        <Link href={`/album/${album.albumId}`} className="sello w-full !py-4">
+          Leer el dossier
         </Link>
-        <div className="mt-4">
+
+        {tieneEnlaces && (
+          <p className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-regla pt-3">
+            <span className="rotulo shrink-0">Escúchalo en</span>
+            {album.links?.spotify && (
+              <EnlaceEscucha href={album.links.spotify}>Spotify</EnlaceEscucha>
+            )}
+            {album.links?.appleMusic && (
+              <EnlaceEscucha href={album.links.appleMusic}>Apple Music</EnlaceEscucha>
+            )}
+            {album.links?.youtubeMusic && (
+              <EnlaceEscucha href={album.links.youtubeMusic}>YT Music</EnlaceEscucha>
+            )}
+          </p>
+        )}
+
+        <div className="mt-5">
           <ShareAlbum
             albumId={album.albumId}
             title={album.title}
@@ -179,93 +194,118 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
 
         {album.canReroll && <DameOtroDisco />}
 
-        {album.madriguera.length > 0 && (
-          <section className="mt-10">
-            <h3 className="text-center text-xs uppercase tracking-[0.25em] text-dim">
-              ¿Ya lo escuchaste? Sigue la madriguera
-            </h3>
-            <p className="mx-auto mt-2 max-w-xs text-center text-sm text-dim">
-              El disco de hoy es la puerta. Si tienes la tarde por delante, baja
-              un poco más.
-            </p>
-            <div className="mt-5 flex flex-col gap-3">
-              {album.madriguera.map((m) => (
-                <Link
-                  key={m.albumId}
-                  href={`/album/${m.albumId}`}
-                  className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-3 transition-transform active:scale-[0.98]"
-                >
-                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-album-dark">
-                    {m.coverUrl ? (
-                      <Image
-                        src={m.coverUrl}
-                        alt={`Portada de ${m.title}`}
-                        fill
-                        sizes="56px"
-                        className="object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center">
-                        <span className="font-serif text-xl text-album-light">♪</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-serif text-base font-semibold">
-                      {m.title}
-                    </p>
-                    <p className="truncate text-sm text-dim">
-                      {m.artist} · {m.year}
-                    </p>
-                    {m.connection && (
-                      <p className="mt-1 line-clamp-2 text-xs italic text-foreground/70">
-                        {m.connection}
-                      </p>
-                    )}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
+        {/* ── Al margen: la curiosidad verificada ──────────────────────── */}
         {album.wowHook && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="mx-auto mt-8 max-w-sm rounded-2xl border border-album/25 bg-album/8 px-5 py-4 text-left"
-          >
-            <p className="text-[0.65rem] uppercase tracking-[0.25em] text-album-light">
-              Lo que no sabías
-            </p>
-            <p className="font-serif mt-2 text-sm leading-relaxed text-foreground/90">
+          <aside className="mt-10 border-y border-tinta py-4">
+            <p className="rotulo">Al margen</p>
+            <p className="font-serif mt-2 text-[15px] leading-relaxed">
               {album.wowHook}
             </p>
             <Link
               href={`/album/${album.albumId}`}
-              className="mt-3 inline-block text-xs text-album-light underline underline-offset-4"
+              className="dato mt-3 inline-block text-[10px] uppercase tracking-[0.14em] underline underline-offset-4"
             >
-              Ver más curiosidades del dossier →
+              Más curiosidades en el dossier
             </Link>
-          </motion.div>
+          </aside>
         )}
 
-        <Link
-          href="/explorar"
-          className="mt-8 block text-center text-sm text-dim underline underline-offset-4"
-        >
-          Explorar rutas temáticas →
-        </Link>
-        {album.showProfileInvite && (
-          <Link
-            href="/perfil"
-            className="mt-4 block text-center text-sm text-dim underline underline-offset-4"
-          >
-            Cuéntanos qué te gusta y el disco de hoy será para ti →
-          </Link>
+        {/* ── La madriguera ────────────────────────────────────────────── */}
+        {album.madriguera.length > 0 && (
+          <section className="mt-10">
+            <div className="cabecera-seccion">
+              <span className="rotulo">Sigue la madriguera</span>
+              <span className="dato text-[10px] text-tinta-suave">
+                {album.madriguera.length}
+              </span>
+            </div>
+            <p className="mt-3 text-[13px] leading-relaxed text-tinta-suave">
+              El disco de hoy es la puerta. Si tienes la tarde por delante, baja
+              un poco más.
+            </p>
+            <ol className="mt-4 border-t border-regla">
+              {album.madriguera.map((m, i) => (
+                <li key={m.albumId}>
+                  <Link
+                    href={`/album/${m.albumId}`}
+                    className="flex gap-3 border-b border-regla py-3 transition-colors hover:bg-tinta/[0.05]"
+                  >
+                    <span className="dato w-5 shrink-0 pt-0.5 text-[10px] text-tinta-suave">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span className="relative h-12 w-12 shrink-0 overflow-hidden border border-regla bg-papel-alto">
+                      {m.coverUrl ? (
+                        <Image
+                          src={m.coverUrl}
+                          alt={`Portada de ${m.title}`}
+                          fill
+                          sizes="48px"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <span className="font-serif flex h-full items-center justify-center text-lg text-album">
+                          ♪
+                        </span>
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="font-serif block truncate text-[16px] leading-tight">
+                        {m.title}
+                      </span>
+                      <span className="dato block truncate text-[10px] uppercase tracking-[0.1em] text-tinta-suave">
+                        {m.artist} · {m.year}
+                      </span>
+                      {m.connection && (
+                        <span className="mt-1 line-clamp-2 block text-[12px] leading-snug text-tinta-suave">
+                          {m.connection}
+                        </span>
+                      )}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </section>
         )}
+
+        {/* ── Pie de página ────────────────────────────────────────────── */}
+        <div className="filete mt-10 pt-4">
+          <Link
+            href="/explorar"
+            className="dato block text-[10px] uppercase tracking-[0.14em] underline underline-offset-4"
+          >
+            Explorar el resto de la publicación
+          </Link>
+          {album.showProfileInvite && (
+            <Link
+              href="/perfil"
+              className="mt-2.5 block text-[12px] leading-relaxed text-tinta-suave underline underline-offset-4"
+            >
+              Cuéntanos qué te gusta y el disco de hoy será para ti.
+            </Link>
+          )}
+        </div>
       </motion.div>
     </div>
+  );
+}
+
+/** Un enlace de escucha: texto subrayado, no una pastilla con un puntito. */
+function EnlaceEscucha({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="dato text-[11px] uppercase tracking-[0.12em] underline decoration-regla underline-offset-4 transition-colors hover:decoration-album hover:text-album"
+    >
+      {children}
+    </a>
   );
 }

@@ -1,6 +1,15 @@
-// Rejilla de carátulas del Salón. Cada disco lleva su sello de puntaje encima y
-// enlaza a su ficha (donde se lee por qué vale ese número y se puede pedir su
-// historia completa).
+// EL ESCALAFÓN — antes: una rejilla de carátulas cuadradas con la moneda
+// dorada encima. O sea, Spotify. O sea, la plantilla.
+//
+// El Salón no es una parrilla de portadas: es un ESCALAFÓN, y un escalafón se
+// lee en columna, numerado, con la cifra alineada a la derecha para poder
+// compararla de un vistazo. Eso es lo que hace aquí `destacada`: el muro de los
+// inmortales se compone como el cuadro de honor de una publicación —posición,
+// carátula pequeña, título en display, puntos conductores y la cifra— en vez de
+// como una galería de estampitas.
+//
+// La carátula no desaparece (es música, la cara importa), pero deja de ser la
+// protagonista: es una viñeta al margen, del tamaño de un sello de correos.
 
 import Link from "next/link";
 import Image from "next/image";
@@ -12,28 +21,28 @@ export function GaleriaCanon({
   destacada = false,
 }: {
   albums: SalonAlbum[];
-  /** Muro de inmortales: piezas más grandes y con halo dorado. */
+  /** Muro de inmortales: entrada más grande y numerada. */
   destacada?: boolean;
 }) {
   if (albums.length === 0) return null;
 
   return (
-    <ul
-      className={`grid gap-4 ${
-        destacada ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-3 sm:grid-cols-4"
-      }`}
-    >
-      {albums.map((a) => (
+    <ol className="border-t border-regla">
+      {albums.map((a, i) => (
         <li key={a.id}>
           <Link
             href={`/salon/disco/${a.id}`}
-            className="group block focus:outline-none"
+            className="group flex items-center gap-3 border-b border-regla py-2.5 transition-colors hover:bg-tinta/[0.05]"
           >
-            <div
-              className={`relative aspect-square overflow-hidden rounded-xl border bg-surface transition-transform group-hover:-translate-y-0.5 group-focus-visible:ring-2 group-focus-visible:ring-album ${
-                destacada
-                  ? "border-amber-300/30 shadow-[0_10px_40px_-18px_rgba(252,211,77,0.55)]"
-                  : "border-white/10"
+            {/* Posición en el escalafón */}
+            <span className="dato w-5 shrink-0 text-[10px] text-tinta-suave">
+              {String(i + 1).padStart(2, "0")}
+            </span>
+
+            {/* La viñeta: la carátula reducida a sello de correos */}
+            <span
+              className={`relative shrink-0 overflow-hidden border border-regla bg-papel-alto ${
+                destacada ? "h-12 w-12" : "h-9 w-9"
               }`}
             >
               {a.coverUrl ? (
@@ -41,28 +50,36 @@ export function GaleriaCanon({
                   src={a.coverUrl}
                   alt={`Carátula de ${a.title}`}
                   fill
-                  sizes="(max-width: 640px) 33vw, 200px"
+                  sizes="48px"
                   className="object-cover"
                 />
               ) : (
-                <div className="flex h-full items-center justify-center p-2 text-center text-[11px] leading-tight text-dim">
-                  {a.title}
-                </div>
+                <span className="dato flex h-full items-center justify-center text-[8px] text-tinta-suave">
+                  s/c
+                </span>
               )}
-              <span className="absolute right-1.5 top-1.5">
-                <SelloPuntaje score={a.score} tam="sm" />
+            </span>
+
+            <span className="min-w-0 flex-1">
+              <span
+                className={`font-serif block truncate leading-tight ${
+                  destacada ? "text-[17px]" : "text-[15px]"
+                }`}
+              >
+                {a.title}
               </span>
-            </div>
-            <p className="mt-2 truncate text-[13px] font-medium leading-tight">
-              {a.title}
-            </p>
-            <p className="truncate text-[11px] text-dim">
-              {a.artist}
-              {a.year ? ` · ${a.year}` : ""}
-            </p>
+              <span className="dato block truncate text-[10px] uppercase tracking-[0.1em] text-tinta-suave">
+                {a.artist}
+                {a.year ? ` · ${a.year}` : ""}
+              </span>
+            </span>
+
+            <span className="puntos hidden sm:block" />
+
+            <SelloPuntaje score={a.score} tam={destacada ? "md" : "sm"} />
           </Link>
         </li>
       ))}
-    </ul>
+    </ol>
   );
 }

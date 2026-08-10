@@ -1,15 +1,18 @@
 "use client";
 
-// El dial del Salón: marcas una altura (55 a 100) y te sale un disco de esa
-// altura exacta. Es lo que convierte una lista en un juego — y como el puntaje
-// está calibrado por percentil, pedir "un 95" significa siempre lo mismo.
+// EL DIAL: marcas una altura (55 a 100) y te sale un disco de esa altura exacta.
+// Como el puntaje está calibrado por percentil, pedir "un 95" significa siempre
+// lo mismo. Responde al instante: no hay ningún LLM debajo, solo una consulta al
+// índice con la afinidad de tus gustos como desempate.
 //
-// Responde al instante: por debajo no hay ninguna llamada a un LLM, solo una
-// consulta al índice con la afinidad de tus gustos como desempate.
+// La composición: la cifra ocupa media pantalla, en display, como el número de
+// una portada de revista. Debajo, una REGLA GRADUADA —con sus marcas cada cinco
+// y sus dos extremos rotulados— en vez del slider azul de sistema. Es el mismo
+// input range de siempre (accesible, arrastrable, funciona con teclado), pero
+// vestido de instrumento de medición y no de control de volumen.
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
 import type { DiscoDePuntaje } from "@/lib/canon/consulta";
 import { pedirDiscoDePuntaje } from "./actions";
 import { SelloPuntaje } from "./SelloPuntaje";
@@ -31,109 +34,125 @@ export function Dial({ inicial = 95 }: { inicial?: number }) {
     });
   }
 
+  const pct = ((score - MIN) / (MAX - MIN)) * 100;
+
   return (
-    <section className="rounded-3xl border border-white/10 bg-surface p-6">
-      <h2 className="font-serif text-xl font-semibold">Pide un disco por su altura</h2>
-      <p className="mt-1.5 text-sm leading-relaxed text-dim">
-        ¿Quieres un 100 de 100? ¿Un 95? Marca el número y te doy uno de esa
+    <section>
+      <div className="cabecera-seccion">
+        <span className="rotulo">El dial</span>
+        <span className="dato text-[10px] text-tinta-suave">55 — 100</span>
+      </div>
+
+      <p className="mt-3 text-[13px] leading-relaxed text-tinta-suave">
+        ¿Quieres un 100 de 100? ¿Un 95? Marca la altura y te doy un disco de esa
         altura exacta, elegido entre los que encajan contigo.
       </p>
 
-      <div className="mt-7 text-center">
-        <motion.span
-          key={score}
-          initial={{ scale: 0.9, opacity: 0.6 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 400, damping: 25 }}
-          className="font-serif text-6xl font-semibold tabular-nums text-album-light"
-        >
-          {score}
-        </motion.span>
-        <span className="ml-1 text-lg text-dim">/100</span>
+      {/* La cifra, a tamaño de portada */}
+      <div className="mt-6 flex items-end justify-center gap-2">
+        <span className="cifra text-[7rem] font-semibold text-album">{score}</span>
+        <span className="dato mb-3 text-sm text-tinta-suave">/100</span>
       </div>
 
-      <label className="sr-only" htmlFor="dial-canon">
-        Puntaje del canon
-      </label>
-      <input
-        id="dial-canon"
-        type="range"
-        min={MIN}
-        max={MAX}
-        step={1}
-        value={score}
-        onChange={(e) => setScore(Number(e.target.value))}
-        className="mt-4 h-2 w-full cursor-pointer appearance-none rounded-full bg-white/10 accent-[var(--album,#c9a227)]"
-      />
-      <div className="mt-1.5 flex justify-between text-[11px] text-dim">
-        <span>{MIN} · notables</span>
-        <span>{MAX} · inmortales</span>
+      {/* La regla graduada */}
+      <div className="mt-2">
+        <label className="sr-only" htmlFor="dial-canon">
+          Puntaje del canon
+        </label>
+        <div className="relative">
+          {/* Las marcas: una cada punto, más alta cada cinco */}
+          <div aria-hidden className="flex h-4 items-end justify-between">
+            {Array.from({ length: MAX - MIN + 1 }, (_, i) => {
+              const v = MIN + i;
+              const mayor = v % 5 === 0;
+              return (
+                <span
+                  key={v}
+                  className={`w-px ${
+                    v <= score ? "bg-tinta" : "bg-regla"
+                  } ${mayor ? "h-4" : "h-2"}`}
+                />
+              );
+            })}
+          </div>
+          {/* El cursor de la regla */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -bottom-1 h-3 w-[3px] bg-album"
+            style={{ left: `calc(${pct}% - 1.5px)` }}
+          />
+          <input
+            id="dial-canon"
+            type="range"
+            min={MIN}
+            max={MAX}
+            step={1}
+            value={score}
+            onChange={(e) => setScore(Number(e.target.value))}
+            className="absolute inset-x-0 -bottom-2 h-8 w-full cursor-pointer appearance-none bg-transparent opacity-0"
+          />
+        </div>
+        <div className="mt-3 flex justify-between border-t border-regla pt-1.5">
+          <span className="dato text-[9px] uppercase tracking-[0.14em] text-tinta-suave">
+            55 · Notables
+          </span>
+          <span className="dato text-[9px] uppercase tracking-[0.14em] text-tinta-suave">
+            100 · Inmortales
+          </span>
+        </div>
       </div>
 
       <button
         type="button"
         onClick={pedir}
         disabled={pendiente}
-        className="mt-6 w-full rounded-full bg-album px-6 py-3.5 text-sm font-medium text-black transition-opacity disabled:opacity-60"
+        className="sello mt-6 w-full"
       >
         {pendiente ? "Buscando en el canon…" : `Dame un disco de ${score}`}
       </button>
 
-      <AnimatePresence mode="wait">
-        {vacio && !pendiente && (
-          <motion.p
-            key="vacio"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="mt-4 text-center text-sm text-dim"
-          >
-            Todavía no tengo discos a esa altura en el índice. Prueba con otro
-            número.
-          </motion.p>
-        )}
+      {vacio && !pendiente && (
+        <p className="mt-4 text-center text-[13px] text-tinta-suave">
+          Todavía no tengo discos a esa altura en el índice. Prueba con otro
+          número.
+        </p>
+      )}
 
-        {resultado && !pendiente && (
-          <motion.div
-            key={resultado.album.id}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="mt-5"
+      {resultado && !pendiente && (
+        <div className="mt-6 border-l-2 border-album pl-3">
+          <p className="rotulo">A esa altura te doy</p>
+          <Link
+            href={`/salon/disco/${resultado.album.id}`}
+            className="mt-2 flex items-center gap-3 transition-opacity hover:opacity-80"
           >
-            <Link
-              href={`/salon/disco/${resultado.album.id}`}
-              className="flex items-center gap-4 rounded-2xl border border-white/10 bg-black/20 p-3 transition-colors hover:border-album/40"
-            >
-              {resultado.album.coverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={resultado.album.coverUrl}
-                  alt=""
-                  className="h-16 w-16 shrink-0 rounded-lg object-cover"
-                />
-              ) : (
-                <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-white/5 text-2xl">
-                  🏛
-                </span>
-              )}
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">
-                  {resultado.album.title}
-                </span>
-                <span className="block truncate text-sm text-dim">
-                  {resultado.album.artist}
-                  {resultado.album.year ? ` · ${resultado.album.year}` : ""}
-                </span>
+            {resultado.album.coverUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={resultado.album.coverUrl}
+                alt=""
+                className="h-14 w-14 shrink-0 border border-regla object-cover"
+              />
+            ) : (
+              <span className="dato flex h-14 w-14 shrink-0 items-center justify-center border border-regla text-[9px] text-tinta-suave">
+                s/c
               </span>
-              <SelloPuntaje score={resultado.album.score} />
-            </Link>
-            <p className="mt-2.5 px-1 text-sm leading-relaxed text-dim">
-              {resultado.porque}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="font-serif block truncate text-lg leading-tight">
+                {resultado.album.title}
+              </span>
+              <span className="dato block truncate text-[10px] uppercase tracking-[0.1em] text-tinta-suave">
+                {resultado.album.artist}
+                {resultado.album.year ? ` · ${resultado.album.year}` : ""}
+              </span>
+            </span>
+            <SelloPuntaje score={resultado.album.score} tam="sm" />
+          </Link>
+          <p className="mt-2.5 text-[13px] leading-relaxed text-tinta-suave">
+            {resultado.porque}
+          </p>
+        </div>
+      )}
     </section>
   );
 }

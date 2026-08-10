@@ -1,21 +1,36 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
-import { Fraunces, Inter } from "next/font/google";
+import { Fraunces, Archivo, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { BottomNav } from "@/components/BottomNav";
+import { Cabecera } from "@/components/Cabecera";
 import { DeviceSync } from "@/components/DeviceSync";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { THEME_COOKIE } from "@/lib/device";
 
-const inter = Inter({
-  variable: "--font-inter",
+// Tres tipografías con tres oficios distintos, como en una redacción:
+//
+// · DISPLAY (Fraunces) — titulares y cifras. Es una serif con óptica variable:
+//   a 60px se ve tallada y a 14px sigue siendo legible.
+// · TEXTO (Archivo) — la grotesca de la prensa. Sustituye a Inter, que es la
+//   tipografía de TODAS las apps del mundo y por sí sola ya delata la plantilla.
+// · DATO (IBM Plex Mono) — todo lo que es número o referencia: puntajes,
+//   fechas, folios, rótulos. Que los datos se vean como datos.
+const display = Fraunces({
+  variable: "--font-display",
+  subsets: ["latin"],
+  axes: ["opsz"],
+});
+
+const texto = Archivo({
+  variable: "--font-texto",
   subsets: ["latin"],
 });
 
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
+const dato = IBM_Plex_Mono({
+  variable: "--font-dato",
+  weight: ["400", "500", "600"],
   subsets: ["latin"],
-  axes: ["opsz"],
 });
 
 export const metadata: Metadata = {
@@ -31,7 +46,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0d0b09",
+  themeColor: "#14110c",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -46,8 +61,13 @@ export default async function RootLayout({
   const isLight = jar.get(THEME_COOKIE)?.value === "light";
   return (
     <html lang="es" className={isLight ? "light" : undefined}>
-      <body className={`${inter.variable} ${fraunces.variable} antialiased`}>
+      <body
+        className={`${texto.variable} ${display.variable} ${dato.variable} antialiased`}
+      >
         <DeviceSync />
+        {/* El folio corrido va en el layout, no en cada página: una publicación
+            lleva su cabecera en todas las hojas. */}
+        <Cabecera edicion={isLight ? "light" : "dark"} />
         <div className="mx-auto min-h-dvh max-w-lg pb-24">{children}</div>
         <InstallPrompt />
         <BottomNav />

@@ -13,7 +13,8 @@ Music/YouTube Music; Musicart es el guía.
 
 **Antes de escribir código, lee `ROADMAP.md`**: ahí están la visión completa,
 las fases con checkbox y los criterios de aceptación. **Fases 0–7 completas;
-Fase 8 casi cerrada (falta 8.6) y Fase 9 EN CURSO** (ago 2026).
+Fase 8 casi cerrada (falta 8.6), Fase 9 EN CURSO y Fase 10 —el rediseño «La
+imprenta»— completada** (ago 2026). La fase de trabajo sigue siendo la 9.
 
 - **Fase 8 — Caminos**: "por dónde entrar a un género". Una secuencia de 5
   discos en orden pedagógico, en **pestaña aparte** (`/caminos`).
@@ -43,6 +44,51 @@ ROADMAP antes de tocar nada de estas fases.
 6. El usuario del proyecto no es programador y suele estar desde el teléfono:
    explica en lenguaje claro, da pasos concretos y verifica tú mismo todo lo
    que se pueda verificar desde el código.
+
+## El sistema visual: LA IMPRENTA (léelo antes de tocar UI)
+
+Musicart **no se ve como una app: se ve como una publicación impresa**. Esto no
+es decorativo — nace de una orden explícita del dueño: *"todas las apps se ven
+iguales, se nota que las hizo una IA, quiero algo distinto"*. Tenía razón, y lo
+que las iguala es un repertorio concreto de gestos. **Esos gestos están
+prohibidos aquí.**
+
+**Lo prohibido** (es literalmente la plantilla): esquinas redondeadas · tarjetas
+flotando con `border-white/10` + `bg-white/[0.03]` · botones en pastilla ·
+acentos con halo/glow difuminado · iconitos de línea de 24px · emojis como
+iconos · todo centrado · Inter.
+
+**Las siete reglas** (están al completo, con su porqué, en la cabecera de
+`src/app/globals.css`, y en vivo con especímenes en la ruta **`/prensa`**):
+
+1. Cero esquinas redondeadas (hay un barrido global; lo que de verdad es un
+   círculo lleva `.circulo`).
+2. Cero tarjetas: estructuran las **reglas** (`.regla`, `.filete`,
+   `.cabecera-seccion`), el aire y la jerarquía. Para destacar se **enmarca**
+   (`.recuadro`).
+3. Dos **ediciones**, no dos "modos": la de noche (por defecto) y la de día
+   (papel prensa). Cambian por cookie, igual que antes.
+4. La tipografía es la interfaz: **Fraunces** (display: titulares y cifras) ·
+   **Archivo** (texto) · **IBM Plex Mono** (`.dato`: todo lo que es número o
+   referencia). Rótulos con `.rotulo`, cifras con `.cifra`.
+5. Los botones son sellos: `.sello` y `.sello-hueco`.
+6. Nada de emojis: adornos tipográficos (`.calderon`, `.capitular`, números
+   romanos, puntos conductores con `.puntos`).
+7. Lo que se numera, se numera: folios `№ 03`, escalafones `01 02 03`, láminas
+   con pie de figura.
+
+**Color:** usa `--acento` / `text-album` (que ya apunta a él), **nunca**
+`--album-vibrant` directo: el acento deriva de la portada del día pero se
+entinta según la edición, y sin eso el dorado desaparece sobre papel claro.
+
+**Estado de la migración:** hechas a mano `layout` + `Cabecera` (folio corrido)
+· `BottomNav` (pie de imprenta) · home/`DailyReveal` · `/caminos` ·
+`/salon` (+ `GaleriaCanon`, `SelloPuntaje`, `Dial`) · `/explorar` +
+`PuertasExplorar` · `ThemeToggle` · `GenreTags` · `/prensa`. El resto de
+pantallas (dossier, diario, perfil, onboarding, revisión, vitrina, rebobinada,
+dueto) heredan paleta, tipografías y el barrido de esquinas, pero **conservan
+estructura de la época de la plantilla**: si tocas una, aprovecha y compónla con
+el sistema.
 
 ## Stack
 
@@ -181,7 +227,11 @@ src/components/          BottomNav (9.8: SOLO 4 pestañas — Hoy · Explorar ·
                          ReflectionForm (1-10 + comentario + canción favorita),
                          MoodCheckin, ShareAlbum, DeviceSync, Narrator, AlbumChat,
                          DuetPanel, PushToggle, ProfileForm, InstallPrompt…
-src/app/explorar/        Rutas temáticas (Fase 4.4).
+src/app/explorar/        Rutas temáticas (Fase 4.4) + PuertasExplorar (sumario).
+src/app/prensa/          El libro de estilo EN VIVO: las siete reglas y sus
+                         especímenes (sellos, cifras, escalafón, índice,
+                         capitular). Sin datos ni base: siempre renderiza.
+src/components/Cabecera.tsx  El folio corrido de la publicación (va en el layout).
 scripts/dossier.ts       CLI: npm run dossier -- "Álbum" "Artista" --publish
 scripts/worker.ts        Worker del catálogo (cron Railway): npm run worker.
                          Además mantiene el Salón (9.10): levanta/termina el

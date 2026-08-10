@@ -52,23 +52,29 @@ export default async function ExplorarPage() {
   }));
 
   return (
-    <main className="px-6 pb-10 pt-12">
+    <main className="px-5 pb-10 pt-8">
       <header>
-        <p className="text-xs uppercase tracking-[0.3em] text-dim">Musicart</p>
-        <h1 className="font-serif mt-2 text-3xl font-semibold">Explorar</h1>
-        <p className="mt-3 text-sm leading-relaxed text-dim">
+        <p className="rotulo">Sumario de la edición</p>
+        <h1 className="font-serif mt-3 text-[2.75rem] font-semibold leading-[0.92]">
+          Explorar
+        </h1>
+        <div className="filete-grueso mt-4" />
+        <p className="font-serif mt-4 text-[15px] leading-relaxed text-tinta-suave">
           Tu disco de hoy es uno y es sagrado. Todo lo demás está aquí: por dónde
           entrar a un género, qué consagró la historia y qué atesoro yo.
         </p>
       </header>
 
-      <div className="mt-7">
+      <div className="mt-8">
         <PuertasExplorar />
       </div>
 
       <section className="mt-12">
-        <h2 className="font-serif text-2xl font-semibold">Rutas temáticas</h2>
-        <p className="mt-1 text-sm leading-relaxed text-dim">
+        <div className="cabecera-seccion">
+          <span className="rotulo">Rutas temáticas</span>
+          <span className="dato text-[10px] text-tinta-suave">{routes.length}</span>
+        </div>
+        <p className="mt-3 text-[13px] leading-relaxed text-tinta-suave">
           Colecciones curadas para seguir la madriguera con intención — no al azar.
         </p>
       </section>

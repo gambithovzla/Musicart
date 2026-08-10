@@ -1,100 +1,382 @@
 @import "tailwindcss";
 
-:root {
-  /* Base editorial oscura, cálida */
-  --background: #0d0b09;
-  --surface: #161310;
-  --foreground: #f3eee6;
-  --foreground-dim: #b3aa9c;
+/* ═══════════════════════════════════════════════════════════════════════════
+   LA IMPRENTA — el sistema visual de Musicart
+   ═══════════════════════════════════════════════════════════════════════════
 
-  /* Paleta del álbum del día — se sobreescribe por página con la portada */
+   Musicart no es una app: es una PUBLICACIÓN. Una revista musical que sale
+   todos los días con un disco dentro. Todo lo de aquí abajo sirve a esa idea, y
+   nace de una queja legítima del dueño: "todas las apps se ven iguales y se
+   nota que las hizo una IA".
+
+   Tenía razón, y el parecido no era casualidad — era un repertorio de gestos
+   repetidos: tarjetas con esquinas redondeadas flotando sobre un gris, bordes
+   blancos al 10%, botones en pastilla, un acento dorado con halo, iconitos de
+   línea y emojis. Nada de eso existe ya aquí.
+
+   LAS SIETE REGLAS (si tocas la UI, respétalas o rompe el sistema entero):
+
+   1. CERO esquinas redondeadas. La tinta no tiene esquinas blandas. Lo único
+      redondo es lo que de verdad es un círculo (un disco, una foto de perfil):
+      esos llevan `.circulo`.
+   2. CERO tarjetas. La estructura la hacen REGLAS (filetes), aire y jerarquía
+      tipográfica — no cajas. Si algo tiene que destacarse, se ENMARCA
+      (`.recuadro`), que es otra cosa: un marco de tinta con su sombra dura.
+   3. Tinta sobre papel, en dos ediciones: la de noche (por defecto) y la de
+      día. No son "dark mode" y "light mode": son dos tiradas de la misma
+      revista.
+   4. La tipografía ES la interfaz. Display enorme y apretado para los títulos y
+      las cifras; versalitas espaciadas para los rótulos; monoespaciada para
+      todo lo que es DATO (puntajes, fechas, folios, números de catálogo).
+   5. Los botones son SELLOS: rectangulares, entintados, con sombra dura sin
+      difuminar, y al pulsarlos se hunden como un tipo móvil contra el papel.
+   6. Nada de emojis. Los adornos son tipográficos (❧ ✻ · ‡) o dibujados.
+   7. Todo lo que se numera, se numera. Secciones con folio (№ 03), discos con
+      número de catálogo. Una publicación se ordena; una app solo se scrollea.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── EDICIÓN DE NOCHE (por defecto) ──────────────────────────────────────
+     Negro de tinta cálido, no el gris carbón de siempre; y el texto no es
+     blanco, es el blanco roto del papel sin blanquear. */
+  --papel: #14110c;
+  --papel-hondo: #0c0a07; /* el fondo del fondo: pies, cabeceras, huecos */
+  --papel-alto: #1c1813; /* un plano por encima del papel, sin ser tarjeta */
+  --tinta: #f0e7d5;
+  --tinta-suave: #a99e8a;
+  --regla: rgba(240, 231, 213, 0.22);
+  --regla-tenue: rgba(240, 231, 213, 0.1);
+  --grano: 0.05;
+
+  /* Paleta del álbum del día — la portada tiñe la edición. Se sobreescribe por
+     página desde `theme.ts`: cada disco imprime su número con su propia tinta. */
   --album-vibrant: #c8a24a;
   --album-dark: #3a2f16;
   --album-light: #e8cf8e;
   --album-muted: #8a7a55;
   --album-dark-muted: #221c12;
+
+  /* El acento IMPRIMIBLE. La paleta de la portada viene pensada para brillar
+     sobre negro; sobre papel claro, ese mismo dorado se pierde. `--acento`
+     deriva de la portada (así cada disco sigue tiñendo su página) pero se
+     entinta según la edición, y es lo que usa toda la UI. */
+  --acento: var(--album-vibrant);
+  --acento-suave: var(--album-light);
+}
+
+/* ── EDICIÓN DE DÍA ────────────────────────────────────────────────────────
+   Papel prensa envejecido, no el blanco de una app. Amarillea a propósito. */
+html.light {
+  --papel: #e8e0cd;
+  --papel-hondo: #ddd4be;
+  --papel-alto: #f0e9d9;
+  --tinta: #16130d;
+  --tinta-suave: #6a6152;
+  --regla: rgba(22, 19, 13, 0.28);
+  --regla-tenue: rgba(22, 19, 13, 0.13);
+  --grano: 0.07;
+
+  /* Sobre papel, el dorado de la portada se hunde a tinta ocre oscura: se
+     sigue viendo que es "el color de este disco", pero se lee. */
+  --acento: color-mix(in srgb, var(--album-vibrant) 58%, #1c1200);
+  --acento-suave: color-mix(in srgb, var(--album-vibrant) 74%, #1c1200);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-surface: var(--surface);
-  --color-foreground: var(--foreground);
-  --color-dim: var(--foreground-dim);
-  --color-album: var(--album-vibrant);
-  --color-album-dark: var(--album-dark);
-  --color-album-light: var(--album-light);
-  --color-album-muted: var(--album-muted);
-  --font-sans: var(--font-inter);
-  --font-serif: var(--font-fraunces);
-}
+  /* Nombres nuevos (los que se usan a partir de ahora) */
+  --color-papel: var(--papel);
+  --color-papel-hondo: var(--papel-hondo);
+  --color-papel-alto: var(--papel-alto);
+  --color-tinta: var(--tinta);
+  --color-tinta-suave: var(--tinta-suave);
+  --color-regla: var(--regla);
 
-/* Modo claro: paleta editorial cálida, como leer un vinilo a la luz del día */
-html.light {
-  --background: #f5f0e8;
-  --surface: #e8e1d5;
-  --foreground: #1a1510;
-  --foreground-dim: #7a6f63;
+  /* Nombres viejos, mapeados: así las pantallas que aún no se han rehecho a
+     mano heredan la edición nueva sin quedarse a medio camino. */
+  --color-background: var(--papel);
+  --color-surface: var(--papel-alto);
+  --color-foreground: var(--tinta);
+  --color-dim: var(--tinta-suave);
+
+  /* `album` y `album-light` apuntan al acento entintado: así las decenas de
+     `text-album` que ya había por toda la app se vuelven legibles en las dos
+     ediciones sin tocarlas una por una. */
+  --color-album: var(--acento);
+  --color-album-dark: var(--album-dark);
+  --color-album-light: var(--acento-suave);
+  --color-album-muted: var(--album-muted);
+
+  --font-sans: var(--font-texto);
+  --font-serif: var(--font-display);
+  --font-mono: var(--font-dato);
 }
 
 html {
-  background: var(--background);
+  background: var(--papel);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-inter), system-ui, sans-serif;
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--font-texto), "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   min-height: 100dvh;
 }
 
-/* Grano sutil de papel sobre toda la app */
+/* ── El papel ──────────────────────────────────────────────────────────────
+   Grano de fibra sobre toda la tirada. Va por encima de todo (z alto) porque
+   en el papel de verdad la fibra también está encima de la tinta. */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 50;
-  opacity: 0.035;
+  z-index: 60;
+  opacity: var(--grano);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-.font-serif {
-  font-family: var(--font-fraunces), Georgia, serif;
+/* ═══ REGLA 1: cero esquinas redondeadas ═══════════════════════════════════
+   Barrido, y a propósito. Hay decenas de pantallas con `rounded-2xl` de la
+   época de la plantilla; en vez de dejarlas a medias mientras se rehacen a
+   mano, se les quita el redondeo a todas de una vez. Lo que de verdad es
+   redondo se marca con `.circulo` y se salva. */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+.circulo,
+.circulo::before,
+.circulo::after {
+  border-radius: 9999px !important;
 }
 
-/* Prosa narrativa del dossier */
+/* ═══ REGLA 2: las tarjetas viejas se vuelven papel ════════════════════════
+   Mismo criterio: `border-white/10` y `bg-white/[0.03]` eran el uniforme de la
+   plantilla y encima se veían mal en la edición de día. Se reinterpretan como
+   filete de tinta y plano de papel. */
+[class*="border-white/"] {
+  border-color: var(--regla) !important;
+}
+[class*="bg-white/"] {
+  background-color: color-mix(in srgb, var(--tinta) 4%, transparent) !important;
+}
+[class*="bg-black/"] {
+  background-color: var(--papel-hondo) !important;
+}
+
+/* ═══ TIPOGRAFÍA ═══════════════════════════════════════════════════════════ */
+
+/* Display: titulares y cifras. Apretado, como un titular de portada. */
+.font-serif,
+.display {
+  font-family: var(--font-display), Georgia, serif;
+  letter-spacing: -0.03em;
+}
+
+/* Rótulo: las versalitas espaciadas de una cabecera de sección. */
+.rotulo {
+  font-family: var(--font-dato), ui-monospace, monospace;
+  font-size: 0.625rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  color: var(--tinta-suave);
+  line-height: 1;
+}
+
+/* Dato: todo lo que es número o referencia. Nunca se mide con la del texto. */
+.dato {
+  font-family: var(--font-dato), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* Cifra: el número grande (un puntaje del canon, el día del mes). */
+.cifra {
+  font-family: var(--font-display), Georgia, serif;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.05em;
+  line-height: 0.82;
+}
+
+/* ═══ REGLAS Y FILETES (la estructura de verdad) ═══════════════════════════ */
+
+.regla {
+  border-top: 1px solid var(--regla);
+}
+.regla-tenue {
+  border-top: 1px solid var(--regla-tenue);
+}
+/* Filete doble: separa secciones mayores, como en un periódico. */
+.filete {
+  border-top: 3px double var(--regla);
+}
+/* Filete grueso: abre la publicación. Solo debajo de una cabecera principal. */
+.filete-grueso {
+  border-top: 2px solid var(--tinta);
+}
+
+/* Cabecera de sección: rótulo a la izquierda, folio a la derecha, y la regla
+   cosiéndolos. Es el gesto que más se repite en toda la app. */
+.cabecera-seccion {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--regla);
+}
+
+/* Puntos conductores: como el índice de un libro, llevan el ojo del título al
+   número. Se pone en el hueco entre los dos. */
+.puntos {
+  flex: 1;
+  min-width: 1.5rem;
+  align-self: flex-end;
+  margin-bottom: 0.3em;
+  border-bottom: 1px dotted var(--regla);
+}
+
+/* ═══ SELLOS (los botones) ═════════════════════════════════════════════════
+   Un tipo móvil entintado: rectángulo macizo, sombra dura sin difuminar, y al
+   pulsarlo se hunde contra el papel. Nada de pastillas. */
+.sello {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.15rem;
+  background: var(--tinta);
+  color: var(--papel);
+  font-family: var(--font-dato), ui-monospace, monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  border: 1px solid var(--tinta);
+  box-shadow: 4px 4px 0 0 var(--acento);
+  transition:
+    transform 0.08s ease-out,
+    box-shadow 0.08s ease-out;
+}
+.sello:active:not(:disabled) {
+  transform: translate(4px, 4px);
+  box-shadow: 0 0 0 0 var(--acento);
+}
+.sello:disabled {
+  opacity: 0.45;
+  box-shadow: 4px 4px 0 0 var(--regla);
+}
+
+/* Sello hueco: la acción secundaria. Solo el contorno entintado. */
+.sello-hueco {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.15rem;
+  background: transparent;
+  color: var(--tinta);
+  font-family: var(--font-dato), ui-monospace, monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  border: 1px solid var(--regla);
+  transition:
+    border-color 0.12s,
+    background 0.12s;
+}
+.sello-hueco:hover:not(:disabled) {
+  border-color: var(--tinta);
+  background: color-mix(in srgb, var(--tinta) 6%, transparent);
+}
+.sello-hueco:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* ═══ RECUADRO ═════════════════════════════════════════════════════════════
+   Lo que sustituye a la tarjeta. Un marco de tinta con sombra dura: no flota,
+   está IMPRESO encima. Se usa con cuentagotas — si todo va enmarcado, no
+   destaca nada. */
+.recuadro {
+  border: 1px solid var(--tinta);
+  background: var(--papel-alto);
+  box-shadow: 5px 5px 0 0 var(--papel-hondo);
+}
+.recuadro-tenue {
+  border: 1px solid var(--regla);
+  background: transparent;
+}
+
+/* ═══ ADORNOS ══════════════════════════════════════════════════════════════ */
+
+/* Capitular: la letra grande con la que arranca un texto largo. */
+.capitular::first-letter {
+  font-family: var(--font-display), Georgia, serif;
+  float: left;
+  font-size: 3.6em;
+  line-height: 0.78;
+  padding: 0.06em 0.1em 0 0;
+  font-weight: 600;
+  color: var(--acento);
+}
+
+/* Fin de artículo: el cuadrado negro de las revistas. */
+.calderon::after {
+  content: "■";
+  font-size: 0.62em;
+  margin-left: 0.45em;
+  vertical-align: 0.12em;
+  color: var(--acento);
+}
+
+/* Prosa narrativa del dossier: lo único que se lee de verdad y de corrido. */
 .prose-dossier {
-  font-family: var(--font-fraunces), Georgia, serif;
+  font-family: var(--font-display), Georgia, serif;
   font-size: 1.075rem;
-  line-height: 1.75;
-  color: var(--foreground);
+  line-height: 1.72;
+  letter-spacing: -0.011em;
+  color: var(--tinta);
+  hyphens: auto;
 }
 .prose-dossier p + p {
   margin-top: 1em;
+  text-indent: 1.4em; /* párrafo sangrado, como en un libro */
 }
 
-/* Scrollbar discreto */
+/* ═══ COMPORTAMIENTO ═══════════════════════════════════════════════════════ */
+
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--album-muted);
-  border-radius: 3px;
+  background: var(--regla);
 }
 
-/* Sensación nativa: sin flash azul al tocar, sin rebote lateral */
 * {
   -webkit-tap-highlight-color: transparent;
 }
 html {
   overscroll-behavior-y: contain;
 }
+::selection {
+  background: var(--acento);
+  color: var(--papel-hondo);
+}
 
-/* Shimmer de los skeletons de carga */
+/* Carga: en vez del shimmer de plantilla, la trama de un fotograbado que aún no
+   ha terminado de imprimirse. */
 .skeleton-shimmer {
   position: relative;
   overflow: hidden;
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--regla-tenue) 0 2px,
+    transparent 2px 5px
+  );
 }
 .skeleton-shimmer::after {
   content: "";
@@ -104,10 +386,10 @@ html {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(243, 238, 230, 0.05),
+    color-mix(in srgb, var(--tinta) 7%, transparent),
     transparent
   );
-  animation: shimmer 1.6s infinite;
+  animation: shimmer 1.8s infinite;
 }
 @keyframes shimmer {
   100% {
@@ -115,22 +397,21 @@ html {
   }
 }
 
-/* Entrada suave de cada página (se aplica desde template.tsx) */
+/* Entrada de página: la hoja se IMPRIME de arriba abajo. Nada de deslizarse. */
 .page-enter {
-  animation: page-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: imprimir 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-@keyframes page-in {
+@keyframes imprimir {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    clip-path: inset(0 0 12% 0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    clip-path: inset(0 0 0 0);
   }
 }
 
-/* Accesibilidad: si el sistema pide menos movimiento, lo respetamos */
 @media (prefers-reduced-motion: reduce) {
   .page-enter {
     animation: none;

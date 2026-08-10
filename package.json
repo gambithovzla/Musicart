@@ -12,6 +12,7 @@
     "db:seed": "prisma db seed",
     "dossier": "tsx scripts/dossier.ts",
     "worker": "tsx scripts/worker.ts",
+    "canon": "tsx scripts/canon.ts",
     "tts": "tsx scripts/tts.ts",
     "push": "tsx scripts/push.ts",
     "db:limpiar-recopilatorios": "tsx scripts/limpiar-recopilatorios.ts"

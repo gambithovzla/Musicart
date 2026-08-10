@@ -300,6 +300,52 @@ model Camino {
   @@index([userId, status])
 }
 
+// Fase 9 — El Salón de la Fama: el índice del canon.
+//
+// Miles de discos con un puntaje 1-100 COMPARABLE entre sí, que es justo lo que
+// `Album.impact` no puede dar: ese lo escribe la IA disco a disco, sin ver a los
+// demás, así que un 88 y un 91 de dos días distintos no significan lo mismo.
+// Aquí el número NO lo inventa un LLM: sale de señales duras (Wikidata,
+// MusicBrainz, Last.fm) y se calibra por percentil contra todo el índice, de
+// modo que el puntaje siempre significa "dónde estás parado entre el canon".
+//
+// Una fila pesa nada y no tiene dossier: el dossier se fabrica perezosamente el
+// día que alguien toca ese disco (mismo patrón que los pasos de un Camino), y
+// entonces `albumId` apunta al Album del catálogo.
+model CanonAlbum {
+  id       String  @id @default(cuid())
+  key      String  @unique // "artista|título" normalizado (anti-duplicados)
+  title    String
+  artist   String
+  year     Int?
+  coverUrl String?
+
+  // El puntaje y sus recibos.
+  score        Int     @default(0) // 1-100 final, calibrado por percentil
+  raw          Float   @default(0) // prestigio bruto antes de calibrar
+  locked       Boolean @default(false) // puntaje fijado a mano por el curador: la ingesta no lo pisa
+  signalsJson  String  @default("{}") // señales crudas (recalibrar sin volver a descargar)
+  evidenceJson String  @default("[]") // recibos legibles: por qué este número
+
+  // Filtros del Salón (canon con acento: por género, país y década).
+  genresJson String  @default("[]")
+  country    String? // código ISO-2 del origen del artista
+  decade     Int? // 1970, 1980… derivado del año, para filtrar barato
+
+  // Identidad en las fuentes y enlace al catálogo (referencias sueltas, sin
+  // relación de Prisma: si el Album se borra, el índice no se rompe).
+  mbid       String? @unique // release group de MusicBrainz
+  wikidataId String? @unique
+  albumId    String? @unique // Album con dossier, si ya se fabricó
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([score])
+  @@index([decade, score])
+  @@index([country, score])
+}
+
 model Account {
   id                String  @id @default(cuid())
   userId            String

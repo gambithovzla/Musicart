@@ -16,6 +16,8 @@ import { GenerarDiscoForm } from "./GenerarDiscoForm";
 import { RecalcularImpactos } from "./RecalcularImpactos";
 import { BuscarYCrear } from "./BuscarYCrear";
 import { CuradorAlbumes, type AlbumCurable } from "./CuradorAlbumes";
+import { ClubDeLosCien } from "./ClubDeLosCien";
+import { getCanonCurado } from "@/lib/canon/consulta";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -44,7 +46,8 @@ export default async function RevisionPage() {
     );
   }
 
-  const [metrics, drafts, cola, publicados] = await Promise.all([
+  const [canonCurado, metrics, drafts, cola, publicados] = await Promise.all([
+    getCanonCurado(),
     getProductMetrics(),
     prisma.dossier.findMany({
       where: { status: "draft", locale: "es" },
@@ -210,6 +213,28 @@ export default async function RevisionPage() {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="mt-12">
+        <h2 className="font-serif text-xl">
+          El club de los 100{" "}
+          <span className="text-base text-dim">
+            ({canonCurado.total} discos en el índice)
+          </span>
+        </h2>
+        <p className="mt-1 text-sm text-dim">
+          La cima del{" "}
+          <Link href="/salon" className="text-album underline underline-offset-2">
+            Salón de la Fama
+          </Link>
+          . La fórmula ordena mil discos bien, pero arriba manda tu criterio:
+          fija a mano los que para ti son un 100 y la ingesta dejará de tocarlos.
+        </p>
+        <ClubDeLosCien
+          fijados={canonCurado.fijados}
+          candidatos={canonCurado.candidatos}
+          total={canonCurado.total}
+        />
       </section>
 
       <section className="mt-12">

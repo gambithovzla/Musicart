@@ -4,6 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 
+// Cuatro pestañas y no siete. Musicart tiene cuatro cosas de verdad distintas:
+// el ritual de hoy, todo lo demás que se puede explorar, tu historia y tus
+// ajustes. Las cuatro maneras de explorar (rutas, caminos, salón, vitrina) son
+// hermanas entre sí, así que viven juntas en /explorar, que las presenta con
+// una frase cada una — en una etiqueta de 11px no cabía la diferencia, y sin
+// esa diferencia se canibalizaban.
 const ITEMS = [
   {
     href: "/",
@@ -18,33 +24,14 @@ const ITEMS = [
   {
     href: "/explorar",
     label: "Explorar",
+    // Estando dentro de un camino, del Salón o de la vitrina sigues "en
+    // Explorar": la pestaña se queda encendida para que no parezca que te
+    // saliste de la app.
+    tambien: ["/caminos", "/salon", "/vitrina", "/album"],
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
         <circle cx="11" cy="11" r="7" />
         <path d="m20 20-3.8-3.8" />
-      </svg>
-    ),
-  },
-  {
-    href: "/caminos",
-    label: "Caminos",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
-        <path d="M6 20c0-3 4-3 4-6s-4-3-4-6 4-3 4-4" />
-        <circle cx="17" cy="6" r="2.2" />
-        <path d="M17 8.2V18" strokeDasharray="2 2.5" />
-      </svg>
-    ),
-  },
-  {
-    href: "/vitrina",
-    label: "Vitrina",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
-        <rect x="3" y="3" width="7.5" height="7.5" rx="1" />
-        <rect x="13.5" y="3" width="7.5" height="7.5" rx="1" />
-        <rect x="3" y="13.5" width="7.5" height="7.5" rx="1" />
-        <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1" />
       </svg>
     ),
   },
@@ -84,7 +71,10 @@ export function BottomNav() {
       <div className="mx-auto flex max-w-lg items-stretch justify-around pb-[env(safe-area-inset-bottom)]">
         {ITEMS.map((item) => {
           const active =
-            item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            item.href === "/"
+              ? pathname === "/"
+              : pathname.startsWith(item.href) ||
+                (item.tambien ?? []).some((p) => pathname.startsWith(p));
           return (
             <Link
               key={item.href}

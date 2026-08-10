@@ -102,6 +102,40 @@ alimentan la cola: la madriguera se excava sola.
   2. Variables: `DATABASE_URL` (la URL **interna** `postgres.railway.internal`)
      y `OPENAI_API_KEY`. Nada más: el resto lo dicta `railway.json`.
 
+## El Salón de la Fama (el canon)
+
+`/salon` responde a una pregunta que el resto de la app no sabía contestar:
+*¿cuáles son los discos 100 de 100? Dame uno de 95.*
+
+El truco está en **separar el ranking del dossier**. La tabla `CanonAlbum` es un
+índice ligero de miles de discos (título, artista, año, portada, puntaje y sus
+recibos) **sin narrativa**: la historia se fabrica el día que alguien toca ese
+disco, reutilizando el pipeline de siempre. Así hay miles de discos sin fabricar
+miles de dossiers.
+
+El puntaje **no lo escribe ningún LLM**. Sale de señales comprobables —en
+cuántas ediciones de Wikipedia tiene artículo propio (Wikidata), qué premios
+recibió, cuánta gente lo escucha (Last.fm, con poco peso: esto mide
+consagración, no popularidad)— y después se calibra **por percentil contra todo
+el índice**. Por eso un 91 significa siempre lo mismo, y por eso el 100 es
+rarísimo (~0,4% del índice). Cada número se abre y enseña de dónde salió.
+
+```bash
+npm run canon                  # construye/refresca el índice (~1000 discos)
+npm run canon -- --limite 150  # corrida corta para probar
+npm run canon -- --portadas 200  # solo carátulas pendientes
+npm run canon -- --recalibrar    # solo recalcular puntajes (sin red)
+```
+
+Corre **fuera de Vercel** (en local o en Railway, como el worker): tarda minutos
+y habla con varias APIs públicas. Necesita `DATABASE_URL`; `LASTFM_API_KEY` es
+opcional (sin ella el índice se construye igual, con menos matices). **No
+necesita clave de IA.**
+
+> `CanonAlbum.score` y `Album.impact` son dos números de 1-100 **distintos**: el
+> primero es comparable entre discos, el segundo (el impacto que la IA escribe
+> dentro de un dossier) no lo es. No los mezcles.
+
 ## Correr en local
 
 Necesitas PostgreSQL. En `.env` define `DATABASE_URL`, p. ej.

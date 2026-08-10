@@ -89,9 +89,18 @@ export async function construirIndice(opciones: {
   const arranque = Date.now();
   const sinTiempo = () =>
     presupuestoMs !== undefined && Date.now() - arranque > presupuestoMs;
+  // La red se lleva como mucho la mitad del presupuesto: la otra mitad es para
+  // escribir en la base y recalibrar, que es lo que deja el índice coherente.
+  // Sin este reparto, un Wikidata lento se comía la corrida entera y no se
+  // guardaba ni un disco de los que sí había traído.
+  const hasta = (fraccion: number) =>
+    presupuestoMs === undefined ? undefined : arranque + presupuestoMs * fraccion;
 
   log(`Pidiendo a Wikidata hasta ${limite} discos (≥${minSitelinks} ediciones de Wikipedia)…`);
-  const candidatos = await buscarAlbumesCanonicos(limite, minSitelinks);
+  const candidatos = await buscarAlbumesCanonicos(limite, minSitelinks, {
+    deadline: hasta(0.5),
+    log,
+  });
   log(`Wikidata devolvió ${candidatos.length} discos distintos.`);
   if (candidatos.length === 0) {
     throw new Error(
@@ -108,7 +117,11 @@ export async function construirIndice(opciones: {
   let premios = new Map<string, string[]>();
   if (premiosPedidos) {
     log("Pidiendo los premios de cada disco…");
-    premios = await premiosDeAlbumes(candidatos.map((c) => c.wikidataId), 200, log);
+    premios = await premiosDeAlbumes(
+      candidatos.map((c) => c.wikidataId),
+      200,
+      { deadline: hasta(0.7), log },
+    );
     log(`${premios.size} discos tienen al menos un premio registrado.`);
   } else {
     log("Sin tiempo para los premios en esta corrida: los añade la siguiente.");
@@ -120,7 +133,17 @@ export async function construirIndice(opciones: {
   const previas = new Map(
     (
       await prisma.canonAlbum.findMany({
-        select: { key: true, genresJson: true, signalsJson: true },
+        select: {
+          key: true,
+          genresJson: true,
+          signalsJson: true,
+          // Los datos que una corrida con prisa puede no traer (país y mbid van
+          // en consultas aparte que se saltan si se acaba el tiempo): se leen
+          // para conservarlos, nunca para borrarlos con un null.
+          year: true,
+          country: true,
+          mbid: true,
+        },
       })
     ).map((p) => [p.key, p]),
   );
@@ -168,11 +191,11 @@ export async function construirIndice(opciones: {
 
     const signals: CanonSignals = {
       sitelinks: c.sitelinks,
-      // Si esta corrida no llegó a preguntar por los premios, se conservan los
-      // que ya tenía: saltarse una consulta no es motivo para borrar un Grammy.
-      awards:
-        premios.get(c.wikidataId) ??
-        (premiosPedidos ? [] : (previos?.awards ?? [])),
+      // Si esta corrida no trajo premios de este disco (porque no se preguntó,
+      // porque su lote falló o porque se acabó el tiempo), se conservan los que
+      // ya tenía: saltarse una consulta no es motivo para borrar un Grammy, y
+      // un premio no se revoca.
+      awards: premios.get(c.wikidataId) ?? previos?.awards ?? [],
       listeners,
       ratingVotes: null,
     };
@@ -187,13 +210,18 @@ export async function construirIndice(opciones: {
     const generos =
       generosNuevos.length > 0 ? generosNuevos : generosPrevios;
 
+    // Mismo criterio que con los premios y los géneros: lo que esta corrida no
+    // trajo no se borra, se hereda. Si no, una corrida corta dejaba el canon sin
+    // países (y con él, sin el "canon con acento") hasta la siguiente larga.
+    const year = c.year ?? previa?.year ?? null;
+
     const datos = {
       title: c.title,
       artist: c.artist,
-      year: c.year,
-      decade: decadaDe(c.year),
-      country: c.country,
-      mbid: c.mbid,
+      year,
+      decade: decadaDe(year),
+      country: c.country ?? previa?.country ?? null,
+      mbid: c.mbid ?? previa?.mbid ?? null,
       wikidataId: c.wikidataId,
       raw: prestigioBruto(signals),
       signalsJson: JSON.stringify(signals),
@@ -375,38 +403,50 @@ export async function avanzarSalon(opciones: {
 
   let total = await prisma.canonAlbum.count();
   let arrastre = ""; // lo que ya contó el paso del índice, si pasó al siguiente
+  // Si Wikidata se cae, aquí queda el motivo — pero la corrida NO se acaba: las
+  // carátulas son de otra casa (Deezer) y se pueden seguir buscando igual.
+  let fallo: string | null = null;
 
   // 1. Lo primero es que haya canon. Mientras falten discos, el resto espera.
   if (total < OBJETIVO_INDICE) {
-    const resumen = await construirIndice({
-      limite: OBJETIVO_INDICE,
-      conOyentes,
-      // Crecer a ratos: no rehacemos los que ya están, así cada corrida avanza.
-      soloNuevos: true,
-      presupuestoMs: restante(),
-      log,
-    });
-    const previo = total;
-    total = await prisma.canonAlbum.count();
+    try {
+      const resumen = await construirIndice({
+        limite: OBJETIVO_INDICE,
+        conOyentes,
+        // Crecer a ratos: no rehacemos los que ya están, así cada corrida avanza.
+        soloNuevos: true,
+        presupuestoMs: restante(),
+        log,
+      });
+      const previo = total;
+      total = await prisma.canonAlbum.count();
 
-    // Wikidata no dio ni uno nuevo teniendo tiempo de sobra: el índice llegó a
-    // su techo (hay menos discos con ese nivel de documentación que el objetivo).
-    // No es un fallo ni algo que repetir: se sigue con las portadas.
-    const enSuTecho = !resumen.incompleta && resumen.nuevos === 0;
-    if (!enSuTecho) {
-      const sinPortada = await prisma.canonAlbum.count({ where: { coverUrl: null } });
-      return {
-        paso: "indice",
-        mensaje:
-          previo === 0
-            ? `El Salón ya está en pie: entraron ${resumen.nuevos} discos al canon.`
-            : `Entraron ${resumen.nuevos} discos más: el canon va por ${total}.`,
-        quedaTrabajo: resumen.incompleta || total < OBJETIVO_INDICE || sinPortada > 0,
-        total,
-        sinPortada,
-      };
+      // Wikidata no dio ni uno nuevo teniendo tiempo de sobra: el índice llegó a
+      // su techo (hay menos discos con ese nivel de documentación que el objetivo).
+      // No es un fallo ni algo que repetir: se sigue con las portadas.
+      const enSuTecho = !resumen.incompleta && resumen.nuevos === 0;
+      if (!enSuTecho) {
+        const sinPortada = await prisma.canonAlbum.count({ where: { coverUrl: null } });
+        return {
+          paso: "indice",
+          mensaje:
+            previo === 0
+              ? `El Salón ya está en pie: entraron ${resumen.nuevos} discos al canon.`
+              : `Entraron ${resumen.nuevos} discos más: el canon va por ${total}.`,
+          quedaTrabajo: resumen.incompleta || total < OBJETIVO_INDICE || sinPortada > 0,
+          total,
+          sinPortada,
+        };
+      }
+      arrastre = `El canon está completo con ${total} discos. `;
+    } catch (err) {
+      // Antes esto tumbaba la corrida entera y el botón no hacía NADA: con el
+      // índice a medias y Wikidata sin responder había cientos de carátulas
+      // esperando y ni se llegaba a mirarlas. Ahora se anota y se sigue.
+      fallo = (err as Error).message;
+      log(`⚠ El índice no pudo crecer: ${fallo}`);
+      total = await prisma.canonAlbum.count();
     }
-    arrastre = `El canon está completo con ${total} discos. `;
   }
 
   // 2. Con el canon en pie, lo que falta son caras: las portadas.
@@ -415,12 +455,20 @@ export async function avanzarSalon(opciones: {
     const sinPortada = await prisma.canonAlbum.count({ where: { coverUrl: null } });
     return {
       paso: "portadas",
-      mensaje: `${arrastre}${puestas} carátulas nuevas. Faltan ${sinPortada} por buscar.`,
-      quedaTrabajo: sinPortada > 0,
+      mensaje: fallo
+        ? `${fallo}, así que el canon no creció esta vez. Mientras tanto busqué ` +
+          `carátulas: ${puestas} nuevas, faltan ${sinPortada}.`
+        : `${arrastre}${puestas} carátulas nuevas. Faltan ${sinPortada} por buscar.`,
+      quedaTrabajo: sinPortada > 0 || fallo !== null,
       total,
       sinPortada,
     };
   }
+
+  // Wikidata falló y no había ninguna otra cosa que hacer: que se sepa. Este es
+  // el único camino que sale por la puerta del error, y es el correcto — decir
+  // "todo al día" con el canon a medio levantar sería mentirle al curador.
+  if (fallo) throw new Error(fallo);
 
   return {
     paso: "al-dia",

@@ -58,9 +58,25 @@ export async function POST() {
     return NextResponse.json({
       ok: false,
       mensaje:
-        "No se pudo avanzar el Salón ahora mismo. Suele ser Wikidata sin " +
-        "responder: inténtalo otra vez en un rato.",
-      detalle: (err as Error).message?.slice(0, 300),
+        "No se pudo avanzar el Salón ahora mismo, ni reintentando. Casi siempre " +
+        "es Wikidata saturada: es un servicio público y a ratos se atasca. " +
+        "Inténtalo otra vez en un rato — y si no, el worker lo hace de noche.",
+      detalle: enCristiano((err as Error).message),
     });
   }
+}
+
+/**
+ * El detalle se le enseña al curador en pantalla, así que no puede ser una
+ * página web. Cuando Wikidata devolvía un 502, su cuerpo era el HTML entero de
+ * nginx y acababa impreso tal cual bajo el botón: doce líneas de `<html>` y
+ * `<center>` que no le dicen nada a nadie.
+ */
+function enCristiano(mensaje: string | undefined): string | undefined {
+  if (!mensaje) return undefined;
+  return mensaje
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
 }

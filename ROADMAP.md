@@ -704,6 +704,24 @@ Musicart YA tenía un número 1-100: el impacto cultural (`Album.impact`, 6.5).
   de tiempo no borra los que ya estaban, y el índice **siempre** termina
   recalibrado — a medio llenar, pero coherente. Y si el que ve el Salón vacío es
   el curador, el mensaje le dice dónde está el botón.
+- [x] **9.11 El botón aguanta a Wikidata** (ago 2026, tras el reporte del dueño:
+  una captura del Salón con «No se pudo avanzar el Salón ahora mismo» y, debajo,
+  la página de error de nginx entera impresa en pantalla) — el «502 Bad Gateway»
+  no era un fallo nuestro **ni** de Wikidata: era una consulta demasiado grande
+  para un endpoint público que se corta a los 60 segundos. Cuatro arreglos:
+  **(a)** la búsqueda va por **tramos** de documentación (≥90 ediciones, 60-90,
+  45-60…) y el país del artista se pregunta aparte y en lotes, así ninguna
+  petición se acerca al minuto — el trabajo total es el mismo, repartido;
+  **(b)** todo **reintenta** tres veces con esperas crecientes, que es lo que
+  cura un 502 (casi siempre es un bache de segundos), respetando el `Retry-After`
+  si lo mandan; **(c)** un tramo caído se pierde solo a sí mismo: el índice se
+  levanta con los demás, y si Wikidata no responde **nada**, el botón sigue con
+  las carátulas (son de Deezer) en vez de no hacer absolutamente nada — antes,
+  con el canon a medias, una caída de Wikidata dejaba cientos de portadas sin
+  buscar; **(d)** al curador se le habla en cristiano ("Wikidata 502: no
+  respondió, su servidor está saturado") y nunca más se le imprime una página
+  HTML en la pantalla. De propina, ninguna corrida corta borra ya el país, el
+  año, el mbid ni los premios que trajo una larga.
 
 ### Pendiente del dueño (una sola vez)
 

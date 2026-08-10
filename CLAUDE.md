@@ -12,10 +12,11 @@ explica **por qué ese disco, para ti, hoy**. La escucha ocurre en Spotify/Apple
 Music/YouTube Music; Musicart es el guía.
 
 **Antes de escribir código, lee `ROADMAP.md`**: ahí están la visión completa,
-las fases con checkbox y los criterios de aceptación. **Fases 0–5 completas;
-Fase 6 EN CURSO** (jun 2026): 6.1, 6.4, 6.5, 6.6 y 6.7 hechas; pendientes 6.2
-(Spotify), 6.3 (dossier más rico) y el plan de profundidad + curiosidades
-(6.8/6.9, ver ROADMAP).
+las fases con checkbox y los criterios de aceptación. **Fases 0–7 completas;
+Fase 8 EN CURSO** (ago 2026): **Caminos** — "por dónde entrar a un género".
+Una secuencia de 5 discos en orden pedagógico, en **pestaña aparte** (`/caminos`):
+el disco del día NO se toca. Ver las decisiones de diseño en el ROADMAP antes de
+tocar nada de esta fase.
 
 ## Reglas de trabajo para la IA
 
@@ -50,7 +51,8 @@ prisma/schema.prisma     Modelos: Artist, Album (difficulty 1-5, impact 1-100),
                          Review (rating 1-10; answersJson trae comentario libre +
                          canción favorita), GenerationQueue, GenerationBudget
                          (tope de gasto diario 6.6), PushSubscription, Rewind,
-                         MusicalThread, DuetPair/DuetPick, DossierChat, DossierView.
+                         MusicalThread, DuetPair/DuetPick, DossierChat, DossierView,
+                         Camino (Fase 8: tema, titulo, intro, stepsJson, status).
                          Campos *Json son String.
 prisma/seed.ts|fixtures.ts  Seed idempotente con 3 discos demo (con impactNote).
 src/app/page.tsx         Home: gate de onboarding (sin perfil → Onboarding, NO se
@@ -63,6 +65,10 @@ src/app/album/[id]/      Dossier completo: métricas clicleables (impacto/dificu
                          reseña (1-10 + comentario + canción favorita) y saltos.
 src/app/diario/          Historial de escuchas con racha + hilo musical (5.4).
 src/app/rebobinada/      Carta mensual del mes musical (5.2).
+src/app/caminos/         Fase 8: pestaña propia de los Caminos (lista + crear, y
+                         /caminos/[id] con sus pasos). Las dos operaciones caras
+                         viven en /api/caminos/crear (maxDuration 120) y
+                         /api/caminos/paso (300), como el disco del día.
 src/app/dueto/           Disco compartido semanal entre dos cuentas (5.5).
 src/app/perfil/          Edición de perfil, push, dueto, Stripe, privacidad.
 src/app/entrar/          Inicio de sesión (Google + email) y fusión del device.
@@ -95,6 +101,14 @@ src/lib/musical-thread.ts Fase 5.4: conecta reseñas del diario entre sí (cache
 src/lib/duet.ts          Fase 5.5: invitación, pick semanal por intersección de gustos.
 src/lib/rewind.ts        Fase 5.2: rebobinada mensual cacheada.
 src/lib/album-chat.ts    Fase 5.3: chat en dossier con FactsPayload y límites diarios.
+src/lib/caminos.ts       Fase 8: motor de los Caminos — proponerCamino (5 pasos con
+                         su papel y su puente, UNA llamada al LLM), abrirPaso
+                         (fabricación perezosa vía pipeline, respeta el tope 6.6),
+                         marcarEscuchado (abre el siguiente) y reemplazarPaso.
+src/lib/caminos-pasos.ts Fase 8: la parte PURA (tipos, etiquetas de papel,
+                         pasoAbierto/pasoActual). Existe aparte porque la UI de
+                         cliente no puede importar caminos.ts (arrastra el
+                         pipeline → jimp → `fs` y rompe el build).
 src/lib/return-ritual.ts Fase 5.6: detecta ausencia y personaliza el pick de regreso.
 src/lib/identity.ts      Fase 3.3: userId + deviceId y filtros de consulta.
 src/lib/user-data.ts     Fase 3.4: exportación y borrado de datos del oyente.

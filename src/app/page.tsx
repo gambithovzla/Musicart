@@ -11,6 +11,7 @@ import {
   getRotacionPickGuardada,
 } from "@/lib/recommend";
 import { getMadriguera } from "@/lib/madriguera";
+import { getCaminoEnCurso } from "@/lib/caminos";
 import { hasProfile } from "@/app/actions";
 import { DEVICE_COOKIE, TZ_COOKIE, LANG_COOKIE, parseTodayLang } from "@/lib/device";
 import { searchLinks } from "@/lib/sources/odesli";
@@ -21,6 +22,7 @@ import { isAdminEmail } from "@/lib/admin";
 import { DailyReveal } from "@/components/DailyReveal";
 import { Onboarding } from "@/components/Onboarding";
 import { CreandoDiscoHoy } from "@/components/CreandoDiscoHoy";
+import { CaminoEnCurso } from "@/components/CaminoEnCurso";
 import { RehacerDiscoAdmin } from "@/components/RehacerDiscoAdmin";
 import { MoodCheckin } from "@/components/MoodCheckin";
 import { CuriosityCard } from "@/components/CuriosityCard";
@@ -146,6 +148,10 @@ export default async function Home() {
     userId ? getPartnerPick(userId, dateKey) : Promise.resolve(null),
   ]);
 
+  // Fase 8: si tiene un camino a medias, se lo recordamos con una tira discreta.
+  // Nunca rompe la home (getCaminoEnCurso devuelve null ante cualquier fallo).
+  const caminoEnCurso = await getCaminoEnCurso(identity);
+
   // Pregunta del día: fallback estático; el CuriosityCard carga la IA en background.
   let initialCuriosityQuestion: ReturnType<typeof todayQuestion> = null;
   if (tienePerfil) {
@@ -246,6 +252,7 @@ export default async function Home() {
             album={partnerPick.album}
           />
         )}
+        {caminoEnCurso && <CaminoEnCurso camino={caminoEnCurso} />}
       </div>
     </main>
   );

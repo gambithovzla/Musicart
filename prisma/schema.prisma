@@ -169,6 +169,7 @@ model User {
   pushSubscriptions PushSubscription[]
   duetAsInviter     DuetPair[] @relation("DuetInviter")
   duetAsPartner     DuetPair[] @relation("DuetPartner")
+  caminos           Camino[]
 
   stripeCustomerId   String?   @unique
   subscriptionStatus String? // active | trialing | canceled | past_due
@@ -270,6 +271,33 @@ model MusicalThread {
   fingerprint String // invalida caché si cambian reseñas
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// Fase 8 — Caminos: "por dónde entro a este género". Una secuencia ORDENADA de
+// discos donde cada paso deja el oído listo para el siguiente (la puerta → el
+// gancho → el canon → el desvío → la cima). Vive aparte del disco del día: el
+// ritual no se toca.
+//
+// Los pasos viven en `stepsJson` (CaminoStep[] en src/lib/caminos.ts) y no en su
+// propia tabla a propósito: nacen todos juntos de UNA propuesta del LLM, se leen
+// siempre juntos y solo mutan dos campos por paso (albumId al fabricarlo,
+// escuchadoAt al marcarlo). Un modelo aparte solo añadiría joins.
+model Camino {
+  id        String   @id @default(cuid())
+  deviceId  String
+  userId    String?
+  tema      String // lo que pidió el oyente ("heavy metal", "de Linkin Park a Black Sabbath")
+  titulo    String // "El camino al heavy metal"
+  intro     String? // la promesa: a dónde te lleva y qué disco te espera al final
+  stepsJson String   @default("[]") // CaminoStep[]
+  status    String   @default("activo") // activo | completado
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([deviceId, status])
+  @@index([userId, status])
 }
 
 model Account {

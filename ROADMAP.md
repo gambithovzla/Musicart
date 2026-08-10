@@ -368,7 +368,7 @@ disco se sienta elegido para ti, no una rotación genérica.
 
 ---
 
-## 🔨 Fase 7 — "Un amigo que te conoce mejor cada día" (EN CURSO · jun 2026)
+## ✅ Fase 7 — "Un amigo que te conoce mejor cada día" (COMPLETADA · ago 2026)
 
 **Objetivo:** la app aprende de tu comportamiento a lo largo del tiempo y se
 integra más profundamente con la escucha real.
@@ -479,18 +479,104 @@ integra más profundamente con la escucha real.
 
 ### Criterios de aceptación
 
-- [ ] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones
+- [x] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones
   en el prompt; la recomendación refleja esa señal de forma notoria.
-- [ ] El botón "Escuchar en Spotify/Apple/YouTube" funciona desde la home y
-  el dossier en un toque, sin fricción.
-- [ ] El usuario puede cambiar entre modo claro y oscuro desde el perfil y la
-  preferencia persiste.
+  (`patronesDeEscucha` en `recommend.ts`: cruza tags de lo que puntuó ≥8, la
+  correlación ánimo→género de los picks y la estación; devuelve `null` si solo
+  hay estación, así que sin historial real no se inyecta ruido. Entra a los dos
+  prompts: `discover.ts` y `elegirConLlm`.)
+- [x] El botón "Escuchar en Spotify/Apple/YouTube" funciona desde la home y
+  el dossier en un toque, sin fricción. (`DailyReveal` pinta los tres botones
+  desde `Album.linksJson`; el dossier usa `ListenLinks` en la sección 05.)
+- [x] El usuario puede cambiar entre modo claro y oscuro desde el perfil y la
+  preferencia persiste. (`ThemeToggle` dentro de `ProfileForm`; cookie
+  `musicart_theme` a un año, leída en SSR por `layout.tsx` para que no haya
+  parpadeo.)
 
 ---
 
-## Estado actual (junio 2026)
+## 🔨 Fase 8 — Caminos: por dónde entrar a un género (EN CURSO · ago 2026)
 
-**Fases 0–6 completas; Fase 7 EN CURSO** (jun 2026).
+**Objetivo:** que el oyente pueda decir *"quiero entender el heavy metal y no sé
+por dónde empezar"* y Musicart le arme **un camino de 5 discos en orden**, donde
+cada paso le deja el oído listo para el siguiente.
+
+La analogía del dueño: a alguien que nunca ha leído no le das el Quijote de
+entrada, le das un Harry Potter. Pero —y esto es clave para el tono— **el camino
+no esconde el Quijote: te lleva hasta él y te lo dice desde el primer paso.**
+"Al final de este camino está *Reign in Blood*, y vas a poder con él." Sin eso,
+la sección se siente condescendiente, que es el peor riesgo de esta idea.
+
+**Por qué ahora:** hoy Musicart es *vertical* (un disco al día, cada uno completo
+en sí mismo, sin arco entre ellos). Esto es lo primero *horizontal*: una meta a
+medio plazo ("quiero entender el metal") en vez de solo un antojo del día. Y es
+algo que una playlist de "essential metal" no puede dar — cualquiera lista los
+discos; lo valioso es **el porqué del orden**.
+
+### Decisiones de diseño tomadas (no re-litigar)
+
+1. **Pestaña aparte. El disco del día NO se toca.** Decisión explícita del dueño.
+   El camino vive en `/caminos` y se consume a su ritmo; el ritual diario sigue
+   siendo uno y sagrado, con su propio motor intacto (`recommend.ts` no cambia).
+   Efecto secundario bueno: el feature no puede romper la home.
+2. **El siguiente paso se abre al marcar el anterior como escuchado.** No es solo
+   control de costo (evita que un solo oyente fabrique 5 dossiers en una tarde y
+   se coma el `DAILY_GENERATION_BUDGET`): es honesto con la idea. Un camino que te
+   tragas de una sentada es una playlist, y el puente pedagógico ("lo que ganaste
+   en el paso anterior") solo funciona si de verdad pasaste por ahí. Basta un "ya
+   lo escuché" — no obligamos a puntuar, eso sería fricción.
+3. **Fabricación perezosa.** Proponer el camino entero es UNA llamada de LLM
+   (barata). El dossier de cada disco se fabrica el día que el oyente llega a él,
+   reutilizando `runDossierPipeline`. Muchos canónicos ya estarán en catálogo →
+   `reused: true` → sale gratis y no consume presupuesto.
+4. **El orden NO sale de `Album.difficulty`.** Ese 1-5 lo asigna la IA disco a
+   disco y no está calibrado para comparar entre discos distintos. El orden lo
+   razona el proponedor del camino; la dificultad se *muestra*, no manda.
+5. **`/explorar` ≠ `/caminos`.** Rutas temáticas = filtros sobre el catálogo que
+   ya existe. Caminos = secuencia con orden pedagógico. Son cosas distintas y el
+   copy tiene que dejarlo claro ("explora" vs "empieza por aquí") o se canibalizan.
+
+### Tareas
+
+- [x] **8.1 Modelo del camino** — `Camino` (deviceId/userId, tema, título, intro,
+  `stepsJson`, status) + migración. Cada paso guarda `{orden, title, artist, year,
+  papel, puente, albumId?, escuchadoAt?}`; `albumId` se rellena al fabricarlo.
+- [x] **8.2 Motor** (`src/lib/caminos.ts`) — `proponerCamino()`: una llamada al
+  LLM que devuelve 5 pasos, cada uno con su **papel** (la puerta · el gancho ·
+  el canon · el desvío · la cima) y su **puente** (qué te deja para el siguiente).
+  Mismo rigor anti-alucinación que `discover.ts`: discos reales y canónicos, nada
+  de recopilatorios, y la narrativa de cada disco sigue naciendo del pipeline
+  verificado. Más `abrirPaso()` (fabricación perezosa con presupuesto) y
+  `marcarEscuchado()` (desbloquea el siguiente; al último, cierra el camino).
+- [x] **8.3 Pestaña `/caminos`** — crear camino (chips de género + texto libre),
+  vista del camino con sus pasos abiertos/bloqueados, y `/api/caminos/paso`
+  (`maxDuration=300`) con pantalla de carga al estilo `CreandoDiscoHoy`, porque
+  fabricar un disco tarda 1-3 min. Enlace en `BottomNav`.
+- [x] **8.4 Que no se olvide** — tira discreta en la home ("vas por el paso 3 de 5
+  del camino al metal") que solo enlaza a la pestaña. Recupera el enganche que
+  perdimos al no coserlo al ritual, sin invadirlo.
+- [x] **8.5 "Eso ya lo conozco"** — botón por paso que lo salta y lo reemplaza por
+  otro. Sin esto, la primera vez que le pongas *Paranoid* a alguien que lo tiene
+  tatuado, pierdes su confianza.
+- [ ] **8.6 Caminos del curador + compartir** — el dueño escribe sus propios
+  caminos desde `/revision` (como la Vitrina de 7.6) y un camino se puede
+  compartir con OG image. En su propia sección esto es natural; cosido al ritual
+  no lo era.
+
+### Criterios de aceptación
+
+- [ ] El oyente pide un género y recibe 5 discos REALES en orden, cada uno con su
+  papel y una frase que explica por qué va ahí y qué le deja para el siguiente.
+- [ ] El paso 2 no se puede abrir sin marcar el 1 como escuchado.
+- [ ] Abrir un paso fabrica su dossier completo (o reutiliza el del catálogo) y
+  cae con elegancia si el LLM falla o se agotó el presupuesto — nunca un 500.
+- [ ] El disco del día sigue funcionando exactamente igual que antes.
+
+---
+
+## Estado actual (agosto 2026)
+
+**Fases 0–7 completas; Fase 8 EN CURSO** (ago 2026).
 
 ---
 

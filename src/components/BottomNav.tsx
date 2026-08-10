@@ -26,6 +26,17 @@ const ITEMS = [
     ),
   },
   {
+    href: "/caminos",
+    label: "Caminos",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+        <path d="M6 20c0-3 4-3 4-6s-4-3-4-6 4-3 4-4" />
+        <circle cx="17" cy="6" r="2.2" />
+        <path d="M17 8.2V18" strokeDasharray="2 2.5" />
+      </svg>
+    ),
+  },
+  {
     href: "/vitrina",
     label: "Vitrina",
     icon: (

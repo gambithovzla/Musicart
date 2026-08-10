@@ -90,6 +90,8 @@ html.light {
   --color-tinta: var(--tinta);
   --color-tinta-suave: var(--tinta-suave);
   --color-regla: var(--regla);
+  --color-acento: var(--acento);
+  --color-acento-suave: var(--acento-suave);
 
   /* Nombres viejos, mapeados: así las pantallas que aún no se han rehecho a
      mano heredan la edición nueva sin quedarse a medio camino. */
@@ -175,15 +177,17 @@ body::before {
   letter-spacing: -0.03em;
 }
 
-/* Rótulo: las versalitas espaciadas de una cabecera de sección. */
+/* Rótulo: las versalitas espaciadas de una cabecera de sección.
+   A 10px con 0.24em de espaciado se leía como una raya borrosa en el teléfono
+   (regla VIII.c): 11px y algo más junto. */
 .rotulo {
   font-family: var(--font-dato), ui-monospace, monospace;
-  font-size: 0.625rem;
-  font-weight: 500;
+  font-size: 0.6875rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.18em;
   color: var(--tinta-suave);
-  line-height: 1;
+  line-height: 1.2;
 }
 
 /* Dato: todo lo que es número o referencia. Nunca se mide con la del texto. */
@@ -239,62 +243,155 @@ body::before {
   border-bottom: 1px dotted var(--regla);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   LA REGLA VIII — LA ERGONOMÍA MANDA
+   ═══════════════════════════════════════════════════════════════════════════
+   Se añadió después de la primera tirada, y corrige un error mío que el dueño
+   cazó en cuanto la vio en el teléfono: "se ve tosca, no se ve interactiva".
+
+   Lo que hice mal fue llevar la lógica del papel al dedo. Una revista puede
+   usar cuerpo 8 y filetes de un pelo porque la sostienes a 30 cm y está impresa
+   a 1200 dpi. Un teléfono, no: se mira a medio metro, a ~460 dpi reales, y se
+   maneja con un dedo de un centímetro de ancho.
+
+   Peor todavía: al quitar las tarjetas quité también los `hover`, y en una
+   pantalla táctil el `hover` NO EXISTE. Sin nada que lo sustituya, la interfaz
+   queda muerta al tacto — parece un documento, no una app.
+
+   Así que la identidad (tinta, reglas, folios, cifras) se queda tal cual, y la
+   interacción se rige por estas cuatro leyes, que ganan a cualquier regla
+   estética de arriba:
+
+     a) NADA que se toque mide menos de 48px de alto. Ni un botón, ni una fila,
+        ni una pestaña.
+     b) TODO lo que se toca responde en el acto: entintado de fondo, hundido o
+        ambos. Si un elemento solo reacciona al `hover`, está roto.
+     c) NADA de cuerpos por debajo de 11px en pantalla. El pie de figura de una
+        revista no se puede copiar tal cual.
+     d) Lo que se puede tocar tiene que PARECER que se puede tocar: una fila
+        lleva su marca de avance (›) a la derecha; un botón, su relieve.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Sin retardo de 300 ms ni zoom accidental al doble toque. */
+a,
+button,
+[role="button"],
+input,
+select,
+textarea,
+summary,
+label {
+  touch-action: manipulation;
+}
+
 /* ═══ SELLOS (los botones) ═════════════════════════════════════════════════
-   Un tipo móvil entintado: rectángulo macizo, sombra dura sin difuminar, y al
-   pulsarlo se hunde contra el papel. Nada de pastillas. */
+   Un tipo móvil entintado: rectángulo macizo, con relieve duro sin difuminar, y
+   al pulsarlo se hunde de verdad contra el papel. Nada de pastillas — pero con
+   el tamaño de un botón de teléfono, no el de un pie de foto. */
 .sello {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.7rem 1.15rem;
-  background: var(--tinta);
-  color: var(--papel);
+  min-height: 52px;
+  padding: 0.9rem 1.4rem;
+  background: var(--acento);
+  color: var(--papel-hondo);
   font-family: var(--font-dato), ui-monospace, monospace;
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.13em;
   border: 1px solid var(--tinta);
-  box-shadow: 4px 4px 0 0 var(--acento);
+  /* El relieve: la sombra dura de un sello entintado. Es lo que dice "esto se
+     puede pulsar" sin recurrir a un degradado ni a una pastilla. */
+  box-shadow: 3px 3px 0 0 var(--tinta);
   transition:
-    transform 0.08s ease-out,
-    box-shadow 0.08s ease-out;
+    transform 0.07s ease-out,
+    box-shadow 0.07s ease-out;
 }
-.sello:active:not(:disabled) {
-  transform: translate(4px, 4px);
-  box-shadow: 0 0 0 0 var(--acento);
+.sello:active:not(:disabled),
+.sello[aria-busy="true"] {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 0 var(--tinta);
 }
 .sello:disabled {
-  opacity: 0.45;
-  box-shadow: 4px 4px 0 0 var(--regla);
+  background: transparent;
+  color: var(--tinta-suave);
+  border-color: var(--regla);
+  box-shadow: 3px 3px 0 0 var(--regla);
 }
 
-/* Sello hueco: la acción secundaria. Solo el contorno entintado. */
+/* Sello hueco: la acción secundaria. Contorno entintado y macizo — con el borde
+   a 1px se leía como un recuadro decorativo, no como un botón. */
 .sello-hueco {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.7rem 1.15rem;
+  min-height: 52px;
+  padding: 0.9rem 1.4rem;
   background: transparent;
   color: var(--tinta);
   font-family: var(--font-dato), ui-monospace, monospace;
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
-  border: 1px solid var(--regla);
+  letter-spacing: 0.13em;
+  border: 2px solid var(--tinta);
   transition:
-    border-color 0.12s,
-    background 0.12s;
-}
-.sello-hueco:hover:not(:disabled) {
-  border-color: var(--tinta);
-  background: color-mix(in srgb, var(--tinta) 6%, transparent);
+    background 0.1s,
+    transform 0.07s ease-out;
 }
 .sello-hueco:active:not(:disabled) {
+  background: var(--tinta);
+  color: var(--papel);
   transform: translateY(1px);
+}
+.sello-hueco:disabled {
+  opacity: 0.4;
+}
+
+/* ═══ FILA — la unidad táctil de las listas ════════════════════════════════
+   Un índice, un escalafón o un sumario se tocan fila a fila. Cada una es un
+   objetivo de 60px que se entinta entera al pulsarla y lleva su marca de avance
+   a la derecha. Esto es lo que le faltaba a la primera tirada para dejar de
+   parecer una tabla impresa y empezar a comportarse como una app. */
+.fila {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 60px;
+  padding: 0.7rem 0.25rem;
+  border-bottom: 1px solid var(--regla);
+  text-align: left;
+  transition: background 0.1s;
+}
+.fila:active {
+  background: color-mix(in srgb, var(--tinta) 12%, transparent);
+}
+/* La marca de avance. Se pone sola: ninguna fila tiene que acordarse. */
+.fila-avanza::after {
+  content: "›";
+  margin-left: auto;
+  padding-left: 0.5rem;
+  font-family: var(--font-dato), ui-monospace, monospace;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: var(--tinta-suave);
+  flex-shrink: 0;
+}
+
+/* Cualquier otra cosa pulsable que no sea sello ni fila. */
+.pulsable {
+  transition:
+    transform 0.07s ease-out,
+    background 0.1s;
+}
+.pulsable:active {
+  transform: scale(0.985);
+  background: color-mix(in srgb, var(--tinta) 8%, transparent);
 }
 
 /* ═══ RECUADRO ═════════════════════════════════════════════════════════════

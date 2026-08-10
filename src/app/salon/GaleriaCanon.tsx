@@ -30,19 +30,16 @@ export function GaleriaCanon({
     <ol className="border-t border-regla">
       {albums.map((a, i) => (
         <li key={a.id}>
-          <Link
-            href={`/salon/disco/${a.id}`}
-            className="group flex items-center gap-3 border-b border-regla py-2.5 transition-colors hover:bg-tinta/[0.05]"
-          >
+          <Link href={`/salon/disco/${a.id}`} className="fila">
             {/* Posición en el escalafón */}
-            <span className="dato w-5 shrink-0 text-[10px] text-tinta-suave">
+            <span className="dato w-5 shrink-0 text-[11px] text-tinta-suave">
               {String(i + 1).padStart(2, "0")}
             </span>
 
             {/* La viñeta: la carátula reducida a sello de correos */}
             <span
               className={`relative shrink-0 overflow-hidden border border-regla bg-papel-alto ${
-                destacada ? "h-12 w-12" : "h-9 w-9"
+                destacada ? "h-14 w-14" : "h-11 w-11"
               }`}
             >
               {a.coverUrl ? (
@@ -54,7 +51,7 @@ export function GaleriaCanon({
                   className="object-cover"
                 />
               ) : (
-                <span className="dato flex h-full items-center justify-center text-[8px] text-tinta-suave">
+                <span className="dato flex h-full items-center justify-center text-[11px] text-tinta-suave">
                   s/c
                 </span>
               )}
@@ -63,18 +60,16 @@ export function GaleriaCanon({
             <span className="min-w-0 flex-1">
               <span
                 className={`font-serif block truncate leading-tight ${
-                  destacada ? "text-[17px]" : "text-[15px]"
+                  destacada ? "text-[18px]" : "text-[16px]"
                 }`}
               >
                 {a.title}
               </span>
-              <span className="dato block truncate text-[10px] uppercase tracking-[0.1em] text-tinta-suave">
+              <span className="dato block truncate text-[11px] uppercase tracking-[0.08em] text-tinta-suave">
                 {a.artist}
                 {a.year ? ` · ${a.year}` : ""}
               </span>
             </span>
-
-            <span className="puntos hidden sm:block" />
 
             <SelloPuntaje score={a.score} tam={destacada ? "md" : "sm"} />
           </Link>

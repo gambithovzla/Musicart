@@ -21,7 +21,7 @@ export function GenreTags({
           )}
           <span
             className={`dato uppercase tracking-[0.14em] text-album ${
-              size === "xs" ? "text-[9px]" : "text-[10px]"
+              size === "xs" ? "text-[11px]" : "text-[12px]"
             }`}
           >
             {g}

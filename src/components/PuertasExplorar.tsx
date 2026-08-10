@@ -41,19 +41,16 @@ export function PuertasExplorar() {
     <ul className="border-t border-regla">
       {SECCIONES.map((s) => (
         <li key={s.href}>
-          <Link
-            href={s.href}
-            className="group flex gap-4 border-b border-regla py-5 transition-colors hover:bg-tinta/[0.05]"
-          >
+          <Link href={s.href} className="fila fila-avanza !items-start !py-5">
             {/* El número romano hace de icono, y encima ordena. */}
-            <span className="cifra w-8 shrink-0 pt-1 text-2xl text-tinta-suave transition-colors group-hover:text-album">
+            <span className="cifra w-8 shrink-0 pt-1 text-2xl text-acento">
               {s.romano}
             </span>
             <span className="min-w-0">
               <span className="font-serif block text-[22px] leading-none">
                 {s.titulo}
               </span>
-              <span className="mt-2 block text-[13px] leading-relaxed text-tinta-suave">
+              <span className="mt-2 block text-[14px] leading-relaxed text-tinta-suave">
                 {s.sumario}
               </span>
             </span>

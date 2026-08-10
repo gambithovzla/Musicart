@@ -66,6 +66,12 @@ const REGLAS = [
     texto:
       "Secciones con folio, discos con posición, láminas con pie de figura. Una publicación se ordena; una app solo se scrollea.",
   },
+  {
+    n: "VIII",
+    titulo: "La ergonomía manda",
+    texto:
+      "Y gana a las siete de arriba. Nada que se toque baja de 48px, nada de cuerpo por debajo de 11px, todo responde al dedo en el acto y lo pulsable parece pulsable. Un teléfono no es papel: se mira a medio metro y se maneja con un dedo de un centímetro.",
+  },
 ];
 
 const ESPECIMENES: SalonAlbum[] = [
@@ -146,7 +152,7 @@ export default function PrensaPage() {
       <section className="mt-10">
         <div className="cabecera-seccion">
           <span className="rotulo">Las reglas</span>
-          <span className="dato text-[10px] text-tinta-suave">№ 01</span>
+          <span className="dato text-[11px] text-tinta-suave">№ 01</span>
         </div>
         <ol className="mt-1 border-t border-regla">
           {REGLAS.map((r) => (
@@ -171,7 +177,7 @@ export default function PrensaPage() {
       <section className="mt-12">
         <div className="cabecera-seccion">
           <span className="rotulo">Las tres letras</span>
-          <span className="dato text-[10px] text-tinta-suave">№ 02</span>
+          <span className="dato text-[11px] text-tinta-suave">№ 02</span>
         </div>
 
         <div className="mt-4 border-b border-regla pb-4">
@@ -179,7 +185,7 @@ export default function PrensaPage() {
           <p className="font-serif mt-1.5 text-[2.5rem] font-semibold leading-[0.95]">
             Un disco al día
           </p>
-          <p className="dato mt-1 text-[10px] text-tinta-suave">
+          <p className="dato mt-1 text-[11px] text-tinta-suave">
             Titulares y cifras. Óptica variable: tallada en grande, legible en
             pequeño.
           </p>
@@ -198,7 +204,7 @@ export default function PrensaPage() {
           <p className="dato mt-1.5 text-[13px]">
             96/100 · 1978 · № 222 · 10 AGO 2026
           </p>
-          <p className="dato mt-1 text-[10px] text-tinta-suave">
+          <p className="dato mt-1 text-[11px] text-tinta-suave">
             Todo lo que es número o referencia. Que los datos se vean como datos.
           </p>
         </div>
@@ -208,7 +214,7 @@ export default function PrensaPage() {
       <section className="mt-12">
         <div className="cabecera-seccion">
           <span className="rotulo">Los sellos</span>
-          <span className="dato text-[10px] text-tinta-suave">№ 03</span>
+          <span className="dato text-[11px] text-tinta-suave">№ 03</span>
         </div>
         <p className="mt-3 text-[13px] leading-relaxed text-tinta-suave">
           Pulsa uno: se hunde contra el papel y la sombra desaparece. Eso es un
@@ -231,7 +237,7 @@ export default function PrensaPage() {
       <section className="mt-12">
         <div className="cabecera-seccion">
           <span className="rotulo">Las cifras del canon</span>
-          <span className="dato text-[10px] text-tinta-suave">№ 04</span>
+          <span className="dato text-[11px] text-tinta-suave">№ 04</span>
         </div>
         <p className="mt-3 text-[13px] leading-relaxed text-tinta-suave">
           La altura se lee por el peso de la tinta, no por el brillo: el 100 va
@@ -250,7 +256,7 @@ export default function PrensaPage() {
       <section className="mt-12">
         <div className="cabecera-seccion">
           <span className="rotulo">El escalafón</span>
-          <span className="dato text-[10px] text-tinta-suave">№ 05</span>
+          <span className="dato text-[11px] text-tinta-suave">№ 05</span>
         </div>
         <p className="mt-3 text-[13px] leading-relaxed text-tinta-suave">
           El muro del Salón, con especímenes. Antes era una rejilla de carátulas
@@ -266,36 +272,70 @@ export default function PrensaPage() {
       <section className="mt-12">
         <div className="cabecera-seccion">
           <span className="rotulo">El índice</span>
-          <span className="dato text-[10px] text-tinta-suave">№ 06</span>
+          <span className="dato text-[11px] text-tinta-suave">№ 06</span>
         </div>
-        <p className="mt-3 text-[13px] leading-relaxed text-tinta-suave">
-          Con puntos conductores, como el índice de un libro. Sustituye a
-          cualquier fila de pastillas.
+        <p className="mt-3 text-[14px] leading-relaxed text-tinta-suave">
+          Con puntos conductores, como el índice de un libro. Cada línea es una
+          fila táctil de 60px con su marca de avance: se entinta entera al
+          pulsarla.
         </p>
-        <ul className="mt-4">
+        <ul className="mt-4 border-t border-regla">
           {["Heavy metal", "Salsa", "Bossa nova"].map((g, i) => (
-            <li
-              key={g}
-              className="flex items-baseline gap-2.5 border-b border-regla-tenue py-2.5"
-            >
-              <span className="dato w-6 shrink-0 text-[10px] text-tinta-suave">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <span className="font-serif shrink-0 text-[17px] leading-none">{g}</span>
-              <span className="puntos" />
-              <span className="dato shrink-0 text-[10px] uppercase tracking-[0.14em] text-tinta-suave">
-                5 discos
-              </span>
+            <li key={g}>
+              <button type="button" className="fila fila-avanza">
+                <span className="dato w-6 shrink-0 text-[11px] text-tinta-suave">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="font-serif shrink-0 text-[19px] leading-none">
+                  {g}
+                </span>
+                <span className="puntos" />
+                <span className="dato shrink-0 text-[11px] uppercase tracking-[0.1em] text-tinta-suave">
+                  5 discos
+                </span>
+              </button>
             </li>
           ))}
         </ul>
+      </section>
+
+      {/* ── Ergonomía ────────────────────────────────────────────────────── */}
+      <section className="mt-12">
+        <div className="cabecera-seccion">
+          <span className="rotulo">La medida del dedo</span>
+          <span className="dato text-[11px] text-tinta-suave">№ 08</span>
+        </div>
+        <p className="mt-3 text-[14px] leading-relaxed text-tinta-suave">
+          La primera tirada de este sistema se veía bien en una hoja y se usaba
+          mal en un teléfono: cuerpos de 9px, filas de 40px y estados que solo
+          respondían al ratón. Estas son las medidas mínimas, y no se negocian.
+        </p>
+        <dl className="mt-4 border-t border-regla">
+          {[
+            ["Botón (sello)", "52 px de alto"],
+            ["Fila de lista", "60 px de alto"],
+            ["Recuadro tocable", "44 px de alto"],
+            ["Pestaña del pie", "60 px de alto"],
+            ["Cuerpo mínimo", "11 px"],
+            ["Campo de texto", "16 px (o iOS hace zoom)"],
+          ].map(([k, v]) => (
+            <div
+              key={k}
+              className="flex items-baseline gap-3 border-b border-regla py-2.5"
+            >
+              <dt className="text-[14px]">{k}</dt>
+              <span className="puntos" />
+              <dd className="dato shrink-0 text-[12px] text-tinta-suave">{v}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
       {/* ── Destacado y capitular ────────────────────────────────────────── */}
       <section className="mt-12">
         <div className="cabecera-seccion">
           <span className="rotulo">Prosa y destacados</span>
-          <span className="dato text-[10px] text-tinta-suave">№ 07</span>
+          <span className="dato text-[11px] text-tinta-suave">№ 07</span>
         </div>
 
         <p className="prose-dossier capitular mt-4">

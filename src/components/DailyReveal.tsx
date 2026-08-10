@@ -73,7 +73,7 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
               ? "Tu disco de hoy"
               : "El disco de hoy"}
         </span>
-        <span className="dato text-[10px] text-tinta-suave">{album.dateLabel}</span>
+        <span className="dato text-[11px] text-tinta-suave">{album.dateLabel}</span>
       </motion.header>
 
       {/* ── La lámina ──────────────────────────────────────────────────── */}
@@ -100,7 +100,7 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
           )}
         </div>
         {/* Pie de figura: lo que convierte una imagen en una lámina. */}
-        <figcaption className="dato mt-1.5 flex items-baseline justify-between gap-3 text-[9px] uppercase tracking-[0.14em] text-tinta-suave">
+        <figcaption className="dato mt-2 flex items-baseline justify-between gap-3 text-[11px] uppercase tracking-[0.1em] text-tinta-suave">
           <span className="truncate">Lám. I · {album.artist}</span>
           <span className="shrink-0">{album.year}</span>
         </figcaption>
@@ -164,23 +164,27 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
         transition={{ duration: 0.5, delay: 1.15 }}
         className="mt-8"
       >
-        <Link href={`/album/${album.albumId}`} className="sello w-full !py-4">
+        <Link href={`/album/${album.albumId}`} className="sello w-full">
           Leer el dossier
         </Link>
 
         {tieneEnlaces && (
-          <p className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-regla pt-3">
-            <span className="rotulo shrink-0">Escúchalo en</span>
-            {album.links?.spotify && (
-              <EnlaceEscucha href={album.links.spotify}>Spotify</EnlaceEscucha>
-            )}
-            {album.links?.appleMusic && (
-              <EnlaceEscucha href={album.links.appleMusic}>Apple Music</EnlaceEscucha>
-            )}
-            {album.links?.youtubeMusic && (
-              <EnlaceEscucha href={album.links.youtubeMusic}>YT Music</EnlaceEscucha>
-            )}
-          </p>
+          <div className="mt-5 border-t border-regla pt-4">
+            <span className="rotulo">Escúchalo en</span>
+            {/* Tres destinos, tres objetivos de 48px. Antes eran tres palabras
+                subrayadas de 11px: bonito de leer, imposible de acertar. */}
+            <div className="mt-2.5 grid grid-cols-3 gap-2">
+              {album.links?.spotify && (
+                <EnlaceEscucha href={album.links.spotify}>Spotify</EnlaceEscucha>
+              )}
+              {album.links?.appleMusic && (
+                <EnlaceEscucha href={album.links.appleMusic}>Apple</EnlaceEscucha>
+              )}
+              {album.links?.youtubeMusic && (
+                <EnlaceEscucha href={album.links.youtubeMusic}>YT Music</EnlaceEscucha>
+              )}
+            </div>
+          </div>
         )}
 
         <div className="mt-5">
@@ -203,7 +207,7 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
             </p>
             <Link
               href={`/album/${album.albumId}`}
-              className="dato mt-3 inline-block text-[10px] uppercase tracking-[0.14em] underline underline-offset-4"
+              className="dato mt-2 inline-flex min-h-[44px] items-center text-[12px] uppercase tracking-[0.08em] underline underline-offset-4"
             >
               Más curiosidades en el dossier
             </Link>
@@ -215,7 +219,7 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
           <section className="mt-10">
             <div className="cabecera-seccion">
               <span className="rotulo">Sigue la madriguera</span>
-              <span className="dato text-[10px] text-tinta-suave">
+              <span className="dato text-[11px] text-tinta-suave">
                 {album.madriguera.length}
               </span>
             </div>
@@ -226,14 +230,11 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
             <ol className="mt-4 border-t border-regla">
               {album.madriguera.map((m, i) => (
                 <li key={m.albumId}>
-                  <Link
-                    href={`/album/${m.albumId}`}
-                    className="flex gap-3 border-b border-regla py-3 transition-colors hover:bg-tinta/[0.05]"
-                  >
-                    <span className="dato w-5 shrink-0 pt-0.5 text-[10px] text-tinta-suave">
+                  <Link href={`/album/${m.albumId}`} className="fila !items-start">
+                    <span className="dato w-5 shrink-0 pt-0.5 text-[11px] text-tinta-suave">
                       {String(i + 1).padStart(2, "0")}
                     </span>
-                    <span className="relative h-12 w-12 shrink-0 overflow-hidden border border-regla bg-papel-alto">
+                    <span className="relative h-14 w-14 shrink-0 overflow-hidden border border-regla bg-papel-alto">
                       {m.coverUrl ? (
                         <Image
                           src={m.coverUrl}
@@ -249,14 +250,14 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
                       )}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="font-serif block truncate text-[16px] leading-tight">
+                      <span className="font-serif block truncate text-[17px] leading-tight">
                         {m.title}
                       </span>
-                      <span className="dato block truncate text-[10px] uppercase tracking-[0.1em] text-tinta-suave">
+                      <span className="dato block truncate text-[11px] uppercase tracking-[0.08em] text-tinta-suave">
                         {m.artist} · {m.year}
                       </span>
                       {m.connection && (
-                        <span className="mt-1 line-clamp-2 block text-[12px] leading-snug text-tinta-suave">
+                        <span className="mt-1 line-clamp-2 block text-[13px] leading-snug text-tinta-suave">
                           {m.connection}
                         </span>
                       )}
@@ -272,14 +273,14 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
         <div className="filete mt-10 pt-4">
           <Link
             href="/explorar"
-            className="dato block text-[10px] uppercase tracking-[0.14em] underline underline-offset-4"
+            className="dato flex min-h-[48px] items-center text-[12px] uppercase tracking-[0.08em] underline underline-offset-4"
           >
             Explorar el resto de la publicación
           </Link>
           {album.showProfileInvite && (
             <Link
               href="/perfil"
-              className="mt-2.5 block text-[12px] leading-relaxed text-tinta-suave underline underline-offset-4"
+              className="flex min-h-[48px] items-center text-[13px] leading-relaxed text-tinta-suave underline underline-offset-4"
             >
               Cuéntanos qué te gusta y el disco de hoy será para ti.
             </Link>
@@ -290,7 +291,7 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
   );
 }
 
-/** Un enlace de escucha: texto subrayado, no una pastilla con un puntito. */
+/** Un destino de escucha: recuadro de tinta con su medida de dedo. */
 function EnlaceEscucha({
   href,
   children,
@@ -303,7 +304,7 @@ function EnlaceEscucha({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="dato text-[11px] uppercase tracking-[0.12em] underline decoration-regla underline-offset-4 transition-colors hover:decoration-album hover:text-album"
+      className="dato pulsable flex min-h-[48px] items-center justify-center border border-tinta px-2 text-center text-[12px] uppercase tracking-[0.06em]"
     >
       {children}
     </a>

@@ -797,6 +797,30 @@ que se hunden contra el papel · nada de emojis · lo que se numera, se numera.
   vuelva a meter una tarjeta redondeada. No toca la base de datos, así que
   siempre renderiza.
 
+- [x] **10.11 La regla VIII: la ergonomía manda** (tras probar la primera tirada
+  en el teléfono: *"se ve tosca, no se ve interactiva; los botones no se ven
+  bien. La otra, a pesar de genérica, parecía una app nativa, y eso es mejor que
+  ser innovador y que se vea feo"*). Crítica correcta y error mío bien concreto:
+  **llevé la lógica del papel al dedo**. Una revista usa cuerpo 8 y filetes de
+  un pelo porque se sostiene a 30 cm y se imprime a 1200 dpi; un teléfono se
+  mira a medio metro y se maneja con un dedo de un centímetro. Y lo peor: al
+  quitar las tarjetas quité los `hover`, que **en una pantalla táctil no
+  existen**, sin poner nada en su lugar — de ahí que no pareciera interactiva.
+  Lo arreglado, con medidas comprobadas en un viewport de teléfono real
+  (393×852): botones de 52px entintados con el acento y relieve duro (antes eran
+  rectángulos planos de 36px que parecían rótulos) · filas de lista de 60px que
+  se entintan enteras al pulsarlas y llevan su marca de avance `›` · pestañas de
+  60px · ningún cuerpo por debajo de 11px · campos a 16px para que iOS no haga
+  zoom solo · `touch-action: manipulation` · y estados `:active` en todo.
+  **Los iconos de la barra vuelven**: su forma es una convención de plataforma,
+  no un gesto de plantilla, y pelearla costaba usabilidad sin ganar identidad
+  —que vive en la tipografía, las reglas y las cifras, no en la barra—. Los
+  iconos, eso sí, están dibujados en este idioma: marcas macizas de tinta (el
+  disco, la lupa de imprenta, el cuadernillo, el sello del suscriptor), no
+  contornos redondeados de librería. Verificado por medición automática: **cero
+  objetivos por debajo de 44px y cero textos por debajo de 11px** en la primera
+  plana y en el libro de estilo.
+
 ### Lo que falta (deuda consciente, no olvido)
 
 - [ ] **10.10 Rehacer a mano el resto de pantallas** — dossier del álbum,
@@ -813,6 +837,8 @@ que se hunden contra el papel · nada de emojis · lo que se numera, se numera.
   papel claro.
 - [x] Un desconocido no puede señalar el gesto de plantilla que delata la app,
   porque no queda ninguno en la ruta principal.
+- [x] **Y se usa como una app nativa**: nada tocable por debajo de 44px, nada
+  legible por debajo de 11px, y todo responde al dedo. Medido, no opinado.
 
 ---
 

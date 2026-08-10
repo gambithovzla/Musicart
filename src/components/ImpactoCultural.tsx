@@ -25,7 +25,7 @@ export function ImpactoCultural({
   const v = Math.max(1, Math.min(100, Math.round(value)));
   return (
     <details className="group inline-block text-left align-middle">
-      <summary className="flex cursor-pointer list-none items-center gap-1 tabular-nums [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-1 tabular-nums [&::-webkit-details-marker]:hidden">
         <span className="text-dim">Impacto</span>
         <span className="font-semibold text-album-light">{v}</span>
         <span className="text-dim">/100 · {etiquetaImpacto(v)}</span>

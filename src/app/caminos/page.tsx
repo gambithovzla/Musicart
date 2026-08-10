@@ -44,7 +44,7 @@ export default async function CaminosPage() {
         <section className="mt-10">
           <div className="cabecera-seccion">
             <span className="rotulo">Tus caminos</span>
-            <span className="dato text-[10px] text-tinta-suave">
+            <span className="dato text-[11px] text-tinta-suave">
               {caminos.length} en curso
             </span>
           </div>
@@ -59,13 +59,13 @@ export default async function CaminosPage() {
                 <li key={c.id}>
                   <Link
                     href={`/caminos/${c.id}`}
-                    className="block border-b border-regla py-4 transition-colors hover:bg-tinta/[0.05]"
+                    className="fila !block !py-4"
                   >
                     <div className="flex items-baseline gap-2.5">
                       <span className="font-serif min-w-0 flex-1 truncate text-xl">
                         {c.titulo}
                       </span>
-                      <span className="dato shrink-0 text-[10px] uppercase tracking-[0.14em] text-tinta-suave">
+                      <span className="dato shrink-0 text-[11px] uppercase tracking-[0.1em] text-tinta-suave">
                         {completado ? "Completado" : `${paso} de ${total}`}
                       </span>
                     </div>

@@ -76,6 +76,20 @@ iconos · todo centrado · Inter.
    romanos, puntos conductores con `.puntos`).
 7. Lo que se numera, se numera: folios `№ 03`, escalafones `01 02 03`, láminas
    con pie de figura.
+8. **LA ERGONOMÍA MANDA, y gana a las siete de arriba.** Se añadió tras la
+   primera tirada, cuando el dueño la vio en el teléfono: *"se ve tosca, no se
+   ve interactiva"*. Tenía razón: llevé la lógica del papel al dedo. Un teléfono
+   no se sostiene a 30 cm ni imprime a 1200 dpi, y **el `hover` no existe** —al
+   quitar las tarjetas quité también los estados, y la interfaz quedó muerta al
+   tacto. Las cuatro leyes: **(a)** nada tocable por debajo de 48px de alto
+   (`.sello` 52 · `.fila` 60 · pestaña 60 · recuadro tocable 44); **(b)** todo
+   responde al dedo en el acto (`:active`, nunca solo `:hover`); **(c)** ningún
+   cuerpo por debajo de 11px —y los campos de texto a 16px o iOS hace zoom
+   solo—; **(d)** lo pulsable parece pulsable (`.fila-avanza` pone su `›`, el
+   sello lleva su relieve). Las clases táctiles son `.sello`, `.sello-hueco`,
+   `.fila`, `.fila-avanza` y `.pulsable`: **úsalas en vez de inventar una fila
+   nueva**. Y la barra de pestañas lleva iconos: su forma es convención de
+   plataforma, no plantilla — pelearla costó usabilidad sin ganar identidad.
 
 **Color:** usa `--acento` / `text-album` (que ya apunta a él), **nunca**
 `--album-vibrant` directo: el acento deriva de la portada del día pero se

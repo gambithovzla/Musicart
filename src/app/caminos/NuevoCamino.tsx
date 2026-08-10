@@ -115,33 +115,34 @@ export function NuevoCamino({ primero }: { primero: boolean }) {
         <span className="rotulo">
           {primero ? "Índice de géneros" : "Trazar otro camino"}
         </span>
-        <span className="dato text-[10px] text-tinta-suave">
+        <span className="dato text-[11px] text-tinta-suave">
           {GENEROS.length} entradas
         </span>
       </div>
 
-      <p className="mt-3 text-[13px] leading-relaxed text-tinta-suave">
+      <p className="mt-3 text-[14px] leading-relaxed text-tinta-suave">
         Un género que siempre te dio curiosidad y nunca supiste por dónde entrar.
         Elige uno y te lo ordeno en cinco discos.
       </p>
 
-      {/* El índice. Cada línea: número · género · puntos · cinco discos. */}
-      <ul className="mt-5">
+      {/* El índice. Cada línea es una FILA táctil de 60px: número · género ·
+          puntos conductores · cuántos discos · marca de avance. */}
+      <ul className="mt-4 border-t border-regla">
         {GENEROS.map((g, i) => (
           <li key={g}>
             <button
               type="button"
               onClick={() => trazar(g)}
-              className="group flex w-full items-baseline gap-2.5 border-b border-regla-tenue py-2.5 text-left transition-colors hover:bg-tinta/[0.06]"
+              className="fila fila-avanza"
             >
-              <span className="dato w-6 shrink-0 text-[10px] text-tinta-suave">
+              <span className="dato w-6 shrink-0 text-[11px] text-tinta-suave">
                 {String(i + 1).padStart(2, "0")}
               </span>
-              <span className="font-serif shrink-0 text-[17px] leading-none transition-transform group-hover:translate-x-0.5">
+              <span className="font-serif shrink-0 text-[19px] leading-none">
                 {g}
               </span>
               <span className="puntos" />
-              <span className="dato shrink-0 text-[10px] uppercase tracking-[0.14em] text-tinta-suave transition-colors group-hover:text-tinta">
+              <span className="dato shrink-0 text-[11px] uppercase tracking-[0.1em] text-tinta-suave">
                 5 discos
               </span>
             </button>
@@ -167,7 +168,9 @@ export function NuevoCamino({ primero }: { primero: boolean }) {
             onChange={(e) => setTema(e.target.value)}
             maxLength={200}
             placeholder="«de Linkin Park a Black Sabbath»"
-            className="dato min-w-0 flex-1 border-b border-tinta bg-transparent px-1 py-2 text-[13px] outline-none placeholder:text-tinta-suave/60 focus:border-album"
+            // 16px de cuerpo: por debajo de eso, iOS hace zoom solo al enfocar
+            // el campo y descoloca la pantalla entera.
+            className="dato min-h-[52px] min-w-0 flex-1 border-2 border-tinta bg-transparent px-3 text-[16px] outline-none placeholder:text-tinta-suave/60 focus:border-acento"
           />
           <button type="submit" disabled={!tema.trim()} className="sello">
             Trazar
@@ -180,7 +183,7 @@ export function NuevoCamino({ primero }: { primero: boolean }) {
           <p className="rotulo !text-album">No se pudo</p>
           <p className="mt-1.5 text-[13px] leading-relaxed">{error}</p>
           {detalle && (
-            <p className="dato mt-1.5 text-[10px] leading-relaxed text-tinta-suave">
+            <p className="dato mt-1.5 text-[11px] leading-relaxed text-tinta-suave">
               {detalle}
             </p>
           )}

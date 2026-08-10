@@ -33,11 +33,17 @@ export function Cabecera({ edicion }: { edicion: "light" | "dark" }) {
 
   return (
     <header className="sticky top-0 z-30 bg-papel">
-      <div className="mx-auto flex max-w-lg items-center justify-between gap-3 px-5 pb-1.5 pt-[calc(env(safe-area-inset-top)+0.55rem)]">
-        <Link href="/" className="rotulo shrink-0 !text-tinta">
+      {/* Los dos elementos tocables del folio (el nombre y el selector de
+          edición) llevan 44px de alto aunque su letra sea pequeña: el objetivo
+          táctil no se mide en puntos de tipografía (regla VIII.a). */}
+      <div className="mx-auto flex max-w-lg items-center justify-between gap-3 px-5 pt-[env(safe-area-inset-top)]">
+        <Link
+          href="/"
+          className="rotulo flex min-h-[44px] shrink-0 items-center !text-tinta"
+        >
           Musicart
         </Link>
-        <span className="dato truncate text-[10px] text-tinta-suave">
+        <span className="dato truncate text-[11px] text-tinta-suave">
           № {numeroDeEdicion(hoy)} · {fecha}
         </span>
         <SelectorEdicion edicion={edicion} />

@@ -9,7 +9,7 @@ export function DificultadEscucha({ value }: { value: number }) {
   const v = Math.max(1, Math.min(5, Math.round(value)));
   return (
     <details className="group inline-block text-left align-middle">
-      <summary className="flex cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden">
         <span className="text-dim">Dificultad</span>
         <Stars value={v} />
         <span className="text-dim">· {PALABRA[v]}</span>

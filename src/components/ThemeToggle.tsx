@@ -27,7 +27,7 @@ export function SelectorEdicion({ edicion }: { edicion: "light" | "dark" }) {
         router.refresh();
       }}
       aria-label={esDia ? "Cambiar a la edición de noche" : "Cambiar a la edición de día"}
-      className="dato shrink-0 text-[10px] uppercase tracking-[0.18em] text-tinta-suave transition-colors hover:text-tinta"
+      className="dato flex min-h-[44px] shrink-0 items-center pl-2 text-[11px] uppercase tracking-[0.14em] text-tinta-suave active:text-tinta"
     >
       <span className={esDia ? "text-tinta" : ""}>Día</span>
       <span className="mx-1 opacity-40">/</span>

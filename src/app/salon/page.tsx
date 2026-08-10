@@ -37,7 +37,7 @@ function Folio({ n, titulo }: { n: number; titulo: string }) {
   return (
     <div className="cabecera-seccion">
       <span className="rotulo">{titulo}</span>
-      <span className="dato text-[10px] text-tinta-suave">
+      <span className="dato text-[11px] text-tinta-suave">
         № {String(n).padStart(2, "0")}
       </span>
     </div>
@@ -98,7 +98,7 @@ export default async function SalonPage() {
               {progreso.escuchados}
             </span>{" "}
             de los {progreso.total} más altos del canon
-            <span className="dato ml-1.5 text-[10px] text-tinta-suave">
+            <span className="dato ml-1.5 text-[11px] text-tinta-suave">
               ({Math.round((progreso.escuchados / progreso.total) * 100)}%)
             </span>
           </p>
@@ -141,18 +141,18 @@ export default async function SalonPage() {
               <li key={p.min}>
                 <Link
                   href={`/salon/lista?min=${p.min}${techo ? `&max=${techo - 1}` : ""}`}
-                  className="flex items-center gap-3 border-b border-regla py-3 transition-colors hover:bg-tinta/[0.05]"
+                  className="fila fila-avanza"
                 >
                   <SelloPuntaje score={p.min === 0 ? 60 : p.min} tam="sm" />
                   <span className="min-w-0 flex-1">
-                    <span className="font-serif block text-[16px] leading-tight">
+                    <span className="font-serif block text-[17px] leading-tight">
                       {p.nombre}
                     </span>
-                    <span className="block text-[11px] leading-relaxed text-tinta-suave">
+                    <span className="block text-[12px] leading-snug text-tinta-suave">
                       {p.descripcion}
                     </span>
                   </span>
-                  <span className="dato shrink-0 text-[11px] text-tinta-suave">
+                  <span className="dato shrink-0 text-[12px] text-tinta-suave">
                     {p.total}
                   </span>
                 </Link>
@@ -169,14 +169,15 @@ export default async function SalonPage() {
             El canon global se escribe casi todo en inglés. Aquí puedes pedirle
             el suyo a cada país y a cada género.
           </p>
-          {/* Sin pastillas: una lista de referencias separadas por barras, como
-              los descriptores al pie de un artículo. */}
-          <p className="mt-3 leading-loose">
+          {/* No son pastillas: son recuadros de tinta. Pero SÍ son objetivos
+              táctiles de 44px — subrayar una palabra de 11px y esperar que el
+              dedo la acierte era pedirle demasiado (regla VIII.a). */}
+          <div className="mt-4 flex flex-wrap gap-2">
             {filtros.generos.map((g) => (
               <Link
                 key={g}
                 href={`/salon/lista?genero=${encodeURIComponent(g)}`}
-                className="dato mr-2 border-b border-regla text-[11px] uppercase tracking-[0.1em] transition-colors hover:border-album hover:text-album"
+                className="dato pulsable flex min-h-[44px] items-center border border-tinta px-3 text-[12px] uppercase tracking-[0.08em]"
               >
                 {g}
               </Link>
@@ -185,12 +186,12 @@ export default async function SalonPage() {
               <Link
                 key={p.code}
                 href={`/salon/lista?pais=${p.code}`}
-                className="dato mr-2 border-b border-regla text-[11px] uppercase tracking-[0.1em] text-tinta-suave transition-colors hover:border-album hover:text-album"
+                className="dato pulsable flex min-h-[44px] items-center border border-regla px-3 text-[12px] uppercase tracking-[0.08em] text-tinta-suave"
               >
                 {p.nombre}
               </Link>
             ))}
-          </p>
+          </div>
         </section>
       )}
 

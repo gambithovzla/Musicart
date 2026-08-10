@@ -40,7 +40,7 @@ export function Dial({ inicial = 95 }: { inicial?: number }) {
     <section>
       <div className="cabecera-seccion">
         <span className="rotulo">El dial</span>
-        <span className="dato text-[10px] text-tinta-suave">55 — 100</span>
+        <span className="dato text-[11px] text-tinta-suave">55 — 100</span>
       </div>
 
       <p className="mt-3 text-[13px] leading-relaxed text-tinta-suave">
@@ -93,10 +93,10 @@ export function Dial({ inicial = 95 }: { inicial?: number }) {
           />
         </div>
         <div className="mt-3 flex justify-between border-t border-regla pt-1.5">
-          <span className="dato text-[9px] uppercase tracking-[0.14em] text-tinta-suave">
+          <span className="dato text-[11px] uppercase tracking-[0.1em] text-tinta-suave">
             55 · Notables
           </span>
-          <span className="dato text-[9px] uppercase tracking-[0.14em] text-tinta-suave">
+          <span className="dato text-[11px] uppercase tracking-[0.1em] text-tinta-suave">
             100 · Inmortales
           </span>
         </div>
@@ -133,7 +133,7 @@ export function Dial({ inicial = 95 }: { inicial?: number }) {
                 className="h-14 w-14 shrink-0 border border-regla object-cover"
               />
             ) : (
-              <span className="dato flex h-14 w-14 shrink-0 items-center justify-center border border-regla text-[9px] text-tinta-suave">
+              <span className="dato flex h-14 w-14 shrink-0 items-center justify-center border border-regla text-[11px] text-tinta-suave">
                 s/c
               </span>
             )}
@@ -141,7 +141,7 @@ export function Dial({ inicial = 95 }: { inicial?: number }) {
               <span className="font-serif block truncate text-lg leading-tight">
                 {resultado.album.title}
               </span>
-              <span className="dato block truncate text-[10px] uppercase tracking-[0.1em] text-tinta-suave">
+              <span className="dato block truncate text-[11px] uppercase tracking-[0.08em] text-tinta-suave">
                 {resultado.album.artist}
                 {resultado.album.year ? ` · ${resultado.album.year}` : ""}
               </span>

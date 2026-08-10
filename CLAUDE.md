@@ -13,10 +13,18 @@ Music/YouTube Music; Musicart es el guía.
 
 **Antes de escribir código, lee `ROADMAP.md`**: ahí están la visión completa,
 las fases con checkbox y los criterios de aceptación. **Fases 0–7 completas;
-Fase 8 EN CURSO** (ago 2026): **Caminos** — "por dónde entrar a un género".
-Una secuencia de 5 discos en orden pedagógico, en **pestaña aparte** (`/caminos`):
-el disco del día NO se toca. Ver las decisiones de diseño en el ROADMAP antes de
-tocar nada de esta fase.
+Fase 8 casi cerrada (falta 8.6) y Fase 9 EN CURSO** (ago 2026).
+
+- **Fase 8 — Caminos**: "por dónde entrar a un género". Una secuencia de 5
+  discos en orden pedagógico, en **pestaña aparte** (`/caminos`).
+- **Fase 9 — El Salón de la Fama** (`/salon`): los discos del canon con un
+  puntaje 1-100 **comparable entre sí**, y el dial "dame un disco de 95". El
+  puntaje NO lo escribe ningún LLM (sale de datos duros y de calibrar por
+  percentil contra todo el índice) y el índice tiene miles de discos **sin**
+  fabricarles dossier: la historia se hace perezosa al tocarlos.
+
+En las dos, el disco del día NO se toca. Ver las decisiones de diseño en el
+ROADMAP antes de tocar nada de estas fases.
 
 ## Reglas de trabajo para la IA
 
@@ -52,7 +60,9 @@ prisma/schema.prisma     Modelos: Artist, Album (difficulty 1-5, impact 1-100),
                          canción favorita), GenerationQueue, GenerationBudget
                          (tope de gasto diario 6.6), PushSubscription, Rewind,
                          MusicalThread, DuetPair/DuetPick, DossierChat, DossierView,
-                         Camino (Fase 8: tema, titulo, intro, stepsJson, status).
+                         Camino (Fase 8: tema, titulo, intro, stepsJson, status),
+                         CanonAlbum (Fase 9: el índice del canon — score 1-100
+                         calibrado, raw, locked, signalsJson, evidenceJson).
                          Campos *Json son String.
 prisma/seed.ts|fixtures.ts  Seed idempotente con 3 discos demo (con impactNote).
 src/app/page.tsx         Home: gate de onboarding (sin perfil → Onboarding, NO se
@@ -69,6 +79,12 @@ src/app/caminos/         Fase 8: pestaña propia de los Caminos (lista + crear, 
                          /caminos/[id] con sus pasos). Las dos operaciones caras
                          viven en /api/caminos/crear (maxDuration 120) y
                          /api/caminos/paso (300), como el disco del día.
+src/app/salon/           Fase 9: El Salón de la Fama. Muro de los 100/100, el
+                         DIAL ("dame un disco de 95"), pisos, canon con acento
+                         (país/género), /salon/lista con filtros y
+                         /salon/disco/[id] con los recibos del puntaje. La
+                         fabricación del dossier vive en /api/salon/abrir
+                         (maxDuration 300), como el disco del día.
 src/app/dueto/           Disco compartido semanal entre dos cuentas (5.5).
 src/app/perfil/          Edición de perfil, push, dueto, Stripe, privacidad.
 src/app/entrar/          Inicio de sesión (Google + email) y fusión del device.
@@ -109,6 +125,23 @@ src/lib/caminos-pasos.ts Fase 8: la parte PURA (tipos, etiquetas de papel,
                          pasoAbierto/pasoActual). Existe aparte porque la UI de
                          cliente no puede importar caminos.ts (arrastra el
                          pipeline → jimp → `fs` y rompe el build).
+src/lib/canon/           Fase 9: el Salón de la Fama. AQUÍ NO ENTRA NINGÚN LLM.
+  score.ts                 PURO (sin red ni DB): prestigioBruto() pondera las
+                           señales duras, calibrar() reparte el 1-100 por
+                           percentil contra TODO el índice (la curva hace que el
+                           100 sea ~0,4%), recibos() y pisoDe(). Es lo que arregla
+                           el defecto de Album.impact: ese no es comparable entre
+                           discos, este sí.
+  ingest.ts                construirIndice() (Wikidata → señales → prestigio →
+                           recalibrar), recalibrar(), enlazarConCatalogo() y
+                           rellenarPortadas(). Corre por script, nunca en runtime.
+  consulta.ts              Lectura de la pestaña: muro, pisos, listarCanon con
+                           filtros, discoDePuntaje() (el dial, personalizado sin
+                           IA) y progresoDelOyente(). Sin import del pipeline.
+  abrir.ts                 abrirDiscoDelCanon(): fabricación perezosa del dossier
+                           con el tope 6.6. Va aparte de consulta.ts porque
+                           importar el pipeline arrastra jimp → `fs` (mismo motivo
+                           que caminos.ts vs caminos-pasos.ts).
 src/lib/return-ritual.ts Fase 5.6: detecta ausencia y personaliza el pick de regreso.
 src/lib/identity.ts      Fase 3.3: userId + deviceId y filtros de consulta.
 src/lib/user-data.ts     Fase 3.4: exportación y borrado de datos del oyente.
@@ -123,7 +156,8 @@ src/lib/dossier/         Pipeline anti-alucinación:
   pipeline.ts              orquesta: facts → generate → verify → save (reused?)
   llm.ts                   adapter OpenAI/Anthropic + hayClaveIA() (env LLM_PROVIDER,
                            LLM_MODEL; plan 6.8: GENERATION_MODEL premium solo para escribir)
-src/lib/sources/         Clientes de las APIs externas.
+src/lib/sources/         Clientes de las APIs externas (+ wikidata.ts en Fase 9:
+                         SPARQL para el universo del canon y sus premios).
 src/lib/types.ts         Tipos de dominio (FactsPayload, DossierContent, Palette…).
 src/lib/merge-device.ts  Fusión Profile/Reviews/DailyPicks al iniciar sesión.
 src/lib/device.ts        Identidad anónima por dispositivo (localStorage + cookie
@@ -149,6 +183,10 @@ npm run db:migrate   # prisma migrate dev
 npm run db:seed      # seed idempotente (manual; el build ya no siembra)
 npm run dossier -- "Álbum" "Artista" --publish   # generar un dossier (CLI, requiere API key)
 npm run worker -- --batch 2                      # corrida del worker de catálogo (curador + pipeline)
+npm run canon                                    # construye el índice del canon (Fase 9; sin IA, ~1000 discos)
+npm run canon -- --limite 150                    # corrida corta de prueba
+npm run canon -- --portadas 200                  # solo rellenar carátulas pendientes
+npm run canon -- --recalibrar                    # solo recalcular puntajes (sin red)
 npm run push                                     # envío Web Push del disco del día (cron Railway)
 ```
 
@@ -187,6 +225,15 @@ npm run push                                     # envío Web Push del disco del
   build del Preview de cada PR ya corre `prisma migrate deploy` sobre la base
   real, así que las migraciones se aplican al abrir el PR (Producción las salta
   por idempotencia). Tenlo en cuenta con migraciones que reescalan datos.
+- **Dos números de 1-100 que NO son lo mismo** (Fase 9): `Album.impact` es el
+  impacto cultural que la IA escribe *dentro* de un dossier — sirve para contar
+  ese disco, pero NO es comparable entre discos (se asigna sin ver a los demás).
+  `CanonAlbum.score` es el puntaje del Salón: sale de datos duros y de calibrar
+  por percentil contra todo el índice, así que ahí un 91 sí significa siempre lo
+  mismo. No los mezcles ni los sincronices sin pensarlo: miden cosas distintas.
+- **`npm run canon` no corre en Vercel ni en sandboxes sin red**: habla con
+  Wikidata, Last.fm y Deezer, y tarda minutos. Es un script de mantenimiento
+  (como el worker), no una ruta. El índice se refresca cuando tú lo corres.
 - **Escalas:** dificultad del álbum 1-5 (estrellas); impacto cultural 1-100
   (honesto, con leyenda + `impactNote` clicleable); puntaje del usuario 1-10
   (umbral "loved" = 8). Migraciones ya reescalaron datos viejos.

@@ -37,6 +37,17 @@ const ITEMS = [
     ),
   },
   {
+    href: "/salon",
+    label: "Salón",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6">
+        <path d="M3 9.5 12 4l9 5.5" />
+        <path d="M5.5 10v8M10 10v8M14 10v8M18.5 10v8" />
+        <path d="M3 20h18" />
+      </svg>
+    ),
+  },
+  {
     href: "/vitrina",
     label: "Vitrina",
     icon: (

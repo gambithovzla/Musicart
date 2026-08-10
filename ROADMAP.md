@@ -574,9 +574,112 @@ discos; lo valioso es **el porqué del orden**.
 
 ---
 
+## 🔨 Fase 9 — El Salón de la Fama (EN CURSO · ago 2026)
+
+**Objetivo:** que el oyente pueda ver **los discos 100 de 100** y pedir *"dame
+un disco de 95"* y que la app sepa dárselo, con una lista de **miles de discos
+que sea de verdad coherente**.
+
+Idea del dueño, tras hablar con musicólogos y melómanos: hay discos que son
+cien de cien (*The Dark Side of the Moon*, *Thriller*, *Abbey Road*…) y eso
+merece su propio sitio en la app.
+
+### El problema que había que resolver primero
+
+Musicart YA tenía un número 1-100: el impacto cultural (`Album.impact`, 6.5).
+**No servía para esto**, por dos razones:
+
+1. Lo escribe la IA **disco a disco, sin ver a los demás**. Cuando narra
+   *Thriller* no tiene delante a *Abbey Road*: un 88 de enero y un 91 de marzo
+   no son comparables. Es el mismo defecto que el ROADMAP ya reconoce para
+   `Album.difficulty` (decisión 4 de la Fase 8).
+2. Solo existe para discos **que ya pasaron por el pipeline**. Para llegar a
+   miles habría que fabricar miles de dossiers: meses de generación y una
+   factura de IA imposible.
+
+### Decisiones de diseño tomadas (no re-litigar)
+
+1. **El ranking va separado del dossier.** Tabla nueva y ligera (`CanonAlbum`)
+   con miles de discos: título, artista, año, portada, puntaje y sus recibos.
+   Sin narrativa. La historia se fabrica perezosamente el día que alguien toca
+   ese disco (`abrirDiscoDelCanon`), igual que un paso de un Camino, y como
+   muchos canónicos ya están en catálogo suele salir gratis (`reused`).
+2. **El puntaje NO lo escribe ningún LLM.** Sale de señales duras: en cuántas
+   ediciones de Wikipedia tiene artículo propio (Wikidata), qué premios recibió
+   y cuánta gente lo escucha (Last.fm, con poco peso: esto mide consagración,
+   no popularidad). Aquí la regla anti-alucinación se cumple sola porque no hay
+   nada escrito por un modelo.
+3. **Coherencia por percentil, no por fórmula suelta.** El 1-100 final se asigna
+   comparando cada disco con TODO el índice (`calibrar`), con una curva que hace
+   el 100 rarísimo (~0,4% del índice: 4-7 discos entre mil). Así un 91 significa
+   siempre lo mismo: "estás por encima del 91% del canon". Entrar discos nuevos
+   recalibra a todos, y está bien — un canon es un ranking.
+4. **El suelo del índice es 55, no 1.** Estar en el índice ya es una distinción
+   (son los discos más documentados de la historia grabada). Un disco de nicho
+   no saca mala nota: sencillamente no aparece.
+5. **El club de los 100 se puede fijar a mano.** `CanonAlbum.locked` congela el
+   puntaje de un disco y la ingesta no lo pisa. Es donde el criterio del curador
+   vale más que la fórmula y donde un error se vería más.
+6. **`/salon` ≠ `/vitrina`.** La vitrina es **mi gusto** (subjetivo, del
+   curador); el Salón es **el veredicto de la historia** (objetivo, con
+   recibos). El copy de ambas lo dice explícitamente o se canibalizan, igual que
+   pasaba con `/explorar` vs `/caminos`.
+7. **El disco del día no se toca.** Otra vez: pestaña aparte, motor aparte.
+
+### Tareas
+
+- [x] **9.1 Modelo del índice** — `CanonAlbum` (puntaje, prestigio bruto,
+  señales, recibos, país, década, género, enlaces a Wikidata/MusicBrainz y al
+  `Album` con dossier) + migración.
+- [x] **9.2 Motor de puntaje** (`src/lib/canon/score.ts`) — PURO, sin red ni
+  base de datos: `prestigioBruto()` pondera las señales, `calibrar()` reparte el
+  1-100 por percentil con la curva del canon, `recibos()` traduce las señales a
+  frases legibles y `pisoDe()` da la leyenda. Verificado: con 1.000 discos salen
+  7 en el 100, 36 de 95 para arriba, 98 de 90 para arriba y **ningún hueco**
+  entre 55 y 100 (el dial necesita que cada número exista).
+- [x] **9.3 Ingesta** (`src/lib/sources/wikidata.ts`, `src/lib/canon/ingest.ts`,
+  `scripts/canon.ts` → `npm run canon`) — Wikidata SPARQL da el universo y las
+  señales fuertes; Last.fm añade oyentes y géneros; Deezer, las carátulas (paso
+  aparte y con tope, por cortesía con una API pública). Idempotente, resiliente
+  fuente a fuente, y termina recalibrando el índice entero.
+- [x] **9.4 Capa de lectura** (`src/lib/canon/consulta.ts`) — muro, pisos,
+  listado con filtros, progreso del oyente y el dial. Sin una sola llamada a un
+  LLM: el Salón carga instantáneo y no consume presupuesto.
+- [x] **9.5 Pestaña `/salon`** — muro de los inmortales, **el dial** ("dame un
+  disco de 95", personalizado por afinidad y sin repetir lo ya escuchado), pisos
+  navegables, canon con acento (país y género), `/salon/lista` con filtros y
+  `/salon/disco/[id]` con los recibos del puntaje. Enlace en `BottomNav`.
+- [ ] **9.6 Primera corrida real del índice** (pendiente del dueño) —
+  `npm run canon` con la `DATABASE_URL` de Railway. Ver "Pendiente del dueño".
+- [ ] **9.7 Curaduría del club de los 100** — que el dueño pueda fijar y
+  ordenar a mano los 100/100 desde `/revision` (usando `locked`), y compartir el
+  Salón con OG image.
+
+### Pendiente del dueño (una sola vez)
+
+- [ ] Correr `npm run canon` con la `DATABASE_URL` pública de Railway. Tarda
+  bastante (habla con tres APIs con pausas de cortesía). Para probar primero:
+  `npm run canon -- --limite 150`.
+- [ ] Opcional: `LASTFM_API_KEY` para que el índice tenga oyentes y géneros. Sin
+  ella el puntaje se calcula igual, solo con menos matices.
+
+### Criterios de aceptación
+
+- [ ] El oyente pide "un disco de 95" y recibe uno de exactamente esa altura,
+  distinto del que ya escuchó y afín a su gusto.
+- [ ] Cada puntaje se puede abrir y enseña las señales reales que lo produjeron.
+- [ ] El índice llega a ~1.000 discos sin fabricar 1.000 dossiers.
+- [ ] Tocar un disco del Salón fabrica su dossier (o reutiliza el del catálogo)
+  y cae con elegancia si se agotó el presupuesto — nunca un 500.
+- [ ] El disco del día sigue funcionando exactamente igual que antes.
+
+---
+
 ## Estado actual (agosto 2026)
 
-**Fases 0–7 completas; Fase 8 EN CURSO** (ago 2026).
+**Fases 0–7 completas; Fase 8 casi cerrada (falta 8.6) y Fase 9 EN CURSO**
+(ago 2026). La 8.6 quedó pendiente por decisión del dueño, que priorizó el
+Salón de la Fama.
 
 ---
 

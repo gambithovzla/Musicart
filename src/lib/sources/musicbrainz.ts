@@ -178,6 +178,65 @@ export async function getAlbumDetails(
   };
 }
 
+export type MbArtistOrigin = {
+  /** Nombre del artista tal cual lo guarda MusicBrainz. */
+  name: string;
+  /** Código ISO del país (VE, US, GB…). MusicBrainz no siempre lo tiene. */
+  country: string | null;
+  /** Área actual (país o región) — respaldo cuando no hay código de país. */
+  areaName: string | null;
+  /** Área de origen (dónde nació/se formó) — el dato más fiel al "de dónde es". */
+  beginAreaName: string | null;
+};
+
+/**
+ * De dónde es un artista, según MusicBrainz. Lo usa la barrera de origen
+ * (`src/lib/origin-guard.ts`) cuando el oyente pide artistas de un país:
+ * comprobarlo con datos duros es mucho más fiable que preguntárselo al LLM.
+ */
+export async function searchArtistOrigin(
+  artist: string,
+): Promise<MbArtistOrigin | null> {
+  // Comillas y símbolos de Lucene romperían la consulta (los nombres de banda
+  // traen de todo): los quitamos antes de armarla.
+  const limpio = artist.replace(/["\\/:^~*?!(){}\[\]]/g, " ").replace(/\s+/g, " ").trim();
+  if (!limpio) return null;
+  const query = encodeURIComponent(`artist:"${limpio}"`);
+  const data = await mb<{
+    artists?: {
+      name: string;
+      score: number;
+      country?: string;
+      area?: { name?: string };
+      "begin-area"?: { name?: string };
+    }[];
+  }>(`/artist/?query=${query}&fmt=json&limit=5`);
+
+  const artists = data.artists ?? [];
+  if (artists.length === 0) return null;
+
+  // Preferimos la coincidencia exacta de nombre; si no la hay, la de mejor score.
+  const plano = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  const objetivo = plano(artist);
+  const best =
+    artists.find((a) => plano(a.name) === objetivo) ??
+    (artists[0].score >= 80 ? artists[0] : null);
+  if (!best) return null;
+
+  return {
+    name: best.name,
+    country: best.country ?? null,
+    areaName: best.area?.name ?? null,
+    beginAreaName: best["begin-area"]?.name ?? null,
+  };
+}
+
 // Conexiones a nivel ARTISTA (colaboraciones, bandas, fundadores…): la materia
 // prima de los saltos de descubrimiento entre artistas. Datos estructurados de
 // MusicBrainz, con su etiqueta → verificables.

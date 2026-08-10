@@ -651,9 +651,29 @@ Musicart YA tenía un número 1-100: el impacto cultural (`Album.impact`, 6.5).
   `/salon/disco/[id]` con los recibos del puntaje. Enlace en `BottomNav`.
 - [ ] **9.6 Primera corrida real del índice** (pendiente del dueño) —
   `npm run canon` con la `DATABASE_URL` de Railway. Ver "Pendiente del dueño".
-- [ ] **9.7 Curaduría del club de los 100** — que el dueño pueda fijar y
-  ordenar a mano los 100/100 desde `/revision` (usando `locked`), y compartir el
-  Salón con OG image.
+- [x] **9.7 Curaduría del club de los 100** — la fórmula ordena mil discos bien,
+  pero la cima es donde un error se ve más y donde el criterio del dueño vale
+  más que cualquier señal. Ahora puede **fijar un puntaje a mano** (`locked`: la
+  ingesta deja de tocarlo), **soltarlo** (recalibra y vuelve a mandar la
+  fórmula), **meter en el canon un disco que el índice no trajo** —hace falta de
+  verdad: Wikipedia sobre-representa al mundo anglosajón y un clásico venezolano
+  puede quedarse fuera— y **quitar** lo que se coló. Los controles finos viven
+  en la ficha del disco (`CuradorCanon`, como los de la Vitrina en 7.6) y la
+  vista de conjunto en `/revision` (`ClubDeLosCien`). Honestidad: si un puntaje
+  está fijado, la ficha lo dice en vez de fingir que salió de los datos.
+- [x] **9.8 La barra de abajo: de siete pestañas a cuatro** — con el Salón, la
+  navegación llegó a siete pestañas y en un teléfono eso es ruido. Quedan
+  **Hoy · Explorar · Diario · Perfil**, que son las cuatro cosas de verdad
+  distintas (el ritual, todo lo demás, tu historia, tus ajustes). Caminos, Salón
+  y Vitrina son hermanas —las cuatro maneras de explorar— y viven ahora juntas
+  en `/explorar`, que las presenta con **una frase que dice en qué se
+  diferencian** (`PuertasExplorar`): eso resuelve de paso la canibalización que
+  el ROADMAP viene avisando desde la Fase 8, porque en una etiqueta de 11px esa
+  diferencia no cabía. **Ninguna URL cambió**: `/caminos`, `/salon`, `/vitrina`,
+  `/explorar/[slug]` y `/explorar/hitos` siguen igual, y la pestaña Explorar se
+  queda encendida mientras estás dentro de cualquiera de ellas.
+- [ ] **9.9 Compartir el Salón** — OG image del Salón y de cada disco del canon
+  ("soy un 96/100"), al estilo de la de la Vitrina en 7.6.
 
 ### Pendiente del dueño (una sola vez)
 

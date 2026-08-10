@@ -6,12 +6,14 @@ import { matchRouteAlbums } from "@/lib/thematic-match";
 import { deriveGenres } from "@/lib/genres";
 import { parseJson, type FactsPayload } from "@/lib/types";
 import { LibraryExplorer, type LibraryAlbum } from "@/components/LibraryExplorer";
+import { PuertasExplorar } from "@/components/PuertasExplorar";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Explorar rutas · Musicart",
-  description: "Colecciones temáticas de discos para seguir la madriguera.",
+  title: "Explorar · Musicart",
+  description:
+    "Caminos, el Salón de la Fama, la vitrina, rutas temáticas y toda la biblioteca de Musicart.",
 };
 
 export default async function ExplorarPage() {
@@ -52,14 +54,26 @@ export default async function ExplorarPage() {
   return (
     <main className="px-6 pb-10 pt-12">
       <header>
-        <p className="text-xs uppercase tracking-[0.3em] text-dim">Explorar</p>
-        <h1 className="font-serif mt-2 text-3xl font-semibold">Rutas temáticas</h1>
+        <p className="text-xs uppercase tracking-[0.3em] text-dim">Musicart</p>
+        <h1 className="font-serif mt-2 text-3xl font-semibold">Explorar</h1>
         <p className="mt-3 text-sm leading-relaxed text-dim">
-          Colecciones curadas para seguir la madriguera con intención — no al azar.
+          Tu disco de hoy es uno y es sagrado. Todo lo demás está aquí: por dónde
+          entrar a un género, qué consagró la historia y qué atesoro yo.
         </p>
       </header>
 
-      <div className="mt-8 flex flex-col gap-4">
+      <div className="mt-7">
+        <PuertasExplorar />
+      </div>
+
+      <section className="mt-12">
+        <h2 className="font-serif text-2xl font-semibold">Rutas temáticas</h2>
+        <p className="mt-1 text-sm leading-relaxed text-dim">
+          Colecciones curadas para seguir la madriguera con intención — no al azar.
+        </p>
+      </section>
+
+      <div className="mt-6 flex flex-col gap-4">
         {routes.map(({ route, count, preview }) => (
           <Link
             key={route.slug}

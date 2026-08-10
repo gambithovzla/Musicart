@@ -6,9 +6,12 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { auth } from "@/auth";
+import { isAdminEmail } from "@/lib/admin";
 import { getCanonAlbum, listarCanon } from "@/lib/canon/consulta";
 import { pisoDe } from "@/lib/canon/score";
 import { AbrirDisco } from "../../AbrirDisco";
+import { CuradorCanon } from "../../CuradorCanon";
 import { GaleriaCanon } from "../../GaleriaCanon";
 import { SelloPuntaje } from "../../SelloPuntaje";
 
@@ -34,9 +37,10 @@ export default async function DiscoDelCanonPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const album = await getCanonAlbum(id);
+  const [album, session] = await Promise.all([getCanonAlbum(id), auth()]);
   if (!album) notFound();
 
+  const esAdmin = isAdminEmail(session?.user?.email);
   const piso = pisoDe(album.score);
 
   // Vecinos: discos de la misma altura, para seguir tirando del hilo.
@@ -109,10 +113,20 @@ export default async function DiscoDelCanonPage({
           </p>
         )}
         <p className="mt-5 border-t border-white/10 pt-4 text-xs leading-relaxed text-dim">
-          El puntaje no lo escribe la IA: sale de estas señales y de comparar
-          este disco con todo el canon. Un {album.score} significa que está por
-          encima de la mayoría de los discos del índice — siempre lo mismo, para
-          cualquier disco.
+          {album.bloqueado ? (
+            <>
+              Este puntaje lo puso el curador de Musicart a mano, no la fórmula.
+              Las señales de arriba siguen siendo reales; el número que las
+              acompaña es una decisión suya y así se dice.
+            </>
+          ) : (
+            <>
+              El puntaje no lo escribe la IA: sale de estas señales y de comparar
+              este disco con todo el canon. Un {album.score} significa que está
+              por encima de la mayoría de los discos del índice — siempre lo
+              mismo, para cualquier disco.
+            </>
+          )}
         </p>
       </section>
 
@@ -158,6 +172,15 @@ export default async function DiscoDelCanonPage({
             <GaleriaCanon albums={otros} />
           </div>
         </section>
+      )}
+
+      {esAdmin && (
+        <CuradorCanon
+          canonId={album.id}
+          scoreActual={album.score}
+          bloqueado={album.bloqueado}
+          titulo={album.title}
+        />
       )}
     </main>
   );

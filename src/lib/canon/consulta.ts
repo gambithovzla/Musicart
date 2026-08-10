@@ -31,6 +31,8 @@ export type SalonAlbum = {
   country: string | null;
   /** Álbum del catálogo si ya tiene dossier; null = hay que fabricarlo. */
   albumId: string | null;
+  /** El curador fijó este puntaje a mano: la ingesta no lo recalcula (9.7). */
+  bloqueado: boolean;
 };
 
 export function aSalonAlbum(c: CanonAlbum): SalonAlbum {
@@ -46,6 +48,37 @@ export function aSalonAlbum(c: CanonAlbum): SalonAlbum {
     generos: parseJson<string[]>(c.genresJson, []),
     country: c.country,
     albumId: c.albumId,
+    bloqueado: c.locked,
+  };
+}
+
+/**
+ * Lo que el curador necesita ver para gobernar la cima (9.7): los discos que ya
+ * fijó a mano, y detrás los más altos que todavía dependen de la fórmula.
+ */
+export async function getCanonCurado(limite = 40): Promise<{
+  fijados: SalonAlbum[];
+  candidatos: SalonAlbum[];
+  total: number;
+}> {
+  const [fijados, candidatos, total] = await Promise.all([
+    prisma.canonAlbum.findMany({
+      where: { locked: true },
+      orderBy: [{ score: "desc" }, { title: "asc" }],
+      take: limite,
+    }),
+    prisma.canonAlbum.findMany({
+      where: { locked: false },
+      orderBy: [{ score: "desc" }, { raw: "desc" }],
+      take: limite,
+    }),
+    prisma.canonAlbum.count(),
+  ]);
+
+  return {
+    fijados: fijados.map(aSalonAlbum),
+    candidatos: candidatos.map(aSalonAlbum),
+    total,
   };
 }
 

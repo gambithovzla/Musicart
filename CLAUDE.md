@@ -85,6 +85,10 @@ src/app/salon/           Fase 9: El Salón de la Fama. Muro de los 100/100, el
                          /salon/disco/[id] con los recibos del puntaje. La
                          fabricación del dossier vive en /api/salon/abrir
                          (maxDuration 300), como el disco del día.
+                         admin-actions.ts + CuradorCanon (9.7): fijar/soltar un
+                         puntaje a mano (locked), añadir al canon lo que el
+                         índice no trajo, quitar lo que se coló. Vista de
+                         conjunto en /revision (ClubDeLosCien).
 src/app/dueto/           Disco compartido semanal entre dos cuentas (5.5).
 src/app/perfil/          Edición de perfil, push, dueto, Stripe, privacidad.
 src/app/entrar/          Inicio de sesión (Google + email) y fusión del device.
@@ -163,7 +167,11 @@ src/lib/merge-device.ts  Fusión Profile/Reviews/DailyPicks al iniciar sesión.
 src/lib/device.ts        Identidad anónima por dispositivo (localStorage + cookie
                          musicart_device para personalizar en el servidor).
 src/lib/theme.ts|palette.ts  Theming de la UI con la paleta de la portada.
-src/components/          Onboarding (entrada por pasos, 6.7), CreandoDiscoHoy (carga
+src/components/          BottomNav (9.8: SOLO 4 pestañas — Hoy · Explorar ·
+                         Diario · Perfil; Caminos/Salón/Vitrina viven dentro de
+                         /explorar vía PuertasExplorar, que explica en qué se
+                         diferencian. No añadas pestañas sin quitar otra),
+                         Onboarding (entrada por pasos, 6.7), CreandoDiscoHoy (carga
                          del disco fresco), RehacerDiscoAdmin, DailyReveal,
                          ImpactoCultural + DificultadEscucha (clicleables),
                          ReflectionForm (1-10 + comentario + canción favorita),

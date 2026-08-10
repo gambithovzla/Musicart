@@ -17,6 +17,7 @@ import { RecalcularImpactos } from "./RecalcularImpactos";
 import { BuscarYCrear } from "./BuscarYCrear";
 import { CuradorAlbumes, type AlbumCurable } from "./CuradorAlbumes";
 import { ClubDeLosCien } from "./ClubDeLosCien";
+import { LevantarSalon } from "./LevantarSalon";
 import { getCanonCurado } from "@/lib/canon/consulta";
 
 export const dynamic = "force-dynamic";
@@ -230,6 +231,9 @@ export default async function RevisionPage() {
           . La fórmula ordena mil discos bien, pero arriba manda tu criterio:
           fija a mano los que para ti son un 100 y la ingesta dejará de tocarlos.
         </p>
+        <div className="mt-5">
+          <LevantarSalon total={canonCurado.total} />
+        </div>
         <ClubDeLosCien
           fijados={canonCurado.fijados}
           candidatos={canonCurado.candidatos}

@@ -34,7 +34,13 @@ import {
 // cliente, que no puede importar este módulo sin arrastrar el pipeline).
 export * from "./caminos-pasos";
 
-const LLM_TIMEOUT_MS = 30_000; // proponer 5 discos con su puente es más largo que proponer 1
+// Proponer 5 discos CON su puente es la generación más larga que hacemos en
+// runtime: son ~1.500 tokens de español. Con 30 s no le daba el tiempo a un
+// modelo premium y el camino moría en "no pude trazar este camino" — por eso
+// ahora espera lo que de verdad tarda (la route aguanta 120 s) y reintenta.
+const LLM_TIMEOUT_MS = 75_000;
+const MAX_TOKENS_CAMINO = 2200; // con 1400 la respuesta se cortaba y el JSON no parseaba
+const INTENTOS = 2;
 
 export type CaminoConPasos = {
   id: string;
@@ -219,60 +225,105 @@ ${input.diarioTexto}
 ${yaConoceTexto}
 Arma el camino. Responde el JSON ahora.`;
 
-  const raw = await llmGeneration({
-    system,
-    user,
-    temperature: 0.7,
-    maxTokens: 1400,
-    timeoutMs: LLM_TIMEOUT_MS,
-  });
+  // Un camino incompleto no es un camino: si la respuesta viene cortada o el
+  // modelo se cae, se reintenta entero en vez de servir cuatro pasos sin cima.
+  // Es UNA llamada barata; gastar dos de vez en cuando sale mejor que un error.
+  let ultimoError: unknown = null;
+  for (let intento = 1; intento <= INTENTOS; intento++) {
+    try {
+      const raw = await llmGeneration({
+        system,
+        user:
+          intento === 1
+            ? user
+            : `${user}\n\nIMPORTANTE: la respuesta anterior no llegó completa. Sé más breve en los "puente" (una frase cada uno) y asegúrate de CERRAR el JSON.`,
+        temperature: intento === 1 ? 0.7 : 0.5,
+        maxTokens: MAX_TOKENS_CAMINO,
+        timeoutMs: LLM_TIMEOUT_MS,
+      });
 
-  const parsed = extractJson<{
-    titulo?: string;
-    intro?: string;
-    pasos?: Array<{
-      orden?: number;
-      title?: string;
-      artist?: string;
-      year?: number;
-      papel?: string;
-      puente?: string;
-    }>;
-  }>(raw);
+      const parsed = extractJson<{
+        titulo?: string;
+        intro?: string;
+        pasos?: Array<{
+          orden?: number;
+          title?: string;
+          artist?: string;
+          year?: number;
+          papel?: string;
+          puente?: string;
+        }>;
+      }>(raw);
 
-  const crudos = Array.isArray(parsed.pasos) ? parsed.pasos : [];
-  const pasos: CaminoStep[] = [];
-  for (const p of crudos) {
-    if (!p.title?.trim() || !p.artist?.trim()) continue;
-    const orden = pasos.length + 1;
-    pasos.push({
-      orden,
-      title: p.title.trim(),
-      artist: p.artist.trim(),
-      year: typeof p.year === "number" ? p.year : null,
-      papel: papelValido(p.papel, orden),
-      puente: (p.puente ?? "").trim().slice(0, 600),
-      albumId: null,
-      escuchadoAt: null,
-    });
+      const crudos = Array.isArray(parsed.pasos) ? parsed.pasos : [];
+      const pasos: CaminoStep[] = [];
+      for (const p of crudos) {
+        if (!p.title?.trim() || !p.artist?.trim()) continue;
+        const orden = pasos.length + 1;
+        pasos.push({
+          orden,
+          title: p.title.trim(),
+          artist: p.artist.trim(),
+          year: typeof p.year === "number" ? p.year : null,
+          papel: papelValido(p.papel, orden),
+          puente: (p.puente ?? "").trim().slice(0, 600),
+          albumId: null,
+          escuchadoAt: null,
+        });
+      }
+
+      // Un camino entero son 5 pasos; un reemplazo suelto, uno. Menos que eso
+      // es una respuesta a medias, y se reintenta.
+      const esperados = input.soloPaso ? 1 : PASOS_POR_CAMINO;
+      if (pasos.length < esperados) {
+        throw new Error(
+          `Propuesta incompleta (${pasos.length} de ${esperados} pasos): ${raw.slice(0, 200)}`,
+        );
+      }
+
+      return {
+        titulo: (parsed.titulo ?? "").trim().slice(0, 120) || `Camino: ${input.tema}`,
+        intro: (parsed.intro ?? "").trim().slice(0, 800),
+        pasos,
+      };
+    } catch (err) {
+      ultimoError = err;
+      console.error(`[caminos] intento ${intento} de ${INTENTOS} falló:`, err);
+    }
   }
 
-  if (pasos.length === 0) {
-    throw new Error(`Propuesta de camino vacía: ${raw.slice(0, 200)}`);
-  }
-
-  return {
-    titulo: (parsed.titulo ?? "").trim().slice(0, 120) || `Camino: ${input.tema}`,
-    intro: (parsed.intro ?? "").trim().slice(0, 800),
-    pasos,
-  };
+  throw ultimoError instanceof Error
+    ? ultimoError
+    : new Error(String(ultimoError));
 }
 
 // ─── Crear ───────────────────────────────────────────────────────────────────
 
 export type CrearCaminoResult =
   | { ok: true; caminoId: string }
-  | { ok: false; reason: "sin-identidad" | "sin-ia" | "sin-tema" | "error" };
+  | {
+      ok: false;
+      reason: "sin-identidad" | "sin-ia" | "sin-tema" | "tiempo" | "ia" | "error";
+      /** El error de verdad, para el curador. Al oyente no se le enseña. */
+      detalle?: string;
+    };
+
+/**
+ * Traduce el fallo a algo que el oyente pueda entender y accionar. "Tardó
+ * demasiado" y "la IA está caída" piden cosas distintas: volver a darle ahora o
+ * volver más tarde.
+ */
+function razonDelFallo(err: unknown): "tiempo" | "ia" | "error" {
+  const e = err as { name?: string; message?: string };
+  const msg = e?.message ?? "";
+  if (e?.name === "TimeoutError" || e?.name === "AbortError" || /timeout|aborted|timed out/i.test(msg)) {
+    return "tiempo";
+  }
+  if (/^(OpenAI|Anthropic) \d+/.test(msg) || /clave de IA|API_KEY/i.test(msg)) {
+    return "ia";
+  }
+  return "error";
+}
 
 export async function crearCamino(
   identity: ListenerIdentity,
@@ -332,7 +383,11 @@ export async function crearCamino(
     return { ok: true, caminoId: camino.id };
   } catch (err) {
     console.error("[caminos] no se pudo armar el camino:", err);
-    return { ok: false, reason: "error" };
+    return {
+      ok: false,
+      reason: razonDelFallo(err),
+      detalle: (err as Error)?.message?.slice(0, 300),
+    };
   }
 }
 

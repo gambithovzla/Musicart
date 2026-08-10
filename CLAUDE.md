@@ -13,7 +13,8 @@ Music/YouTube Music; Musicart es el guía.
 
 **Antes de escribir código, lee `ROADMAP.md`**: ahí están la visión completa,
 las fases con checkbox y los criterios de aceptación. **Fases 0–7 completas;
-Fase 8 casi cerrada (falta 8.6) y Fase 9 EN CURSO** (ago 2026).
+Fase 8 casi cerrada (falta 8.6), Fase 9 EN CURSO y Fase 10 —el rediseño «La
+imprenta»— completada** (ago 2026). La fase de trabajo sigue siendo la 9.
 
 - **Fase 8 — Caminos**: "por dónde entrar a un género". Una secuencia de 5
   discos en orden pedagógico, en **pestaña aparte** (`/caminos`).
@@ -43,6 +44,51 @@ ROADMAP antes de tocar nada de estas fases.
 6. El usuario del proyecto no es programador y suele estar desde el teléfono:
    explica en lenguaje claro, da pasos concretos y verifica tú mismo todo lo
    que se pueda verificar desde el código.
+
+## El sistema visual: LA IMPRENTA (léelo antes de tocar UI)
+
+Musicart **no se ve como una app: se ve como una publicación impresa**. Esto no
+es decorativo — nace de una orden explícita del dueño: *"todas las apps se ven
+iguales, se nota que las hizo una IA, quiero algo distinto"*. Tenía razón, y lo
+que las iguala es un repertorio concreto de gestos. **Esos gestos están
+prohibidos aquí.**
+
+**Lo prohibido** (es literalmente la plantilla): esquinas redondeadas · tarjetas
+flotando con `border-white/10` + `bg-white/[0.03]` · botones en pastilla ·
+acentos con halo/glow difuminado · iconitos de línea de 24px · emojis como
+iconos · todo centrado · Inter.
+
+**Las siete reglas** (están al completo, con su porqué, en la cabecera de
+`src/app/globals.css`, y en vivo con especímenes en la ruta **`/prensa`**):
+
+1. Cero esquinas redondeadas (hay un barrido global; lo que de verdad es un
+   círculo lleva `.circulo`).
+2. Cero tarjetas: estructuran las **reglas** (`.regla`, `.filete`,
+   `.cabecera-seccion`), el aire y la jerarquía. Para destacar se **enmarca**
+   (`.recuadro`).
+3. Dos **ediciones**, no dos "modos": la de noche (por defecto) y la de día
+   (papel prensa). Cambian por cookie, igual que antes.
+4. La tipografía es la interfaz: **Fraunces** (display: titulares y cifras) ·
+   **Archivo** (texto) · **IBM Plex Mono** (`.dato`: todo lo que es número o
+   referencia). Rótulos con `.rotulo`, cifras con `.cifra`.
+5. Los botones son sellos: `.sello` y `.sello-hueco`.
+6. Nada de emojis: adornos tipográficos (`.calderon`, `.capitular`, números
+   romanos, puntos conductores con `.puntos`).
+7. Lo que se numera, se numera: folios `№ 03`, escalafones `01 02 03`, láminas
+   con pie de figura.
+
+**Color:** usa `--acento` / `text-album` (que ya apunta a él), **nunca**
+`--album-vibrant` directo: el acento deriva de la portada del día pero se
+entinta según la edición, y sin eso el dorado desaparece sobre papel claro.
+
+**Estado de la migración:** hechas a mano `layout` + `Cabecera` (folio corrido)
+· `BottomNav` (pie de imprenta) · home/`DailyReveal` · `/caminos` ·
+`/salon` (+ `GaleriaCanon`, `SelloPuntaje`, `Dial`) · `/explorar` +
+`PuertasExplorar` · `ThemeToggle` · `GenreTags` · `/prensa`. El resto de
+pantallas (dossier, diario, perfil, onboarding, revisión, vitrina, rebobinada,
+dueto) heredan paleta, tipografías y el barrido de esquinas, pero **conservan
+estructura de la época de la plantilla**: si tocas una, aprovecha y compónla con
+el sistema.
 
 ## Stack
 
@@ -77,7 +123,7 @@ src/app/diario/          Historial de escuchas con racha + hilo musical (5.4).
 src/app/rebobinada/      Carta mensual del mes musical (5.2).
 src/app/caminos/         Fase 8: pestaña propia de los Caminos (lista + crear, y
                          /caminos/[id] con sus pasos). Las dos operaciones caras
-                         viven en /api/caminos/crear (maxDuration 120) y
+                         viven en /api/caminos/crear (maxDuration 300) y
                          /api/caminos/paso (300), como el disco del día.
 src/app/salon/           Fase 9: El Salón de la Fama. Muro de los 100/100, el
                          DIAL ("dame un disco de 95"), pisos, canon con acento
@@ -85,6 +131,8 @@ src/app/salon/           Fase 9: El Salón de la Fama. Muro de los 100/100, el
                          /salon/disco/[id] con los recibos del puntaje. La
                          fabricación del dossier vive en /api/salon/abrir
                          (maxDuration 300), como el disco del día.
+                         /api/salon/construir (9.10, maxDuration 300): levanta el
+                         índice por tramos desde el panel, sin terminal.
                          admin-actions.ts + CuradorCanon (9.7): fijar/soltar un
                          puntaje a mano (locked), añadir al canon lo que el
                          índice no trajo, quitar lo que se coló. Vista de
@@ -137,8 +185,10 @@ src/lib/canon/           Fase 9: el Salón de la Fama. AQUÍ NO ENTRA NINGÚN LL
                            el defecto de Album.impact: ese no es comparable entre
                            discos, este sí.
   ingest.ts                construirIndice() (Wikidata → señales → prestigio →
-                           recalibrar), recalibrar(), enlazarConCatalogo() y
-                           rellenarPortadas(). Corre por script, nunca en runtime.
+                           recalibrar), recalibrar(), enlazarConCatalogo(),
+                           rellenarPortadas() y avanzarSalon() (9.10: un tramo
+                           de construcción con presupuesto de tiempo, reanudable
+                           — lo llaman el botón de /revision y el worker).
   consulta.ts              Lectura de la pestaña: muro, pisos, listarCanon con
                            filtros, discoDePuntaje() (el dial, personalizado sin
                            IA) y progresoDelOyente(). Sin import del pipeline.
@@ -177,9 +227,15 @@ src/components/          BottomNav (9.8: SOLO 4 pestañas — Hoy · Explorar ·
                          ReflectionForm (1-10 + comentario + canción favorita),
                          MoodCheckin, ShareAlbum, DeviceSync, Narrator, AlbumChat,
                          DuetPanel, PushToggle, ProfileForm, InstallPrompt…
-src/app/explorar/        Rutas temáticas (Fase 4.4).
+src/app/explorar/        Rutas temáticas (Fase 4.4) + PuertasExplorar (sumario).
+src/app/prensa/          El libro de estilo EN VIVO: las siete reglas y sus
+                         especímenes (sellos, cifras, escalafón, índice,
+                         capitular). Sin datos ni base: siempre renderiza.
+src/components/Cabecera.tsx  El folio corrido de la publicación (va en el layout).
 scripts/dossier.ts       CLI: npm run dossier -- "Álbum" "Artista" --publish
-scripts/worker.ts        Worker del catálogo (cron Railway): npm run worker
+scripts/worker.ts        Worker del catálogo (cron Railway): npm run worker.
+                         Además mantiene el Salón (9.10): levanta/termina el
+                         índice, lo refresca cada 7 días y busca portadas.
 ```
 
 ## Comandos
@@ -241,7 +297,10 @@ npm run push                                     # envío Web Push del disco del
   mismo. No los mezcles ni los sincronices sin pensarlo: miden cosas distintas.
 - **`npm run canon` no corre en Vercel ni en sandboxes sin red**: habla con
   Wikidata, Last.fm y Deezer, y tarda minutos. Es un script de mantenimiento
-  (como el worker), no una ruta. El índice se refresca cuando tú lo corres.
+  (como el worker), no una ruta. Desde la app el índice se levanta **a tramos**
+  (botón "Levantar el Salón" en `/revision` → `/api/salon/construir`, con
+  presupuesto de tiempo) y el worker de Railway lo termina de noche: el Salón ya
+  no depende de que alguien tenga una terminal delante.
 - **Escalas:** dificultad del álbum 1-5 (estrellas); impacto cultural 1-100
   (honesto, con leyenda + `impactNote` clicleable); puntaje del usuario 1-10
   (umbral "loved" = 8). Migraciones ya reescalaron datos viejos.

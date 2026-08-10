@@ -1,4 +1,6 @@
-// Badges de género musical: mismo estilo que los chips de ánimo de la rebobinada.
+// Descriptores de género — antes: pastillas ámbar, como las etiquetas de
+// cualquier app. Ahora son lo que son en una publicación: los DESCRIPTORES que
+// se ponen al pie de un artículo, en monoespaciada y separados por barras.
 
 export function GenreTags({
   genres,
@@ -9,19 +11,23 @@ export function GenreTags({
 }) {
   if (genres.length === 0) return null;
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {genres.map((g) => (
-        <span
-          key={g}
-          className={
-            size === "xs"
-              ? "rounded-full bg-album/15 px-2 py-0.5 text-[0.65rem] font-medium text-album-light"
-              : "rounded-full bg-album/15 px-3 py-1 text-xs font-medium text-album-light"
-          }
-        >
-          {g}
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      {genres.map((g, i) => (
+        <span key={g} className="flex items-center gap-2">
+          {i > 0 && (
+            <span aria-hidden className="text-tinta-suave/50">
+              /
+            </span>
+          )}
+          <span
+            className={`dato uppercase tracking-[0.14em] text-album ${
+              size === "xs" ? "text-[9px]" : "text-[10px]"
+            }`}
+          >
+            {g}
+          </span>
         </span>
       ))}
-    </div>
+    </p>
   );
 }

@@ -4,8 +4,15 @@
 // premios, oyentes) y de comparar cada disco contra todo el canon. Por eso un
 // 100 significa algo — y por eso se puede pedir "dame un 95" y que tenga
 // sentido.
+//
+// La composición es la de una PORTADA con su sumario: titular a toda página,
+// filete, entradilla, y debajo las secciones numeradas (№ 01, № 02…) separadas
+// por reglas. Nada de tarjetas: el Salón es una institución grabada en piedra,
+// no una parrilla de botones redondeados.
 
 import Link from "next/link";
+import { auth } from "@/auth";
+import { isAdminEmail } from "@/lib/admin";
 import { getListenerIdentity, hasListener } from "@/lib/identity";
 import {
   getMuro,
@@ -25,6 +32,18 @@ export const metadata = {
     "Los discos que la historia consagró, con un puntaje comparable de 1 a 100 y los datos que lo respaldan.",
 };
 
+/** Cabecera de sección con su folio, el gesto que ordena toda la publicación. */
+function Folio({ n, titulo }: { n: number; titulo: string }) {
+  return (
+    <div className="cabecera-seccion">
+      <span className="rotulo">{titulo}</span>
+      <span className="dato text-[10px] text-tinta-suave">
+        № {String(n).padStart(2, "0")}
+      </span>
+    </div>
+  );
+}
+
 export default async function SalonPage() {
   const identity = await getListenerIdentity();
   const [muro, pisos, filtros] = await Promise.all([
@@ -37,55 +56,58 @@ export default async function SalonPage() {
     : null;
 
   // Índice vacío: la ingesta todavía no ha corrido. Se dice claro, sin
-  // maquillarlo con datos de mentira.
+  // maquillarlo con datos de mentira. Al curador, además, se le dice dónde está
+  // el botón que lo arregla: si no, ve lo mismo que el oyente y no puede hacer nada.
   if (muro.length === 0) {
+    const sesion = await auth();
+    const esCurador = isAdminEmail(sesion?.user?.email);
     return (
-      <main className="px-6 pb-16 pt-14">
-        <Cabecera />
-        <div className="mt-10 rounded-3xl border border-white/10 bg-surface p-10 text-center">
-          <p className="text-4xl">🏛</p>
-          <p className="font-serif mt-4 text-lg">El Salón se está levantando</p>
-          <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-dim">
+      <main className="px-5 pb-24 pt-8">
+        <Portada />
+        {/* "En prensa": la página que la revista reserva cuando una sección
+            todavía no ha entrado a imprimir. */}
+        <div className="mt-12 border-y-2 border-tinta py-12 text-center">
+          <p className="rotulo">En prensa</p>
+          <p className="font-serif mt-3 text-2xl leading-tight">
+            El Salón se está levantando
+          </p>
+          <p className="mx-auto mt-3 max-w-[19rem] text-[13px] leading-relaxed text-tinta-suave">
             El índice del canon aún no se ha construido. Cuando esté, aquí
             estarán los discos con los que se cuenta la historia de la música.
           </p>
+          {esCurador && (
+            <Link href="/revision" className="sello mt-6">
+              Levantarlo ahora
+            </Link>
+          )}
         </div>
       </main>
     );
   }
 
   return (
-    <main className="px-6 pb-16 pt-14">
-      <Cabecera />
+    <main className="px-5 pb-24 pt-8">
+      <Portada />
 
       {progreso && progreso.total > 0 && (
-        <section className="mt-8 rounded-2xl border border-album/20 bg-album/5 p-4">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-sm">
-              Llevas{" "}
-              <strong className="font-serif text-lg text-album-light">
-                {progreso.escuchados}
-              </strong>{" "}
-              de los {progreso.total} más altos del canon
-            </p>
-            <span className="text-xs text-dim">
-              {Math.round((progreso.escuchados / progreso.total) * 100)}%
+        <section className="mt-10 border-l-2 border-album pl-3">
+          <p className="rotulo">Tu recorrido</p>
+          <p className="mt-2 text-[13px] leading-relaxed">
+            Llevas{" "}
+            <span className="cifra text-2xl font-semibold">
+              {progreso.escuchados}
+            </span>{" "}
+            de los {progreso.total} más altos del canon
+            <span className="dato ml-1.5 text-[10px] text-tinta-suave">
+              ({Math.round((progreso.escuchados / progreso.total) * 100)}%)
             </span>
-          </div>
-          <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/10">
-            <div
-              className="h-full rounded-full bg-album transition-all"
-              style={{
-                width: `${Math.max(2, (progreso.escuchados / progreso.total) * 100)}%`,
-              }}
-            />
-          </div>
+          </p>
           {progreso.siguientes.length > 0 && (
-            <p className="mt-3 text-xs leading-relaxed text-dim">
+            <p className="mt-1.5 text-[12px] leading-relaxed text-tinta-suave">
               Te falta, por ejemplo,{" "}
               <Link
                 href={`/salon/disco/${progreso.siguientes[0].id}`}
-                className="text-foreground underline underline-offset-4"
+                className="text-tinta underline underline-offset-4"
               >
                 {progreso.siguientes[0].title}
               </Link>{" "}
@@ -96,39 +118,41 @@ export default async function SalonPage() {
       )}
 
       <section className="mt-10">
-        <h2 className="font-serif text-xl font-semibold">El muro de los inmortales</h2>
-        <p className="mt-1.5 text-sm leading-relaxed text-dim">
+        <Folio n={1} titulo="El muro de los inmortales" />
+        <p className="mt-3 text-[13px] leading-relaxed text-tinta-suave">
           Los 100 de 100. Los discos con los que se cuenta la historia de la
           música grabada — toca uno para ver por qué está aquí.
         </p>
-        <div className="mt-5">
+        <div className="mt-4">
           <GaleriaCanon albums={muro} destacada />
         </div>
       </section>
 
-      <div className="mt-10">
+      <section className="mt-12">
         <Dial />
-      </div>
+      </section>
 
-      <section className="mt-10">
-        <h2 className="font-serif text-xl font-semibold">Los pisos del Salón</h2>
-        <ul className="mt-4 space-y-2.5">
+      <section className="mt-12">
+        <Folio n={2} titulo="Los pisos del Salón" />
+        <ul className="mt-4 border-t border-regla">
           {pisos.map((p) => {
             const techo = pisos.find((x) => x.min > p.min)?.min;
             return (
               <li key={p.min}>
                 <Link
                   href={`/salon/lista?min=${p.min}${techo ? `&max=${techo - 1}` : ""}`}
-                  className="flex items-center gap-4 rounded-2xl border border-white/10 bg-surface p-4 transition-colors hover:border-album/40"
+                  className="flex items-center gap-3 border-b border-regla py-3 transition-colors hover:bg-tinta/[0.05]"
                 >
-                  <SelloPuntaje score={p.min === 0 ? 60 : p.min} />
+                  <SelloPuntaje score={p.min === 0 ? 60 : p.min} tam="sm" />
                   <span className="min-w-0 flex-1">
-                    <span className="block font-medium">{p.nombre}</span>
-                    <span className="block text-xs leading-relaxed text-dim">
+                    <span className="font-serif block text-[16px] leading-tight">
+                      {p.nombre}
+                    </span>
+                    <span className="block text-[11px] leading-relaxed text-tinta-suave">
                       {p.descripcion}
                     </span>
                   </span>
-                  <span className="shrink-0 text-xs tabular-nums text-dim">
+                  <span className="dato shrink-0 text-[11px] text-tinta-suave">
                     {p.total}
                   </span>
                 </Link>
@@ -139,18 +163,20 @@ export default async function SalonPage() {
       </section>
 
       {(filtros.paises.length > 0 || filtros.generos.length > 0) && (
-        <section className="mt-10">
-          <h2 className="font-serif text-xl font-semibold">Canon con acento</h2>
-          <p className="mt-1.5 text-sm leading-relaxed text-dim">
+        <section className="mt-12">
+          <Folio n={3} titulo="Canon con acento" />
+          <p className="mt-3 text-[13px] leading-relaxed text-tinta-suave">
             El canon global se escribe casi todo en inglés. Aquí puedes pedirle
             el suyo a cada país y a cada género.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
+          {/* Sin pastillas: una lista de referencias separadas por barras, como
+              los descriptores al pie de un artículo. */}
+          <p className="mt-3 leading-loose">
             {filtros.generos.map((g) => (
               <Link
                 key={g}
                 href={`/salon/lista?genero=${encodeURIComponent(g)}`}
-                className="rounded-full border border-white/15 px-3.5 py-1.5 text-xs text-foreground/80 transition-colors hover:border-album/50"
+                className="dato mr-2 border-b border-regla text-[11px] uppercase tracking-[0.1em] transition-colors hover:border-album hover:text-album"
               >
                 {g}
               </Link>
@@ -159,34 +185,46 @@ export default async function SalonPage() {
               <Link
                 key={p.code}
                 href={`/salon/lista?pais=${p.code}`}
-                className="rounded-full border border-white/15 px-3.5 py-1.5 text-xs text-foreground/80 transition-colors hover:border-album/50"
+                className="dato mr-2 border-b border-regla text-[11px] uppercase tracking-[0.1em] text-tinta-suave transition-colors hover:border-album hover:text-album"
               >
                 {p.nombre}
               </Link>
             ))}
-          </div>
+          </p>
         </section>
       )}
 
-      <p className="mt-10 text-center text-xs leading-relaxed text-dim">
-        <Link href="/salon/lista" className="underline underline-offset-4">
+      <div className="filete mt-12 pt-4 text-center">
+        <Link
+          href="/salon/lista"
+          className="dato text-[11px] uppercase tracking-[0.14em] underline underline-offset-4"
+        >
           Ver el canon completo
         </Link>
-        {" · "}
-        <Link href="/vitrina" className="underline underline-offset-4">
-          ¿Buscabas mi gusto? Eso está en la vitrina
-        </Link>
-      </p>
+        <p className="mt-2 text-[11px] leading-relaxed text-tinta-suave">
+          ¿Buscabas mi gusto y no el de la historia?{" "}
+          <Link href="/vitrina" className="text-tinta underline underline-offset-4">
+            Eso está en la vitrina
+          </Link>
+          .
+        </p>
+      </div>
     </main>
   );
 }
 
-function Cabecera() {
+/** La portada de la sección: antetítulo, titular a toda página y entradilla. */
+function Portada() {
   return (
-    <header className="text-center">
-      <p className="text-xs uppercase tracking-[0.35em] text-dim">El canon</p>
-      <h1 className="font-serif mt-3 text-4xl font-semibold">El Salón de la Fama</h1>
-      <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-dim">
+    <header>
+      <p className="rotulo">Sección II · El canon</p>
+      <h1 className="font-serif mt-3 text-[2.75rem] font-semibold leading-[0.9]">
+        El Salón
+        <br />
+        de la Fama
+      </h1>
+      <div className="filete-grueso mt-4" />
+      <p className="font-serif mt-4 text-[15px] leading-relaxed text-tinta-suave">
         Aquí no opino yo: opina la historia. Cada disco lleva un puntaje del 1 al
         100 que sale de datos comprobables y de compararlo con todo el canon.
         Ábrelo y verás exactamente de dónde salió su número.

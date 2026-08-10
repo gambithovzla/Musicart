@@ -562,6 +562,19 @@ discos; lo valioso es **el porqué del orden**.
   caminos desde `/revision` (como la Vitrina de 7.6) y un camino se puede
   compartir con OG image. En su propia sección esto es natural; cosido al ritual
   no lo era.
+- [x] **8.7 Que trazar un camino no falle** (ago 2026, tras el reporte del dueño:
+  «puse salsa y me da error en rojo») — la propuesta de 5 discos con sus puentes
+  es la generación más larga que hacemos en runtime (~1.500 tokens de español) y
+  se estaba pidiendo con **30 s de espera y 1.400 tokens de tope**: si el modelo
+  tardaba un poco más o se pasaba de largo, la respuesta llegaba cortada, el JSON
+  no parseaba y el oyente veía "no pude trazar este camino". Ahora espera 75 s
+  (y la route pasó a `maxDuration` 300 para que quepa el reintento), cabe en
+  2.200 tokens, **reintenta una vez** si vuelve
+  incompleta y solo acepta el camino con sus 5 pasos —cuatro pasos sin cima no
+  son un camino—. Además el error dice qué pasó ("tardó demasiado, dale otra
+  vez" ≠ "la IA está caída, vuelve luego") y, si quien lo ve es el curador, se
+  le enseña el error técnico: un fallo en producción ya no es invisible desde el
+  teléfono.
 
 ### Criterios de aceptación
 
@@ -649,8 +662,9 @@ Musicart YA tenía un número 1-100: el impacto cultural (`Album.impact`, 6.5).
   disco de 95", personalizado por afinidad y sin repetir lo ya escuchado), pisos
   navegables, canon con acento (país y género), `/salon/lista` con filtros y
   `/salon/disco/[id]` con los recibos del puntaje. Enlace en `BottomNav`.
-- [ ] **9.6 Primera corrida real del índice** (pendiente del dueño) —
-  `npm run canon` con la `DATABASE_URL` de Railway. Ver "Pendiente del dueño".
+- [ ] **9.6 Primera corrida real del índice** — ya no hace falta terminal (ver
+  9.10): o le das al botón de `/revision`, o esperas al worker de la noche.
+  Queda por marcar hasta que el índice esté de verdad levantado en producción.
 - [x] **9.7 Curaduría del club de los 100** — la fórmula ordena mil discos bien,
   pero la cima es donde un error se ve más y donde el criterio del dueño vale
   más que cualquier señal. Ahora puede **fijar un puntaje a mano** (`locked`: la
@@ -674,12 +688,29 @@ Musicart YA tenía un número 1-100: el impacto cultural (`Album.impact`, 6.5).
   queda encendida mientras estás dentro de cualquiera de ellas.
 - [ ] **9.9 Compartir el Salón** — OG image del Salón y de cada disco del canon
   ("soy un 96/100"), al estilo de la de la Vitrina en 7.6.
+- [x] **9.10 El Salón se levanta solo** (ago 2026, tras el reporte del dueño:
+  «me metí en el Salón y no aparece absolutamente nada») — el índice dependía de
+  que alguien corriera `npm run canon` **en una terminal**, y el dueño anda en el
+  teléfono: la pestaña se quedaba en "El Salón se está levantando" para siempre y
+  desde la app no había manera de arreglarlo. Ahora la ingesta se puede dar por
+  tramos (`avanzarSalon`, con presupuesto de tiempo y reanudable: lo que entró se
+  queda y la siguiente corrida sigue) y la llaman dos sitios:
+  **(a)** un botón en `/revision` — "Levantar el Salón" — que avanza lo que quepa
+  en una función de Vercel y te dice cuántos discos entraron y si hay que volver
+  a darle; **(b)** el **worker de Railway**, que cada noche termina lo que falte,
+  refresca el índice cada 7 días y busca carátulas, sin que nadie mire y sin
+  gastar IA. Detalles que importan: una corrida rápida (sin Last.fm) ya no borra
+  los oyentes ni los géneros que trajo una lenta, saltarse los premios por falta
+  de tiempo no borra los que ya estaban, y el índice **siempre** termina
+  recalibrado — a medio llenar, pero coherente. Y si el que ve el Salón vacío es
+  el curador, el mensaje le dice dónde está el botón.
 
 ### Pendiente del dueño (una sola vez)
 
-- [ ] Correr `npm run canon` con la `DATABASE_URL` pública de Railway. Tarda
-  bastante (habla con tres APIs con pausas de cortesía). Para probar primero:
-  `npm run canon -- --limite 150`.
+- [ ] Levantar el índice: entra a `/revision` y dale a **"Levantar el Salón"**
+  (tarda unos minutos y puede pedir más de un toque). Si no lo tocas, el worker
+  de Railway lo hace igual esa misma noche. La terminal ya no hace falta:
+  `npm run canon` sigue existiendo para corridas grandes de mantenimiento.
 - [ ] Opcional: `LASTFM_API_KEY` para que el índice tenga oyentes y géneros. Sin
   ella el puntaje se calcula igual, solo con menos matices.
 
@@ -695,11 +726,103 @@ Musicart YA tenía un número 1-100: el impacto cultural (`Album.impact`, 6.5).
 
 ---
 
+## ✅ Fase 10 — La imprenta (COMPLETADA · ago 2026)
+
+Encargo directo del dueño, fuera del orden de fases: *"todas las apps que se
+hacen últimamente son exactamente iguales, se reconoce al instante que las hizo
+una IA, como los flyers de ChatGPT. No quiero eso. Haz algo distinto, sal de tus
+plantillas, reinvéntate"*.
+
+**El diagnóstico.** El parecido no era casualidad ni mala suerte: era un
+repertorio concreto y repetido de gestos. Esquinas redondeadas, tarjetas
+flotando con `border-white/10` sobre `bg-white/[0.03]`, botones en pastilla, un
+acento dorado con halo difuminado, iconitos de línea, emojis haciendo de iconos,
+todo centrado e Inter. Musicart los tenía **todos**. Nombrarlos era la mitad del
+trabajo: son lo que hay que matar.
+
+**La idea.** Musicart no es una app, es una **publicación**: una revista musical
+que sale todos los días con un disco dentro. Todo el sistema sirve a eso — y
+como el producto ya era curaduría narrativa con voz de crítico, el disfraz de
+app era lo que le quedaba mal, no al revés.
+
+**Las siete reglas** (íntegras y con su porqué en la cabecera de `globals.css`;
+en vivo, con especímenes, en la ruta `/prensa`): cero esquinas redondeadas ·
+cero tarjetas (estructuran las reglas tipográficas, no las cajas) · dos
+**ediciones** en vez de dos "modos" · la tipografía es la interfaz (Fraunces
+display · Archivo texto · IBM Plex Mono para los datos) · los botones son sellos
+que se hunden contra el papel · nada de emojis · lo que se numera, se numera.
+
+### Tareas
+
+- [x] **10.1 El sistema** (`globals.css`) — tokens de tinta y papel en las dos
+  ediciones, y las clases que sustituyen a la plantilla: `.rotulo`, `.dato`,
+  `.cifra`, `.regla`/`.filete`, `.cabecera-seccion`, `.puntos`, `.sello`,
+  `.sello-hueco`, `.recuadro`, `.capitular`, `.calderon`. Con dos barridos
+  globales que arrastran a las pantallas todavía sin rehacer: se anula el
+  redondeo en toda la app y se reinterpretan `border-white/*` y `bg-white/*`
+  como filete y papel. **Un rediseño a medias se ve peor que no hacerlo.**
+- [x] **10.2 El acento imprimible** — la paleta de la portada estaba pensada
+  para brillar sobre negro y desaparecía sobre papel claro. `--acento` deriva de
+  la portada (cada disco sigue tiñendo su página) pero se entinta según la
+  edición. `text-album` apunta ahí, así que las decenas de usos que ya había se
+  arreglaron solos.
+- [x] **10.3 El folio corrido** (`Cabecera`) — todas las pantallas abren con el
+  nombre, el número de edición (el día del año) y la fecha, sobre filete doble.
+  Ninguna app se abre así; todas las revistas, sí.
+- [x] **10.4 El pie de imprenta** (`BottomNav`) — la barra de cuatro iconitos con
+  la pastilla de color era, junto con las tarjetas, la firma más reconocible de
+  la plantilla. Ahora son cuatro secciones numeradas en romanos, en versalitas, y
+  la activa se **entinta** (papel sobre tinta). Sin un solo icono.
+- [x] **10.5 La primera plana** (`DailyReveal`) — la carátula pasa a ser una
+  **lámina** con marco y pie de figura; el titular va a la izquierda y enorme;
+  la ficha técnica es una tira de datos entre reglas; la razón del día es un
+  **destacado** al margen y no una cajita ámbar; escuchar es una línea de
+  créditos, no tres pastillas con puntitos de color.
+- [x] **10.6 Caminos** — el selector de género deja de ser doce pastillas
+  idénticas y se compone como el **índice** que en realidad es (numerado, con
+  puntos conductores). Y mientras se traza no hay ruedita girando: hay una
+  **prensa imprimiendo**.
+- [x] **10.7 El Salón** — el sello dorado con halo (que además mentía: ese
+  número es un dato calibrado, no una medalla) se vuelve **cifra grabada**, con
+  la altura legible por el peso de la tinta. El muro deja de ser rejilla de
+  carátulas y se vuelve **escalafón** en columna. El dial gana una **regla
+  graduada** en lugar del slider del sistema.
+- [x] **10.8 El sumario** (`PuertasExplorar`) — las tres puertas con emoji
+  pasan a ser el sumario de la publicación, con romanos y su frase
+  diferenciadora (que era justo lo que la Fase 8 pedía y en una etiqueta de 11px
+  no cabía).
+- [x] **10.9 `/prensa`, el libro de estilo en vivo** — las siete reglas y sus
+  especímenes, en las dos ediciones. Existe sobre todo como **defensa**: el
+  riesgo de un sistema con carácter es que la siguiente sesión, por inercia,
+  vuelva a meter una tarjeta redondeada. No toca la base de datos, así que
+  siempre renderiza.
+
+### Lo que falta (deuda consciente, no olvido)
+
+- [ ] **10.10 Rehacer a mano el resto de pantallas** — dossier del álbum,
+  diario, perfil, onboarding, revisión, vitrina, rebobinada y dueto heredan
+  paleta, tipografías y el barrido de esquinas, pero conservan la estructura de
+  la época de la plantilla. Se van componiendo con el sistema a medida que se
+  toquen.
+
+### Criterios de aceptación
+
+- [x] Ninguna esquina redondeada, ninguna tarjeta flotante, ningún emoji-icono
+  y ninguna pastilla en las pantallas rehechas.
+- [x] Las dos ediciones son legibles: el acento se entinta y no se pierde sobre
+  papel claro.
+- [x] Un desconocido no puede señalar el gesto de plantilla que delata la app,
+  porque no queda ninguno en la ruta principal.
+
+---
+
 ## Estado actual (agosto 2026)
 
-**Fases 0–7 completas; Fase 8 casi cerrada (falta 8.6) y Fase 9 EN CURSO**
-(ago 2026). La 8.6 quedó pendiente por decisión del dueño, que priorizó el
-Salón de la Fama.
+**Fases 0–7 completas; Fase 8 casi cerrada (falta 8.6), Fase 9 EN CURSO y Fase
+10 (el rediseño "La imprenta") completada** (ago 2026). La 8.6 quedó pendiente
+por decisión del dueño, que priorizó el Salón de la Fama; la 10 fue un encargo
+transversal suyo y no altera el orden de las fases de producto: **la fase de
+trabajo sigue siendo la 9**.
 
 ---
 

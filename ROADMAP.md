@@ -456,6 +456,27 @@ integra más profundamente con la escucha real.
   nunca se cae por la IA). Ambos prompts dejan claro además que un detalle
   REAL suyo repetido dos días seguidos ya es muletilla, aunque sea verdad.
 
+- [x] **7.9 El pedido se cumple ENTERO (barrera de origen)** — el dueño pidió
+  "artistas venezolanos, rock" y el curador le trajo Green Day y luego Van
+  Halen: cumplía el género y se saltaba el país. La causa: en todos los prompts
+  el pedido se enumeraba como "género, idioma, época, estilo o energía" — el
+  PAÍS no estaba en ninguna lista, y `discoCumplePedido` daba el visto bueno
+  porque juzgaba solo "¿es rock?". Tres arreglos: (a) nueva barrera dura
+  `src/lib/origin-guard.ts` (hermana de `reason-guard.ts`): detecta país o
+  gentilicio en el pedido —distinguiendo "en inglés" (idioma) de "artistas
+  ingleses" (país)— y comprueba el origen del artista propuesto con DATOS DUROS
+  de MusicBrainz (`searchArtistOrigin`) antes de gastar el pipeline; si no es de
+  ahí, se rechaza y se pide otra propuesta explicando por qué. Ante la duda
+  (artista no encontrado, sin dato) deja pasar: la app nunca deja al oyente sin
+  disco. (b) Los prompts de `discover.ts` suman país/nacionalidad como requisito
+  obligatorio, dejan claro que un pedido con varias partes se cumple ENTERO, que
+  el pedido manda sobre las reglas de descubrimiento y variedad, y que el idioma
+  del día no puede romper el país pedido; `discoCumplePedido` juzga ahora el
+  origen y ahí la duda se resuelve al revés (si no le consta, no cumple).
+  (c) El respaldo del catálogo (`elegirConLlm`) prioriza el origen sobre el
+  género cuando no puede cumplir todo y está OBLIGADO a reconocerlo en la
+  primera frase de la razón en vez de fingir que cumplió.
+
 ### Criterios de aceptación
 
 - [ ] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones

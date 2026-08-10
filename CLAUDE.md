@@ -85,6 +85,10 @@ src/lib/budget.ts        Fase 6.6: tope de discos nuevos/día (DAILY_GENERATION_
 src/lib/reason-guard.ts  Fase 7.8: barrera anti-muletilla de la razón del día —
                          veta las palabras que ya usó en días recientes y, si
                          reincide, reescribe la razón (nunca rompe: deja la original).
+src/lib/origin-guard.ts  Fase 7.9: barrera dura del ORIGEN del artista — si el pedido
+                         nombra un país ("artistas venezolanos"), comprueba con
+                         MusicBrainz que el artista lo sea; si no, se descarta la
+                         propuesta y se pide otra (ante la duda, deja pasar).
 src/lib/review.ts        Claves del comentario libre y canción favorita; escala
                          1-10 (RATING_MAX, LOVED_THRESHOLD, splitAnswers).
 src/lib/musical-thread.ts Fase 5.4: conecta reseñas del diario entre sí (cacheada).

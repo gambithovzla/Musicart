@@ -30,6 +30,11 @@ import { runDossierPipeline } from "./dossier/pipeline";
 import { LOVED_THRESHOLD, RATING_MAX, DISLIKED_THRESHOLD } from "./review";
 import { hayPresupuestoHoy, registrarGeneracion } from "./budget";
 import { afinarRazon, ganchosQuemados, textoGanchosProhibidos } from "./reason-guard";
+import {
+  detectarPaisesPedido,
+  artistaEsDeAlgunPais,
+  nombresDePaises,
+} from "./origin-guard";
 
 const MAX_REVIEWS = 10;
 const MAX_RECENT_PICKS = 14;
@@ -450,6 +455,11 @@ export async function generarPickDelDia(
   const excluir = new Set(opts?.excluirAlbumIds ?? []);
   const esRehacer = excluir.size > 0;
   const peticion = opts?.peticion?.trim() || null;
+  // ¿El pedido nombra un país o una nacionalidad ("artistas venezolanos")? Es
+  // parte del pedido tan obligatoria como el género, y se comprueba con datos
+  // duros (MusicBrainz), no solo con el prompt. Ver `src/lib/origin-guard.ts`.
+  const paisesPedidos = detectarPaisesPedido(peticion);
+  const paisesTexto = nombresDePaises(paisesPedidos);
 
   try {
     // Idempotencia: si ya hay disco de hoy (otra pestaña lo hizo), devolverlo.
@@ -587,6 +597,9 @@ export async function generarPickDelDia(
       voz,
       patronesTexto,
       peticion,
+      // País/nacionalidad detectados en el pedido: van al prompt como requisito
+      // aparte para que no se pierda dentro del texto libre del oyente.
+      paisesPedidos: paisesTexto || null,
       artistasRecientes,
       ganchosTexto,
     });
@@ -620,6 +633,18 @@ export async function generarPickDelDia(
           );
           rechazar(p, "ya conocido");
           continue;
+        }
+        // Barrera de ORIGEN (7.9): si pidió artistas de un país, lo comprobamos
+        // con MusicBrainz antes que con el LLM — es un dato duro. Solo corta los
+        // desajustes claros ("venezolanos" → Green Day es de Estados Unidos).
+        if (paisesPedidos.length > 0) {
+          const o = await artistaEsDeAlgunPais(p.artist, paisesPedidos);
+          if (o.veredicto === "no") {
+            const motivo = `${p.artist} es de ${o.origen}, y el oyente pidió artistas de ${paisesTexto}`;
+            console.warn(`[recommend] ${motivo}; pido otra.`);
+            rechazar(p, motivo);
+            continue;
+          }
         }
         if (peticion) {
           const v = await discoCumplePedido({
@@ -1146,7 +1171,8 @@ async function elegirConLlm(input: {
   // acerque. Si menciona discos como referencia de un sentimiento, NO elegimos
   // ese mismo disco — buscamos uno que comparta ese espíritu.
   const peticionTexto = input.peticion?.trim()
-    ? `\nLO QUE EL OYENTE PIDIÓ HOY (máxima prioridad): «${input.peticion.trim()}». Elige del catálogo el disco que MÁS se acerque a ese pedido (género, idioma, estilo, energía o escena). Si menciona discos o artistas como referencia de cómo quiere SENTIRSE, NO elijas ese mismo disco: busca otro que comparta ese espíritu. Si nada encaja bien, elige lo más cercano y dilo con honestidad en la "reason".\n`
+    ? `\nLO QUE EL OYENTE PIDIÓ HOY (máxima prioridad): «${input.peticion.trim()}». Elige del catálogo el disco que MÁS se acerque a ese pedido (género, PAÍS o nacionalidad del artista, idioma, estilo, energía o escena). Si el pedido tiene varias partes ("artistas venezolanos, rock" = origen + género), busca el que cumpla TODAS; si ninguno las cumple, prioriza la parte más difícil de sustituir (el ORIGEN antes que el género: un rock de otro país NO es "casi" lo que pidió). Si menciona discos o artistas como referencia de cómo quiere SENTIRSE, NO elijas ese mismo disco: busca otro que comparta ese espíritu.
+HONESTIDAD OBLIGATORIA: el catálogo es cerrado y hoy puede no tener lo que pidió. Si el disco que eliges NO cumple el pedido, la "reason" debe RECONOCERLO en la primera frase, con naturalidad y sin excusas raras ("hoy no tengo un disco venezolano a la mano, así que te traigo…"). PROHIBIDO fingir que sí lo cumple o justificarlo con que "su energía resuena".\n`
     : "";
 
   // Cuando el catálogo está agotado (el oyente ya vio todo) y el LLM recibe una

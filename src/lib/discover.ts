@@ -39,6 +39,9 @@ export async function proponerDiscoDescubrimiento(input: {
    *  energía", "algo tipo Linkin Park"). Lo escribe en el gate del día (o el
    *  admin al rehacer) y MANDA por encima del gusto histórico. */
   peticion?: string | null;
+  /** País o nacionalidad detectados en el pedido ("Venezuela"): requisito duro,
+   *  verificado además contra MusicBrainz (`src/lib/origin-guard.ts`). */
+  paisesPedidos?: string | null;
   /** Artistas recomendados en días recientes: NO repetir el mismo artista
    *  (variedad), salvo que el oyente lo pida explícitamente. */
   artistasRecientes?: string[];
@@ -64,13 +67,25 @@ export async function proponerDiscoDescubrimiento(input: {
   // los patrones. Sigue intacta la regla anti-alucinación (disco real y documentado).
   const peticionTexto = input.peticion?.trim()
     ? `\nLO QUE EL OYENTE PIDIÓ ESCUCHAR HOY (MÁXIMA PRIORIDAD): «${input.peticion.trim()}».
-Este pedido MANDA por encima del gusto histórico, el ánimo y los patrones de escucha.
-- Si nombra un GÉNERO, IDIOMA, ÉPOCA, ESTILO o ENERGÍA, cúmplelo al pie de la letra.
+Este pedido MANDA por encima del gusto histórico, el ánimo, los patrones de escucha Y TAMBIÉN por encima de las reglas 4 y 5 (descubrimiento, ampliación y variedad): esas reglas gobiernan los días en que el oyente NO pide nada. Hoy pidió, así que cumplir lo que pidió es lo primero. (La regla 6 —no repetir discos ya mostrados— NO se toca: sigue siendo absoluta.)
+- EL PEDIDO SE CUMPLE ENTERO, NO A MEDIAS: si tiene varias partes ("artistas venezolanos, rock" = país + género), el disco debe cumplir TODAS. Cumplir una sola y saltarte el resto es un fallo grave — es exactamente lo que el oyente vive como "no me está escuchando".
+- Si nombra un GÉNERO, PAÍS o NACIONALIDAD, ESCENA, IDIOMA, ÉPOCA, ESTILO o ENERGÍA, cúmplelo al pie de la letra.
+- PAÍS / NACIONALIDAD: si pide artistas de un país ("venezolanos", "de Argentina", "boricuas"), el artista debe SER DE ESE PAÍS de verdad (nacido/criado allí, o banda formada allí). No vale que cante en ese idioma, que suene "latino", que haya girado por allí o que tenga un miembro de allí. Antes de responder, pregúntate: "¿de dónde es este artista?" — si la respuesta no es el país que pidió, elige otro. En cada país hay discos canónicos de sobra; si un género y un país se cruzan poco, busca más hondo en esa escena en vez de rendirte y traer al artista famoso de siempre de otro país.
 - Si pide EXPLÍCITAMENTE un artista ("quiero a X", "ponme algo de X"), puedes proponer ese artista aunque salga en "artistas recientes".
 - REFERENCIAS COMO INSPIRACIÓN: si menciona discos o artistas para describir cómo quiere SENTIRSE ("algo que me haga sentir como X", "en la vena de X", "parecido a X", "como Y me hizo sentir"), esos nombres son EJEMPLOS para que te inspires, NO discos para recomendárselos: el oyente YA los conoce de sobra. PROHIBIDO proponer el mismo disco que puso de referencia y, salvo que insista, también su mismo artista. Propón algo DISTINTO que comparta ese nervio, esa emoción o esa escena.
 - IDIOMA IMPLÍCITO: aunque el idioma del día sea "Cualquiera", si el pedido o sus referencias apuntan claramente a un idioma o escena (p. ej. menciona artistas que cantan en español), respeta ese idioma al elegir.
 Sigue siendo OBLIGATORIO que sea un álbum de estudio REAL y bien documentado (regla 2 y 3). En la "reason", conecta el disco con lo que pidió (sin prometer que suena idéntico a sus referencias).
-- PROHIBIDO ABSOLUTO proponer un disco de OTRO género del que pidió y justificarlo con que "su energía resuena" o "aunque no es un X clásico…". Si pidió un género (bolero, salsa, jazz, metal…), el disco DEBE ser de ese género de verdad — de toda la música grabada existen cientos de discos canónicos de cada género, así que NUNCA es "imposible". Caer en un favorito del perfil que no encaja con el pedido es el peor error que puedes cometer aquí.\n`
+- PROHIBIDO ABSOLUTO proponer un disco de OTRO género o de OTRO país del que pidió y justificarlo con que "su energía resuena" o "aunque no es un X clásico…". Si pidió un género (bolero, salsa, jazz, metal…) o un origen (venezolano, mexicano…), el disco DEBE serlo de verdad — de toda la música grabada existen cientos de discos canónicos de cada género y de cada país, así que NUNCA es "imposible". Caer en un favorito del perfil o en un clásico famoso que no encaja con el pedido es el peor error que puedes cometer aquí.\n`
+    : "";
+
+  // El país detectado en el pedido va aparte del texto libre: al proponedor se
+  // le olvidaba dentro de la frase ("artistas venezolanos, rock" → cumplía el
+  // rock y se saltaba Venezuela). Además hay barrera en código: si el artista
+  // no es de ahí según MusicBrainz, se rechaza la propuesta y se pide otra.
+  const paisTexto = input.paisesPedidos?.trim()
+    ? `\nORIGEN OBLIGATORIO DE HOY: el oyente pidió artistas de ${input.paisesPedidos.trim()}.
+El artista que propongas TIENE que ser de ${input.paisesPedidos.trim()} (nacido/criado allí, o banda formada allí). Esto se comprueba después con datos duros (MusicBrainz): si no es de ahí, tu propuesta se descarta y perdemos el intento.
+Escarba en la escena real de ese país —sus discos de culto, sus clásicos locales, sus bandas históricas— y NO te refugies en artistas famosos de otro país que compartan género.\n`
     : "";
 
   // Variedad de artistas: si en días recientes ya sonaron ciertos artistas, NO
@@ -84,7 +99,8 @@ Sigue siendo OBLIGATORIO que sea un álbum de estudio REAL y bien documentado (r
       : "";
 
   const idiomaRegla = input.lang
-    ? `\n9. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO proponer un disco donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Solo si no existe ningún disco decente en ese idioma puedes elegir el más cercano, y debes mencionarlo en la "reason".\n   ATENCIÓN — los idiomas son distintos entre sí: "Español" (castellano, hispanohablante) ≠ "Português" (Brasil, Portugal) ≠ "Français" ≠ "English" ≠ "Italiano". No confundas lenguas romances ni des por válido un disco en portugués cuando pidieron español, ni uno en francés cuando pidieron italiano. Sé estricto: si dudas del idioma principal de un artista, elige otro del que estés seguro.`
+    ? `\n9. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO proponer un disco donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Solo si no existe ningún disco decente en ese idioma puedes elegir el más cercano, y debes mencionarlo en la "reason".\n   EXCEPCIÓN — el idioma del día NO puede romper el pedido: si el oyente pidió artistas de un PAÍS o una ESCENA concreta, manda el pedido. Elige un artista de ese país aunque cante en otro idioma (y si puedes, uno que además cuadre con el idioma del día).
+   ATENCIÓN — los idiomas son distintos entre sí: "Español" (castellano, hispanohablante) ≠ "Português" (Brasil, Portugal) ≠ "Français" ≠ "English" ≠ "Italiano". No confundas lenguas romances ni des por válido un disco en portugués cuando pidieron español, ni uno en francés cuando pidieron italiano. Sé estricto: si dudas del idioma principal de un artista, elige otro del que estés seguro.`
     : "";
 
   const vozCurador = input.voz?.trim()
@@ -120,7 +136,7 @@ SU DIARIO (reseñas recientes, de la más nueva a la más vieja):
 ${input.diarioTexto}
 
 ÁNIMO DE HOY: ${input.mood ?? "(no indicado)"}
-${peticionTexto}${artistasRecientesTexto}${regresoTexto}${rehacerTexto}
+${peticionTexto}${paisTexto}${artistasRecientesTexto}${regresoTexto}${rehacerTexto}
 DISCOS QUE YA CONOCE O YA SE LE MOSTRARON (NO los repitas):
 ${evitarTexto}
 
@@ -189,9 +205,11 @@ El oyente pidió algo concreto para hoy y otra IA propuso un disco. Tu única ta
 Reglas:
 1. Responde SOLO JSON: {"cumple": true|false, "motivo": "..."} — sin texto extra.
 2. Si el pedido nombra un GÉNERO, ESTILO, ÉPOCA, IDIOMA o ENERGÍA, el disco debe encajar DE VERDAD en eso. Un disco de otro género NO cumple, por bueno que sea. Ejemplo: si pidió "bolero" y el disco es flamenco/pop, "cumple": false.
-3. EXCEPCIÓN — referencias de inspiración: si el pedido usa un artista o disco como ejemplo de cómo quiere SENTIRSE ("algo tipo X", "en la vena de Y", "como me hizo sentir Z"), basta con que el disco comparta ese espíritu, energía o escena; NO hace falta que sea el mismo artista. Ahí sé generoso.
-4. Ante la duda razonable, "cumple": true. Solo marca false cuando el desajuste es CLARO.
-5. Juzga por tu conocimiento musical del disco y el artista, no por lo que diga nadie.`;
+3. EL PEDIDO SE JUZGA ENTERO: si tiene varias partes ("artistas venezolanos, rock" = origen + género), TODAS deben cumplirse. Cumplir una sola es "cumple": false.
+4. PAÍS / NACIONALIDAD / ESCENA: si el pedido nombra un país o un gentilicio ("venezolanos", "de Argentina", "boricuas", "de la escena de Manchester"), el artista tiene que SER de ahí (nacido/criado allí, o banda formada allí). No basta con cantar en ese idioma, sonar "latino", haber girado por allí o tener un miembro de allí. Aquí NO aplica el beneficio de la duda de la regla 6: si no te consta que el artista sea de ese país, responde "cumple": false y dilo en el motivo. Ejemplo: pidió "rock venezolano" y el disco es de Green Day (Estados Unidos) o Van Halen (Países Bajos/Estados Unidos) → "cumple": false.
+5. EXCEPCIÓN — referencias de inspiración: si el pedido usa un artista o disco como ejemplo de cómo quiere SENTIRSE ("algo tipo X", "en la vena de Y", "como me hizo sentir Z"), basta con que el disco comparta ese espíritu, energía o escena; NO hace falta que sea el mismo artista. Ahí sé generoso.
+6. Ante la duda razonable, "cumple": true. Solo marca false cuando el desajuste es CLARO (salvo en la regla 4, donde la duda se resuelve al revés).
+7. Juzga por tu conocimiento musical del disco y el artista, no por lo que diga nadie.`;
 
   const user = `PEDIDO DEL OYENTE: «${input.peticion.trim()}»${
     input.lang ? `\nIDIOMA QUE PIDIÓ HOY: ${input.lang}` : ""

@@ -1305,11 +1305,11 @@ function formatPerfil(profile: Record<string, unknown>): string {
 // Bloques de texto reutilizables (los usan el selector de catálogo y el
 // proponedor de disco fresco) para que el prompt cite solo señales reales.
 
-function perfilATexto(profile: Record<string, unknown> | null): string {
+export function perfilATexto(profile: Record<string, unknown> | null): string {
   return profile ? formatPerfil(profile) : "(sin perfil todavía)";
 }
 
-function diarioATexto(reviews: ReviewConAlbum[]): string {
+export function diarioATexto(reviews: ReviewConAlbum[]): string {
   if (reviews.length === 0) return "(aún no ha reseñado ningún disco)";
   return reviews
     .map((r) => {
@@ -1399,7 +1399,7 @@ function patronesDeEscucha(
 // artistas favoritos) y el diario (lo que puntuó 4★+). Así el oyente NUNCA cae
 // en la rotación global ciega: un rockero recibe rock, no una balada.
 
-type ReviewConAlbum = Prisma.ReviewGetPayload<{
+export type ReviewConAlbum = Prisma.ReviewGetPayload<{
   include: { album: { include: { artist: true } } };
 }>;
 type PickConAlbum = Prisma.DailyPickGetPayload<{

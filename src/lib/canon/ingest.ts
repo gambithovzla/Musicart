@@ -150,6 +150,7 @@ export async function construirIndice(opciones: {
 
   let nuevos = 0;
   let actualizados = 0;
+  let fallidos = 0;
   let incompleta = false;
 
   for (const c of candidatos) {
@@ -229,16 +230,29 @@ export async function construirIndice(opciones: {
       genresJson: JSON.stringify(generos),
     };
 
-    await prisma.canonAlbum.upsert({
-      where: { key },
-      create: { key, ...datos },
-      update: datos,
-    });
-    if (previa) actualizados++;
-    else nuevos++;
+    try {
+      await prisma.canonAlbum.upsert({
+        where: { key },
+        create: { key, ...datos },
+        update: datos,
+      });
+      if (previa) actualizados++;
+      else nuevos++;
+    } catch (err) {
+      // Un disco que no entra no puede tumbar la corrida entera. Pasa de
+      // verdad: `mbid` y `wikidataId` son únicos, y Wikidata a veces trae dos
+      // fichas del mismo disco con títulos ligeramente distintos — la segunda
+      // choca contra la primera. Antes ese choque abortaba `construirIndice`
+      // ANTES de recalibrar, y el índice se quedaba entero sin puntaje.
+      fallidos++;
+      log(`⚠ No entró «${c.title}» de ${c.artist}: ${(err as Error).message}`);
+    }
   }
 
-  log(`Índice: ${nuevos} discos nuevos, ${actualizados} actualizados.`);
+  log(
+    `Índice: ${nuevos} discos nuevos, ${actualizados} actualizados` +
+      (fallidos > 0 ? `, ${fallidos} que no entraron.` : "."),
+  );
 
   await enlazarConCatalogo(log);
   const recalibrados = await recalibrar(log);
@@ -268,21 +282,53 @@ export async function recalibrar(log: (msg: string) => void = () => {}): Promise
   const nuevos = calibrar(filas);
   const previo = new Map(filas.map((f) => [f.id, f]));
 
-  let cambiados = 0;
+  // Se agrupa por puntaje de destino antes de escribir. Los puntajes son ~46
+  // números enteros (55 a 100) para mil discos, así que esto son ~46
+  // escrituras en vez de mil, y la calibración pasa de minutos a un suspiro.
+  //
+  // No es una optimización cosmética: era LA razón por la que el Salón se veía
+  // con todo a "0 de 100". Escribir mil `update` seguidos desde una función de
+  // Vercel no cabe en el tiempo que tiene —y la calibración es lo ÚLTIMO que
+  // hace la ingesta—, así que la cortaban justo aquí y los discos se quedaban
+  // con el 0 de fábrica por mucho que el índice estuviera lleno.
+  const porPuntaje = new Map<number, string[]>();
   for (const n of nuevos) {
     const antes = previo.get(n.id);
     // Los puntajes fijados a mano por el curador no se tocan: son la parte del
     // Salón donde manda su criterio y no la fórmula.
     if (!antes || antes.locked || antes.score === n.score) continue;
-    await prisma.canonAlbum.update({
-      where: { id: n.id },
-      data: { score: n.score },
-    });
-    cambiados++;
+    const lista = porPuntaje.get(n.score);
+    if (lista) lista.push(n.id);
+    else porPuntaje.set(n.score, [n.id]);
+  }
+
+  let cambiados = 0;
+  for (const [score, ids] of porPuntaje) {
+    // De 500 en 500: un `IN` con miles de identificadores es una consulta que
+    // Postgres puede rechazar, y aquí no hay ninguna prisa por apurarlo.
+    for (let i = 0; i < ids.length; i += 500) {
+      // El `locked: false` se repite en el filtro a propósito: entre la lectura
+      // y esta escritura el curador pudo fijar un puntaje a mano, y manda él.
+      const r = await prisma.canonAlbum.updateMany({
+        where: { id: { in: ids.slice(i, i + 500) }, locked: false },
+        data: { score },
+      });
+      cambiados += r.count;
+    }
   }
 
   log(`Recalibrado: ${cambiados} puntajes cambiaron de ${filas.length} discos.`);
   return cambiados;
+}
+
+/**
+ * Discos del índice que siguen sin puntaje. El 0 es el valor de fábrica de la
+ * columna y NINGÚN disco calibrado puede tenerlo (la curva empieza en 55 y lo
+ * que mete el curador a mano también), así que "score = 0" significa exactamente
+ * una cosa: a este disco nunca le llegó la calibración.
+ */
+export async function contarSinPuntaje(): Promise<number> {
+  return prisma.canonAlbum.count({ where: { score: 0 } });
 }
 
 /**
@@ -402,10 +448,34 @@ export async function avanzarSalon(opciones: {
     presupuestoMs === undefined ? undefined : presupuestoMs - (Date.now() - arranque);
 
   let total = await prisma.canonAlbum.count();
-  let arrastre = ""; // lo que ya contó el paso del índice, si pasó al siguiente
+  let arrastre = ""; // lo que ya contó un paso anterior, si pasó al siguiente
   // Si Wikidata se cae, aquí queda el motivo — pero la corrida NO se acaba: las
   // carátulas son de otra casa (Deezer) y se pueden seguir buscando igual.
   let fallo: string | null = null;
+
+  // 0. Antes que nada: que ningún disco del índice se quede sin puntaje.
+  //
+  // La calibración vivía SOLO al final de `construirIndice`, y eso la hacía
+  // rehén de todo lo que puede salir mal antes: un 502 de Wikidata, un disco
+  // duplicado, o sencillamente que se acabe el tiempo de la función. Cuando
+  // alguna de esas pasaba, el índice quedaba lleno pero con todos los discos en
+  // "0 de 100" — y ninguna corrida posterior lo arreglaba, porque todas
+  // volvían a tropezar en el mismo sitio antes de llegar al final.
+  //
+  // Aquí arriba ya no depende de nada: no toca la red, es una lectura y un
+  // puñado de escrituras agrupadas, y se hace SIEMPRE que haga falta. Un toque
+  // al botón basta para que el Salón tenga números.
+  if (total > 0) {
+    const sinPuntaje = await contarSinPuntaje();
+    if (sinPuntaje > 0) {
+      log(`${sinPuntaje} discos del índice están sin puntaje: calibrando…`);
+      const puestos = await recalibrar(log);
+      if (puestos > 0) {
+        arrastre =
+          `Le puse puntaje a ${puestos} discos que se habían quedado en cero. `;
+      }
+    }
+  }
 
   // 1. Lo primero es que haya canon. Mientras falten discos, el resto espera.
   if (total < OBJETIVO_INDICE) {
@@ -430,15 +500,16 @@ export async function avanzarSalon(opciones: {
         return {
           paso: "indice",
           mensaje:
-            previo === 0
+            arrastre +
+            (previo === 0
               ? `El Salón ya está en pie: entraron ${resumen.nuevos} discos al canon.`
-              : `Entraron ${resumen.nuevos} discos más: el canon va por ${total}.`,
+              : `Entraron ${resumen.nuevos} discos más: el canon va por ${total}.`),
           quedaTrabajo: resumen.incompleta || total < OBJETIVO_INDICE || sinPortada > 0,
           total,
           sinPortada,
         };
       }
-      arrastre = `El canon está completo con ${total} discos. `;
+      arrastre += `El canon está completo con ${total} discos. `;
     } catch (err) {
       // Antes esto tumbaba la corrida entera y el botón no hacía NADA: con el
       // índice a medias y Wikidata sin responder había cientos de carátulas
@@ -456,8 +527,8 @@ export async function avanzarSalon(opciones: {
     return {
       paso: "portadas",
       mensaje: fallo
-        ? `${fallo}, así que el canon no creció esta vez. Mientras tanto busqué ` +
-          `carátulas: ${puestas} nuevas, faltan ${sinPortada}.`
+        ? `${arrastre}${fallo}, así que el canon no creció esta vez. Mientras ` +
+          `tanto busqué carátulas: ${puestas} nuevas, faltan ${sinPortada}.`
         : `${arrastre}${puestas} carátulas nuevas. Faltan ${sinPortada} por buscar.`,
       quedaTrabajo: sinPortada > 0 || fallo !== null,
       total,
@@ -468,7 +539,22 @@ export async function avanzarSalon(opciones: {
   // Wikidata falló y no había ninguna otra cosa que hacer: que se sepa. Este es
   // el único camino que sale por la puerta del error, y es el correcto — decir
   // "todo al día" con el canon a medio levantar sería mentirle al curador.
-  if (fallo) throw new Error(fallo);
+  //
+  // Salvo que la corrida SÍ haya arreglado algo (los puntajes que faltaban):
+  // entonces contarlo vale más que el error, porque es justo lo que el curador
+  // vino a ver. Se dice todo: lo que se arregló y lo que sigue sin poder ser.
+  if (fallo) {
+    if (arrastre) {
+      return {
+        paso: "indice",
+        mensaje: `${arrastre}El canon no creció esta vez (${fallo}).`,
+        quedaTrabajo: true,
+        total,
+        sinPortada: 0,
+      };
+    }
+    throw new Error(fallo);
+  }
 
   return {
     paso: "al-dia",

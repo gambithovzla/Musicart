@@ -19,6 +19,7 @@ import {
   contarPorPiso,
   progresoDelOyente,
   filtrosDisponibles,
+  estadoDelSalon,
 } from "@/lib/canon/consulta";
 import { LevantarSalon } from "@/components/LevantarSalon";
 import { Dial } from "./Dial";
@@ -56,13 +57,17 @@ export default async function SalonPage() {
     ? await progresoDelOyente(identity)
     : null;
 
-  // Índice vacío: la ingesta todavía no ha corrido. Se dice claro, sin
-  // maquillarlo con datos de mentira. Al curador, además, se le da AQUÍ MISMO el
-  // botón que lo arregla — antes esto era un enlace a /revision y el curador
-  // acababa en su perfil sin haber levantado nada (ver LevantarSalon).
+  // Sin muro no hay Salón: la ingesta no ha corrido, o corrió a medias y los
+  // discos se quedaron sin puntaje. Se dice claro, sin maquillarlo con datos de
+  // mentira. Al curador, además, se le da AQUÍ MISMO el botón que lo arregla —
+  // antes esto era un enlace a /revision y el curador acababa en su perfil sin
+  // haber levantado nada (ver LevantarSalon).
   if (muro.length === 0) {
-    const sesion = await auth();
+    const [sesion, estado] = await Promise.all([auth(), estadoDelSalon()]);
     const esCurador = isAdminEmail(sesion?.user?.email);
+    // Dos averías distintas que desde fuera se ven igual. La segunda es la que
+    // se nos escapó: el índice lleno y todo marcado "0 de 100".
+    const sinCalibrar = estado.total > 0;
     return (
       <main className="px-5 pb-24 pt-8">
         <Portada />
@@ -71,15 +76,22 @@ export default async function SalonPage() {
         <div className="mt-12 border-y-2 border-tinta py-12 text-center">
           <p className="rotulo">En prensa</p>
           <p className="font-serif mt-3 text-2xl leading-tight">
-            El Salón se está levantando
+            {sinCalibrar
+              ? "El Salón está sin puntuar"
+              : "El Salón se está levantando"}
           </p>
           <p className="mx-auto mt-3 max-w-[19rem] text-[13px] leading-relaxed text-tinta-suave">
-            El índice del canon aún no se ha construido. Cuando esté, aquí
-            estarán los discos con los que se cuenta la historia de la música.
+            {sinCalibrar
+              ? `Los ${estado.total} discos del canon ya están, pero todavía no se les ha puesto su puntaje, y un disco sin número no dice nada aquí. Falta la última pasada.`
+              : "El índice del canon aún no se ha construido. Cuando esté, aquí estarán los discos con los que se cuenta la historia de la música."}
           </p>
           {esCurador && (
             <div className="mt-2 flex flex-col items-center">
-              <LevantarSalon total={0} enmarcado={false} />
+              <LevantarSalon
+                total={estado.total}
+                sinPuntaje={estado.sinPuntaje}
+                enmarcado={false}
+              />
               <Link
                 href="/revision"
                 className="dato pulsable mt-6 flex min-h-[44px] items-center text-[11px] uppercase tracking-[0.14em] text-tinta-suave underline underline-offset-4"

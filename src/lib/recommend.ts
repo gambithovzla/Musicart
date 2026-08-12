@@ -38,7 +38,14 @@ import {
 
 const MAX_REVIEWS = 10;
 const MAX_RECENT_PICKS = 14;
-const LLM_TIMEOUT_MS = 4_000;
+// Cuánto esperamos a la llamada que ELIGE el disco del catálogo. Estuvo en 4 s
+// y era demasiado poco: con un catálogo largo el prompt es grande, el modelo
+// tarda más de eso a menudo, y al vencer el plazo caíamos a `elegirPorGusto`
+// —que elige por afinidad de géneros y NO sabe nada del pedido del oyente—. Ese
+// era el camino silencioso por el que pedir "rock venezolano" terminaba en un
+// disco de rock cualquiera. Ahora esperamos lo razonable; el reloj total lo
+// vigila el presupuesto de tiempo de `generarPickDelDia`, que es su sitio.
+const LLM_TIMEOUT_MS = 15_000;
 
 type DossierConAlbum = Prisma.DossierGetPayload<{
   include: { album: { include: { artist: true } } };
@@ -51,6 +58,11 @@ export type PickPersonal = {
   regenerated: boolean;
   returnPick: boolean;
   absenceDays: number | null;
+  /** Si hoy NO se pudo cumplir lo que el oyente pidió, la frase que lo dice.
+   *  Va también dentro de `reason` (es lo que se lee bajo el disco); aparte
+   *  sirve para avisar en el acto a quien acaba de pedirlo, sin que tenga que
+   *  bajar a leer la razón para enterarse de que no era lo que pidió. */
+  avisoPedido?: string | null;
 };
 
 type PickCtx = { deviceId: string; userId: string | null };
@@ -666,7 +678,22 @@ export async function generarPickDelDia(
           );
           return null;
         }
-        const p = await proponerDiscoDescubrimiento(argsPropuesta(rechazados));
+        // Una llamada que falla (timeout del modelo, un 429, un JSON a medias)
+        // NO puede tumbar la fabricación entera. Antes esta excepción subía
+        // hasta el `catch` de más afuera y se iba derecha al catálogo: un solo
+        // hipo del proveedor y el pedido del oyente se quedaba sin cumplir, en
+        // silencio y con el disco elegido solo por gusto. Aquí se anota y se
+        // vuelve a intentar, que es lo que hace el resto del bucle con todo lo
+        // demás que sale mal.
+        let p: DiscoPropuesto;
+        try {
+          p = await proponerDiscoDescubrimiento(argsPropuesta(rechazados));
+        } catch (err) {
+          console.warn(
+            `[recommend] falló la propuesta ${i + 1}/${MAX_PROPUESTAS}: ${(err as Error).message}; reintento.`,
+          );
+          continue;
+        }
         if (esConflictiva(p)) {
           console.warn(
             `[recommend] propuesta "${p.title}" de ${p.artist} ya conocida; pido otra (${i + 1}/${MAX_PROPUESTAS}).`,
@@ -823,6 +850,26 @@ export async function generarPickDelDia(
         )?.slice(0, 600) ?? null;
       }
 
+      // Honestidad también en el disco fresco. La barrera de origen deja pasar
+      // cuando MusicBrainz no contesta o no conoce al artista (a propósito: no
+      // queremos dejar a nadie sin disco por una fuente caída), así que un disco
+      // puede llegar hasta aquí SIN que nos conste que es del país que pediste.
+      // Si es el caso, se dice — la promesa incumplida se avisa, no se disimula.
+      const aviso =
+        peticion && paisesPedidos.length > 0
+          ? await avisoSiNoCumplePedido({
+              peticion,
+              title: dossier.album.title,
+              artist: dossier.album.artist.name,
+              lang: langPick,
+              soloOrigen: true,
+            })
+          : null;
+      if (aviso) {
+        const resto = reason ? ` ${reason.slice(0, 600 - aviso.length)}`.trimEnd() : "";
+        reason = `${aviso}${resto}`;
+      }
+
       await saveTodaysPick(ctx, date, {
         albumId: dossier.album.id,
         reason,
@@ -839,6 +886,7 @@ export async function generarPickDelDia(
         regenerated: esRehacer,
         returnPick: Boolean(returnRitual),
         absenceDays: returnRitual?.absenceDays ?? null,
+        avisoPedido: aviso,
       };
     }
 
@@ -916,6 +964,10 @@ async function avisoSiNoCumplePedido(input: {
   title: string;
   artist: string;
   lang: string | null;
+  /** Comprobar SOLO el origen. Lo usa el disco fresco, donde el verificador de
+   *  pedido ya dijo que sí antes de fabricarlo: repetirle la pregunta cuesta
+   *  tiempo y se arriesga a que conteste distinto que hace un minuto. */
+  soloOrigen?: boolean;
 }): Promise<string | null> {
   const peticion = input.peticion.trim();
   if (!peticion) return null;
@@ -923,6 +975,15 @@ async function avisoSiNoCumplePedido(input: {
   try {
     // 1. El origen, con datos duros. Es la parte del pedido más imposible de
     //    sustituir: un rock de otro país no es "casi" lo que pidió.
+    //
+    //    OJO con la dirección de la duda. Las barreras que ELIGEN el disco
+    //    dudan a favor del oyente (si MusicBrainz no responde, dejan pasar: más
+    //    vale un disco de más que quedarse sin disco). Este aviso es lo
+    //    contrario, y tiene que serlo: aquí no se descarta nada ni se deja a
+    //    nadie sin música, solo se dice la verdad. Así que mientras no conste
+    //    que el artista ES de donde pediste, se avisa — callar porque la fuente
+    //    estaba caída es exactamente cómo un disco de Oklahoma acaba
+    //    presentándose como si fuera lo que pediste.
     const paises = detectarPaisesPedido(peticion);
     if (paises.length > 0) {
       const o = await artistaEsDeAlgunPais(input.artist, paises);
@@ -933,9 +994,17 @@ async function avisoSiNoCumplePedido(input: {
           `mientras te consigo uno de verdad.`
         );
       }
+      if (o.veredicto === "desconocido") {
+        return (
+          `No pude confirmar que ${input.artist} sea de ${nombresDePaises(paises)}, ` +
+          `así que no te prometo que esto sea lo que pediste. Te lo dejo mientras ` +
+          `te consigo uno que sí lo sea.`
+        );
+      }
     }
 
     // 2. El resto del pedido (género, época, estilo), con el verificador.
+    if (input.soloOrigen) return null;
     const v = await discoCumplePedido({
       peticion,
       title: input.title,
@@ -1245,6 +1314,7 @@ async function recomendarYGuardar(
       regenerated: opts.regenerated ?? false,
       returnPick: Boolean(returnRitual),
       absenceDays: returnRitual?.absenceDays ?? null,
+      avisoPedido: aviso,
     };
   } catch (err) {
     console.error("[recommend] el motor falló, va rotación global:", err);

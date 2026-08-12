@@ -501,6 +501,27 @@ integra más profundamente con la escucha real.
   según MusicBrainz, o el verificador de pedido— y se pega delante de la razón
   cuando ya nadie la va a tocar. Si no se pudo cumplir lo que pediste, lo lees.
 
+- [x] **7.11 Las barreras del pedido dejaban de existir en silencio** (ago 2026,
+  tras el segundo reporte del dueño con el mismo pedido: pidió *rock venezolano
+  de calidad* y recibió The Flaming Lips, de Oklahoma) — la 7.10 arregló que el
+  pedido no se perdiera, pero quedaba un camino más silencioso: **todo lo que
+  comprueba el pedido falla hacia el "sí"**. `elegirConLlm` esperaba solo **4
+  segundos** al modelo y, al vencer, caía a `elegirPorGusto`, que elige por
+  afinidad de géneros y NO SABE NADA del pedido: por ahí un "rock venezolano"
+  se convertía en un disco de rock cualquiera sin que nada avisara. Además, un
+  fallo de una sola llamada del proponedor (timeout, 429, JSON a medias) subía
+  hasta el `catch` de más afuera y mandaba la fabricación entera al catálogo.
+  Y las dos barreras que sí comprueban (origen y `discoCumplePedido`) dejan
+  pasar ante la duda a propósito —para no dejar a nadie sin disco—, así que con
+  MusicBrainz caído no queda nadie mirando. Cuatro arreglos: **(a)** el plazo de
+  la elección sube a 15 s (el reloj total ya lo vigila el presupuesto de tiempo
+  de la 7.10, que es su sitio); **(b)** una propuesta que falla se reintenta en
+  vez de tumbar la fabricación; **(c)** el aviso de "esto no es lo que pediste"
+  ahora también salta cuando **no se pudo comprobar** el origen, no solo cuando
+  consta lo contrario — la duda se resuelve al revés que en las barreras porque
+  aquí no se descarta nada, solo se dice la verdad; **(d)** ese aviso vuelve al
+  cuadro de admin y se lee al instante, sin bajar a buscar la razón.
+
 ### Criterios de aceptación
 
 - [x] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones

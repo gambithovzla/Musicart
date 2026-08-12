@@ -114,7 +114,12 @@ export async function POST(req: Request) {
       date,
       [...excluirAlbumIds, ...(nuevoId ? [nuevoId] : [])],
     );
-    const res = NextResponse.json({ ok: pick !== null });
+    // El aviso viaja de vuelta para que quien acaba de pedir algo se entere en
+    // el acto de que no se pudo cumplir, sin tener que bajar a leer la razón.
+    const res = NextResponse.json({
+      ok: pick !== null,
+      avisoPedido: pick?.avisoPedido ?? null,
+    });
     res.cookies.set(SEEN_TODAY_COOKIE, seen, {
       path: "/",
       maxAge: 86_400,

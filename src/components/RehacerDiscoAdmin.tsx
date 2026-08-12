@@ -17,6 +17,7 @@ export function RehacerDiscoAdmin({ dateKey }: { dateKey: string }) {
   const router = useRouter();
   const [estado, setEstado] = useState<"idle" | "eligiendo" | "trabajando" | "error">("idle");
   const [instruccion, setInstruccion] = useState("");
+  const [aviso, setAviso] = useState<string | null>(null);
 
   async function rehacer(lang: string) {
     setEstado("trabajando");
@@ -43,11 +44,16 @@ export function RehacerDiscoAdmin({ dateKey }: { dateKey: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rehacer: true, instruccion: instruccion.trim() || undefined }),
       });
-      const data = (await res.json()) as { ok?: boolean };
+      const data = (await res.json()) as { ok?: boolean; avisoPedido?: string | null };
       if (!data.ok) {
         setEstado("error");
         return;
       }
+      // Si no se pudo cumplir el pedido, se dice aquí mismo. La razón bajo el
+      // disco también lo trae, pero para eso hay que bajar a leerla: quien
+      // acaba de pedir "rock venezolano" merece enterarse antes de mirar la
+      // portada y pensar que el curador no le hizo caso.
+      setAviso(data.avisoPedido ?? null);
       router.refresh();
       setEstado("idle");
     } catch {
@@ -101,6 +107,11 @@ export function RehacerDiscoAdmin({ dateKey }: { dateKey: string }) {
       {estado === "error" && (
         <p className="mt-2 text-xs text-red-300/90">
           No se pudo rehacer ahora. Intenta de nuevo en un momento.
+        </p>
+      )}
+      {aviso && estado === "idle" && (
+        <p className="mx-auto mt-2 max-w-[22rem] text-xs leading-relaxed text-album-light/80">
+          {aviso}
         </p>
       )}
     </div>

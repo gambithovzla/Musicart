@@ -476,6 +476,30 @@ integra más profundamente con la escucha real.
   (c) El respaldo del catálogo (`elegirConLlm`) prioriza el origen sobre el
   género cuando no puede cumplir todo y está OBLIGADO a reconocerlo en la
   primera frase de la razón en vez de fingir que cumplió.
+- [x] **7.10 El pedido no se pierde por el camino** (ago 2026, tras el reporte
+  del dueño: «le di rehacer, puse *rock venezolano de calidad* y me recomendó un
+  disco en inglés que no tiene nada que ver») — la 7.9 puso las barreras, pero
+  el pedido podía **no llegar nunca a ellas**. Tres agujeros, los tres tapados:
+  **(a) el pedido viajaba SOLO en el cuerpo de la llamada.** Fabricar un disco
+  tarda minutos, y si esa llamada muere (se acaba el tiempo de la función, se
+  corta la red, cierras la pantalla) la home reintenta sola con una petición
+  **sin cuerpo**: la instrucción se evaporaba y el disco salía elegido solo por
+  gusto — exactamente el disco en inglés que no venía a cuento. Ahora el cuadro
+  de admin guarda el pedido en su cookie ANTES de llamar, igual que el gate del
+  día, así que manda en cualquier fabricación de hoy aunque la primera se caiga.
+  **(b) La fabricación no miraba el reloj.** Cada propuesta rechazada costaba
+  ~25 s (MusicBrainz + verificador, en fila) y un pedido difícil quema varias
+  seguidas antes de llegar al pipeline; sumando, la función se pasaba del techo
+  y la cortaban **sin dejar disco guardado**. Ahora tiene presupuesto de tiempo
+  (se rinde a tiempo y siempre deja algo puesto) y las dos barreras del pedido
+  corren **en paralelo**: la misma vuelta cuesta la mitad, o sea el doble de
+  intentos reales de cumplir lo que pediste.
+  **(c) El respaldo del catálogo prometía honestidad y no la garantizaba.** El
+  aviso ("hoy no tengo un disco venezolano a la mano") se le pedía al LLM en el
+  prompt… y luego otro LLM reescribía la razón (anti-muletilla) y podía
+  borrarlo. Ahora lo escribe el CÓDIGO sobre datos duros —el origen del artista
+  según MusicBrainz, o el verificador de pedido— y se pega delante de la razón
+  cuando ya nadie la va a tocar. Si no se pudo cumplir lo que pediste, lo lees.
 
 ### Criterios de aceptación
 

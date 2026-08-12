@@ -9,7 +9,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { LANG_COOKIE } from "@/lib/device";
+import { LANG_COOKIE, PEDIDO_COOKIE } from "@/lib/device";
 
 const IDIOMAS = ["Español", "English", "Italiano", "Français", "Português", "Cualquiera"];
 
@@ -21,6 +21,22 @@ export function RehacerDiscoAdmin({ dateKey }: { dateKey: string }) {
   async function rehacer(lang: string) {
     setEstado("trabajando");
     document.cookie = `${LANG_COOKIE}=${dateKey}|${encodeURIComponent(lang)}; path=/; max-age=86400; samesite=lax`;
+
+    // El pedido se guarda en su cookie ANTES de llamar, igual que hace el gate
+    // del día (LanguageGate). No es un detalle: fabricar un disco tarda minutos
+    // y esa llamada se puede caer (se acaba el tiempo de la función, se corta la
+    // red, cierras la pantalla). Cuando eso pasaba, la home reintentaba sola
+    // —con una petición SIN cuerpo— y tu instrucción se perdía por el camino:
+    // pedías "rock venezolano" y volvías a recibir el disco de siempre, elegido
+    // solo con tu gusto. En la cookie el pedido sobrevive al accidente y manda
+    // en cualquier fabricación de hoy.
+    const pedido = instruccion.trim();
+    document.cookie = pedido
+      ? `${PEDIDO_COOKIE}=${dateKey}|${encodeURIComponent(pedido)}; path=/; max-age=86400; samesite=lax`
+      : // Sin texto vuelves al criterio de siempre: hay que BORRAR el pedido
+        // anterior, o el de hace un rato seguiría mandando sin que lo pidas.
+        `${PEDIDO_COOKIE}=; path=/; max-age=0; samesite=lax`;
+
     try {
       const res = await fetch("/api/pick-hoy", {
         method: "POST",

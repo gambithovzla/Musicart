@@ -66,6 +66,14 @@ export type GenerarPickOpts = {
    *  fabrica fresco — el tope existe para no dispararse con testers, no para el
    *  dueño, a quien repetirle un disco es justo lo que queremos evitar. */
   omitirPresupuesto?: boolean;
+  /**
+   * Cuánto tiempo hay para fabricar, en ms. Existe porque esto corre dentro de
+   * una función de Vercel con el reloj en contra: si nos pasamos, nos cortan a
+   * media faena y NO queda disco guardado — la home reintenta sola, sin el
+   * pedido del oyente, y le sirve cualquier cosa. Con presupuesto preferimos
+   * rendirnos a tiempo y dejar guardado lo mejor que tengamos.
+   */
+  presupuestoMs?: number;
 };
 
 /** AlbumId del pick guardado hoy, si existe. */
@@ -461,6 +469,29 @@ export async function generarPickDelDia(
   const paisesPedidos = detectarPaisesPedido(peticion);
   const paisesTexto = nombresDePaises(paisesPedidos);
 
+  // El reloj de la fabricación. Fabricar un disco fresco son varias llamadas al
+  // LLM y una pasada del pipeline (minutos), y todo esto vive dentro de una
+  // función con tiempo máximo. Sin este control, un pedido difícil ("rock
+  // venezolano": muchas propuestas rechazadas por la barrera de origen) agotaba
+  // el reloj, la función moría sin guardar nada y la home reintentaba por su
+  // cuenta —con una petición sin cuerpo, o sea SIN el pedido— y acababa
+  // sirviendo un disco elegido solo por gusto. Preferimos parar a tiempo.
+  const arranque = Date.now();
+  const restanteMs = () =>
+    opts?.presupuestoMs === undefined
+      ? Number.POSITIVE_INFINITY
+      : opts.presupuestoMs - (Date.now() - arranque);
+  // Lo que hay que dejar libre para caer al catálogo y GUARDAR un disco: esa
+  // caída son dos llamadas cortas al LLM, pero es la que garantiza que la home
+  // encuentre algo al refrescar.
+  const RESERVA_CATALOGO_MS = 30_000;
+  // Cuánto tarda una pasada del pipeline. Empieza como estimación y se corrige
+  // con la primera medida real: así el presupuesto se ajusta al modelo y a la
+  // red que haya hoy, en vez de a un número escrito a mano.
+  let costePipelineMs = 90_000;
+  const hayTiempoParaFabricar = () =>
+    restanteMs() > costePipelineMs + RESERVA_CATALOGO_MS;
+
   try {
     // Idempotencia: si ya hay disco de hoy (otra pestaña lo hizo), devolverlo.
     const guardado = await findTodaysPick(ctx, date);
@@ -626,6 +657,15 @@ export async function generarPickDelDia(
     const MAX_PROPUESTAS = 8;
     const conseguirPropuesta = async (): Promise<DiscoPropuesto | null> => {
       for (let i = 0; i < MAX_PROPUESTAS; i++) {
+        // Proponer y verificar son baratos en dinero pero no en reloj (dos
+        // llamadas al LLM por vuelta). Si ya no queda tiempo para fabricar el
+        // disco que salga de aquí, seguir buscando no sirve de nada.
+        if (!hayTiempoParaFabricar()) {
+          console.warn(
+            "[recommend] se acabó el tiempo buscando propuesta; voy con lo que haya.",
+          );
+          return null;
+        }
         const p = await proponerDiscoDescubrimiento(argsPropuesta(rechazados));
         if (esConflictiva(p)) {
           console.warn(
@@ -634,32 +674,43 @@ export async function generarPickDelDia(
           rechazar(p, "ya conocido");
           continue;
         }
-        // Barrera de ORIGEN (7.9): si pidió artistas de un país, lo comprobamos
-        // con MusicBrainz antes que con el LLM — es un dato duro. Solo corta los
-        // desajustes claros ("venezolanos" → Green Day es de Estados Unidos).
-        if (paisesPedidos.length > 0) {
-          const o = await artistaEsDeAlgunPais(p.artist, paisesPedidos);
-          if (o.veredicto === "no") {
-            const motivo = `${p.artist} es de ${o.origen}, y el oyente pidió artistas de ${paisesTexto}`;
-            console.warn(`[recommend] ${motivo}; pido otra.`);
-            rechazar(p, motivo);
-            continue;
-          }
+        // Las dos barreras del pedido, EN PARALELO. Antes iban en fila y cada
+        // vuelta costaba ~25 segundos de reloj (MusicBrainz + una llamada al
+        // LLM), así que un pedido difícil —donde se rechazan varias propuestas
+        // seguidas— se comía el tiempo de la función antes de fabricar nada.
+        // Juntas cuestan lo que la más lenta. A veces pagamos una verificación
+        // que el origen ya iba a descartar: son céntimos, y lo que ganamos es el
+        // doble de intentos para encontrar de verdad lo que pidió.
+        const [origen, cumple] = await Promise.all([
+          // Barrera de ORIGEN (7.9): dato duro de MusicBrainz. Solo corta los
+          // desajustes claros ("venezolanos" → Green Day es de Estados Unidos).
+          paisesPedidos.length > 0
+            ? artistaEsDeAlgunPais(p.artist, paisesPedidos)
+            : Promise.resolve(null),
+          peticion
+            ? discoCumplePedido({
+                peticion,
+                title: p.title,
+                artist: p.artist,
+                lang: langPick,
+              })
+            : Promise.resolve(null),
+        ]);
+
+        // El origen manda: es el dato duro, y es la parte del pedido que no
+        // admite sustituto.
+        if (origen?.veredicto === "no") {
+          const motivo = `${p.artist} es de ${origen.origen}, y el oyente pidió artistas de ${paisesTexto}`;
+          console.warn(`[recommend] ${motivo}; pido otra.`);
+          rechazar(p, motivo);
+          continue;
         }
-        if (peticion) {
-          const v = await discoCumplePedido({
-            peticion,
-            title: p.title,
-            artist: p.artist,
-            lang: langPick,
-          });
-          if (!v.cumple) {
-            console.warn(
-              `[recommend] "${p.title}" de ${p.artist} NO cumple el pedido «${peticion}» (${v.motivo}); pido otra.`,
-            );
-            rechazar(p, `no cumple el pedido «${peticion}» — ${v.motivo}`);
-            continue;
-          }
+        if (cumple && !cumple.cumple) {
+          console.warn(
+            `[recommend] "${p.title}" de ${p.artist} NO cumple el pedido «${peticion}» (${cumple.motivo}); pido otra.`,
+          );
+          rechazar(p, `no cumple el pedido «${peticion}» — ${cumple.motivo}`);
+          continue;
         }
         return p;
       }
@@ -674,6 +725,14 @@ export async function generarPickDelDia(
     // repetir es el peor resultado posible.
     const MAX_PIPELINE = 4;
     for (let intento = 0; intento < MAX_PIPELINE; intento++) {
+      // Empezar una pasada que no va a caber es peor que no empezarla: nos
+      // cortan con el disco a medio fabricar y sin nada guardado.
+      if (!hayTiempoParaFabricar()) {
+        console.warn(
+          `[recommend] sin tiempo para otra pasada del pipeline (intento ${intento + 1}); voy al catálogo.`,
+        );
+        break;
+      }
       const propuesta = await conseguirPropuesta();
       // El proponedor solo nombró discos ya vistos en esta ronda. NO nos rendimos:
       // la lista de rechazos (`rechazados`) creció, así que el siguiente intento
@@ -682,9 +741,13 @@ export async function generarPickDelDia(
       if (!propuesta) continue;
 
       // El pipeline investiga, narra, verifica y publica (o reutiliza si ya existe).
+      const t0 = Date.now();
       const result = await runDossierPipeline(propuesta.title, propuesta.artist, {
         publish: true,
       });
+      // La medida real manda sobre la estimación: si esta pasada tardó dos
+      // minutos, la siguiente no cabe en treinta segundos.
+      costePipelineMs = Math.max(costePipelineMs, Date.now() - t0);
 
       // Post-pipeline: comparamos por id Y por obra. El pipeline resuelve título y
       // artista contra MusicBrainz/iTunes y puede caer en (a) un disco que ya vio
@@ -830,6 +893,67 @@ async function dossierDelAlbum(albumId: string): Promise<DossierConAlbum | null>
     where: { albumId, status: "published", locale: "es" },
     include: { album: { include: { artist: true } } },
   });
+}
+
+/**
+ * ¿El disco que sacamos del catálogo cumple lo que el oyente pidió hoy? Si NO,
+ * devuelve el aviso que se le antepone a la razón.
+ *
+ * El catálogo es cerrado: cuando el pedido no se puede cumplir con lo publicado
+ * (pediste rock venezolano y hoy no hay ninguno), la app tiene dos salidas y
+ * solo una es aceptable. La mala es servir el disco callando —que es lo que se
+ * vivía como «me recomendó algo que no tiene nada que ver con lo que dije»—
+ * porque además la razón la escribe un LLM al que se le pide justificar su
+ * elección, y siempre encuentra una excusa bonita («su energía resuena…»).
+ *
+ * Este aviso lo escribe el CÓDIGO sobre datos duros (el origen del artista según
+ * MusicBrainz) o sobre el verificador de pedido. Va delante de la razón y ya no
+ * lo puede borrar ningún modelo: es la misma ley anti-alucinación de siempre,
+ * aplicada a lo que la app promete y no solo a lo que cuenta del disco.
+ */
+async function avisoSiNoCumplePedido(input: {
+  peticion: string;
+  title: string;
+  artist: string;
+  lang: string | null;
+}): Promise<string | null> {
+  const peticion = input.peticion.trim();
+  if (!peticion) return null;
+
+  try {
+    // 1. El origen, con datos duros. Es la parte del pedido más imposible de
+    //    sustituir: un rock de otro país no es "casi" lo que pidió.
+    const paises = detectarPaisesPedido(peticion);
+    if (paises.length > 0) {
+      const o = await artistaEsDeAlgunPais(input.artist, paises);
+      if (o.veredicto === "no") {
+        return (
+          `Hoy no tengo publicado nada de ${nombresDePaises(paises)}, así que esto ` +
+          `no es lo que pediste: ${input.artist} es de ${o.origen}. Te lo dejo ` +
+          `mientras te consigo uno de verdad.`
+        );
+      }
+    }
+
+    // 2. El resto del pedido (género, época, estilo), con el verificador.
+    const v = await discoCumplePedido({
+      peticion,
+      title: input.title,
+      artist: input.artist,
+      lang: input.lang,
+    });
+    if (!v.cumple) {
+      return (
+        `Hoy no tengo publicado nada que cumpla lo que pediste («${peticion}»), ` +
+        `así que este disco no lo es. Es lo más cerca que llegué con lo que hay.`
+      );
+    }
+  } catch (err) {
+    // Si no podemos comprobarlo, no inventamos un aviso: callar de más es peor
+    // que callar de menos, pero acusar en falso también confunde.
+    console.warn("[recommend] no pude comprobar si el disco cumple el pedido:", err);
+  }
+  return null;
 }
 
 async function recomendarYGuardar(
@@ -1062,6 +1186,17 @@ async function recomendarYGuardar(
       throw new Error(`El LLM eligió un albumId fuera del catálogo: ${eleccion.albumId}`);
     }
 
+    // ¿Cumple lo que pidió? Se comprueba ANTES de retocar la razón, porque el
+    // aviso se pega al final y ya nadie lo reescribe.
+    const aviso = opts.peticion
+      ? await avisoSiNoCumplePedido({
+          peticion: opts.peticion,
+          title: dossier.album.title,
+          artist: dossier.album.artist.name,
+          lang: opts.lang && opts.lang !== "Cualquiera" ? opts.lang : null,
+        })
+      : null;
+
     let reason = eleccion.reason?.trim().slice(0, 600) || null;
     if (returnRitual && !reason) {
       reason = fallbackReturnReason(
@@ -1085,6 +1220,13 @@ async function recomendarYGuardar(
           voz,
         })
       )?.slice(0, 600) ?? null;
+    }
+
+    // El aviso va PRIMERO y entero: es lo que el oyente necesita leer antes que
+    // ninguna otra cosa. Lo que se recorta, si algo sobra, es la razón.
+    if (aviso) {
+      const resto = reason ? ` ${reason.slice(0, 600 - aviso.length)}`.trimEnd() : "";
+      reason = `${aviso}${resto}`;
     }
 
     await saveTodaysPick(ctx, date, {

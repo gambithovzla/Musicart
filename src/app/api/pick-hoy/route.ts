@@ -37,6 +37,13 @@ export const maxDuration = 300;
 // aplicando por encima de esto.
 const MAX_DISCOS_POR_DIA = 4;
 
+// Tiempo que le damos a la fabricación, con margen contra el techo de la
+// función (300 s). Que nos corten a mitad NO es un final aceptable: el disco de
+// hoy se borró antes de empezar y no queda nada guardado, así que la home
+// reintenta por su cuenta —sin el pedido del oyente— y le sirve otra cosa. Con
+// presupuesto, el motor se rinde a tiempo y siempre deja un disco puesto.
+const PRESUPUESTO_MS = 240_000;
+
 export async function POST(req: Request) {
   try {
     const [session, jar] = await Promise.all([auth(), cookies()]);
@@ -95,6 +102,10 @@ export async function POST(req: Request) {
       // El admin/dueño no respeta el tope diario: para él la app siempre fabrica
       // fresco, nunca le repite un disco del catálogo por haberse agotado el tope.
       omitirPresupuesto: isAdminEmail(session?.user?.email),
+      // Ojo, son dos "presupuestos" distintos: el de arriba es de DINERO (cuántos
+      // discos nuevos se fabrican hoy) y este es de TIEMPO (cuánto puede tardar
+      // esta llamada antes de que la plataforma la corte).
+      presupuestoMs: PRESUPUESTO_MS,
     });
 
     // Recordamos lo mostrado hoy (lo previo + el nuevo) para próximos "Rehacer".

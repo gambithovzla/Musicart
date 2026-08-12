@@ -522,6 +522,25 @@ integra más profundamente con la escucha real.
   aquí no se descarta nada, solo se dice la verdad; **(d)** ese aviso vuelve al
   cuadro de admin y se lee al instante, sin bajar a buscar la razón.
 
+- [x] **7.12 Un disco que las fuentes no conocen ya no acaba con la búsqueda**
+  (ago 2026, tercer reporte del mismo pedido: *rock venezolano de calidad* →
+  Juan Luis Guerra, dominicano) — con el pedido ya llegando (7.10) y las
+  barreras despiertas (7.11), quedaba el motivo de fondo: **la fabricación se
+  rendía al primer disco que las fuentes no tuvieran fichado**.
+  `gatherAlbumFacts` lanza cuando el álbum no está ni en MusicBrainz ni en
+  iTunes, o cuando resulta ser un sencillo; su propio comentario dice que
+  entonces "el motor cae a otra opción"… pero no caía: la excepción se saltaba
+  el bucle de intentos entero y aterrizaba en el `catch` de más afuera, o sea
+  derecha al catálogo. Y eso le pasa **justo a lo que más falta hace buscar**:
+  pides una escena poco documentada, el proponedor acierta con un disco de culto
+  real, la fuente no lo tiene… y en vez de probar con el siguiente, se servía lo
+  que hubiera en casa. Ahora es un rechazo más: se anota y se sigue.
+  De propina, **la bitácora**: qué se intentó y por qué falló cada intento
+  («no lo pude investigar», «es de Estados Unidos», «no pasó verificación»)
+  vuelve al cuadro de admin. Vivía solo en los logs de Vercel, que para un dueño
+  con el teléfono en la mano es no existir — y por eso hicieron falta tres
+  rondas de conjeturas para llegar hasta aquí.
+
 ### Criterios de aceptación
 
 - [x] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones

@@ -63,6 +63,9 @@ export type PickPersonal = {
    *  sirve para avisar en el acto a quien acaba de pedirlo, sin que tenga que
    *  bajar a leer la razón para enterarse de que no era lo que pidió. */
   avisoPedido?: string | null;
+  /** Qué se intentó antes de rendirse y por qué falló cada intento, en cristiano.
+   *  Solo se le enseña al curador (es diagnóstico, no parte del ritual). */
+  intentos?: string[];
 };
 
 type PickCtx = { deviceId: string; userId: string | null };
@@ -654,8 +657,16 @@ export async function generarPickDelDia(
     // reintento no basta: el LLM gravita a los mismos discos canónicos y, al
     // rendirse pronto, caíamos al catálogo… que para él es justo una repetición.
     const rechazados: string[] = [];
+    // La misma información, escrita para un humano. Todo esto vivía solo en los
+    // logs de Vercel, o sea en ningún sitio para el dueño, que anda en el
+    // teléfono: cuando un pedido no se cumplía no había forma de saber si fue
+    // porque el proponedor no dio con nada, porque las fuentes no conocían el
+    // disco o porque el artista no era del país. Tres rondas de conjeturas.
+    // Ahora el cuadro de admin lo enseña al terminar.
+    const bitacora: string[] = [];
     const rechazar = (p: Obra, motivo: string) => {
       rechazados.push(`"${p.title}" de ${p.artist} (rechazado: ${motivo} — PROHIBIDO repetir)`);
+      bitacora.push(`«${p.title}» de ${p.artist} — ${motivo}`);
     };
 
     // Una propuesta es conflictiva si es una obra ya vista (memoria completa) o,
@@ -768,10 +779,33 @@ export async function generarPickDelDia(
       if (!propuesta) continue;
 
       // El pipeline investiga, narra, verifica y publica (o reutiliza si ya existe).
+      //
+      // Y puede LANZAR, que es lo que aquí se pasaba por alto: `gatherAlbumFacts`
+      // lanza cuando el disco no aparece ni en MusicBrainz ni en iTunes, o cuando
+      // resulta ser un sencillo o un EP. Su propio comentario dice que entonces
+      // "el motor cae a otra opción"… pero no caía: la excepción se saltaba este
+      // bucle entero y aterrizaba en el `catch` de más abajo, o sea derecha al
+      // catálogo. Y eso le pasa JUSTO a lo que el oyente más necesita que
+      // busquemos: pide una escena poco documentada (rock venezolano), el
+      // proponedor acierta con un disco de culto real, la fuente no lo tiene
+      // fichado… y en vez de probar con el siguiente, nos rendíamos y le
+      // servíamos lo que hubiera en casa. Ahora es un rechazo más: se anota y se
+      // sigue, que es lo que el comentario prometía.
       const t0 = Date.now();
-      const result = await runDossierPipeline(propuesta.title, propuesta.artist, {
-        publish: true,
-      });
+      let result: Awaited<ReturnType<typeof runDossierPipeline>>;
+      try {
+        result = await runDossierPipeline(propuesta.title, propuesta.artist, {
+          publish: true,
+        });
+      } catch (err) {
+        costePipelineMs = Math.max(costePipelineMs, Date.now() - t0);
+        const motivo = `no lo pude investigar (${(err as Error).message})`;
+        console.warn(
+          `[recommend] intento ${intento + 1}/${MAX_PIPELINE}: "${propuesta.title}" de ${propuesta.artist} — ${motivo}; reintento.`,
+        );
+        rechazar({ title: propuesta.title, artist: propuesta.artist }, motivo);
+        continue;
+      }
       // La medida real manda sobre la estimación: si esta pasada tardó dos
       // minutos, la siguiente no cabe en treinta segundos.
       costePipelineMs = Math.max(costePipelineMs, Date.now() - t0);
@@ -894,7 +928,12 @@ export async function generarPickDelDia(
     console.warn(
       "[recommend] no logré fabricar un disco nuevo tras varios intentos; voy al catálogo.",
     );
-    return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
+    const delCatalogo = await caerAlCatalogo(
+      ctx, date, tz, mood ?? null, langPick, [...excluir], peticion,
+    );
+    // La bitácora viaja con el disco: si acabamos sirviendo algo del catálogo,
+    // lo que hay que poder leer es POR QUÉ no salió lo que se pidió.
+    return delCatalogo ? { ...delCatalogo, intentos: bitacora } : null;
   } catch (err) {
     console.error("[recommend] disco fresco falló, voy al catálogo:", err);
     try {

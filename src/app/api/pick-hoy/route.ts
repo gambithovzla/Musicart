@@ -119,6 +119,9 @@ export async function POST(req: Request) {
     const res = NextResponse.json({
       ok: pick !== null,
       avisoPedido: pick?.avisoPedido ?? null,
+      // La bitácora es diagnóstico del curador, no parte del ritual: solo va
+      // para el admin, y solo cuando hubo algo que contar.
+      intentos: isAdminEmail(session?.user?.email) ? pick?.intentos ?? null : null,
     });
     res.cookies.set(SEEN_TODAY_COOKIE, seen, {
       path: "/",

@@ -18,6 +18,7 @@ export function RehacerDiscoAdmin({ dateKey }: { dateKey: string }) {
   const [estado, setEstado] = useState<"idle" | "eligiendo" | "trabajando" | "error">("idle");
   const [instruccion, setInstruccion] = useState("");
   const [aviso, setAviso] = useState<string | null>(null);
+  const [intentos, setIntentos] = useState<string[] | null>(null);
 
   async function rehacer(lang: string) {
     setEstado("trabajando");
@@ -44,11 +45,16 @@ export function RehacerDiscoAdmin({ dateKey }: { dateKey: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rehacer: true, instruccion: instruccion.trim() || undefined }),
       });
-      const data = (await res.json()) as { ok?: boolean; avisoPedido?: string | null };
+      const data = (await res.json()) as {
+        ok?: boolean;
+        avisoPedido?: string | null;
+        intentos?: string[] | null;
+      };
       if (!data.ok) {
         setEstado("error");
         return;
       }
+      setIntentos(data.intentos ?? null);
       // Si no se pudo cumplir el pedido, se dice aquí mismo. La razón bajo el
       // disco también lo trae, pero para eso hay que bajar a leerla: quien
       // acaba de pedir "rock venezolano" merece enterarse antes de mirar la
@@ -113,6 +119,20 @@ export function RehacerDiscoAdmin({ dateKey }: { dateKey: string }) {
         <p className="mx-auto mt-2 max-w-[22rem] text-xs leading-relaxed text-album-light/80">
           {aviso}
         </p>
+      )}
+      {intentos && intentos.length > 0 && estado === "idle" && (
+        <details className="mx-auto mt-2 max-w-[22rem] text-left">
+          <summary className="cursor-pointer text-xs text-dim">
+            Qué intenté antes de rendirme ({intentos.length})
+          </summary>
+          <ul className="mt-1 space-y-1">
+            {intentos.map((t, i) => (
+              <li key={i} className="text-[11px] leading-relaxed text-dim">
+                {t}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );

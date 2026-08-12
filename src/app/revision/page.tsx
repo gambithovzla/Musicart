@@ -18,7 +18,7 @@ import { BuscarYCrear } from "./BuscarYCrear";
 import { CuradorAlbumes, type AlbumCurable } from "./CuradorAlbumes";
 import { ClubDeLosCien } from "./ClubDeLosCien";
 import { LevantarSalon } from "@/components/LevantarSalon";
-import { getCanonCurado } from "@/lib/canon/consulta";
+import { getCanonCurado, estadoDelSalon } from "@/lib/canon/consulta";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -47,8 +47,9 @@ export default async function RevisionPage() {
     );
   }
 
-  const [canonCurado, metrics, drafts, cola, publicados] = await Promise.all([
+  const [canonCurado, estadoSalon, metrics, drafts, cola, publicados] = await Promise.all([
     getCanonCurado(),
+    estadoDelSalon(),
     getProductMetrics(),
     prisma.dossier.findMany({
       where: { status: "draft", locale: "es" },
@@ -232,7 +233,10 @@ export default async function RevisionPage() {
           fija a mano los que para ti son un 100 y la ingesta dejará de tocarlos.
         </p>
         <div className="mt-5">
-          <LevantarSalon total={canonCurado.total} />
+          <LevantarSalon
+            total={canonCurado.total}
+            sinPuntaje={estadoSalon.sinPuntaje}
+          />
         </div>
         <ClubDeLosCien
           fijados={canonCurado.fijados}

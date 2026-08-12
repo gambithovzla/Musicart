@@ -723,6 +723,27 @@ Musicart YA tenía un número 1-100: el impacto cultural (`Album.impact`, 6.5).
   HTML en la pantalla. De propina, ninguna corrida corta borra ya el país, el
   año, el mbid ni los premios que trajo una larga.
 
+- [x] **9.12 Ningún disco se queda en «0 de 100»** (ago 2026, tras el reporte del
+  dueño: una captura del muro de los inmortales con Thriller, *21* y *Sgt.
+  Pepper's* marcados **0/100**) — el índice estaba lleno y con carátulas, pero
+  **sin calibrar**: el 0 es el valor de fábrica de la columna, o sea "a este
+  disco nunca le llegó su número". La 9.10 daba por hecho que "el índice
+  **siempre** termina recalibrado", y no era verdad: la calibración vivía SOLO
+  en la última línea de `construirIndice`, detrás de todo lo que puede fallar
+  antes — un 502 de Wikidata, un disco duplicado que choca contra el `mbid`
+  único, o el reloj de la función de Vercel. Cuando algo de eso pasaba, el
+  puntaje no se escribía, y ninguna corrida posterior lo arreglaba porque todas
+  volvían a tropezar antes de llegar al final. Cuatro arreglos: **(a)** calibrar
+  es ahora el **paso 0** de `avanzarSalon` (un toque al botón y el Salón tiene
+  números), no la última línea de la operación más frágil; **(b)** la
+  calibración escribe **agrupando por puntaje** — 46 escrituras en vez de mil, de
+  minutos a un suspiro, que era lo que la hacía morir en el minuto cinco de
+  Vercel; **(c)** un disco que no entra ya no aborta la ingesta entera, se anota
+  y se sigue; **(d)** el Salón **no enseña un puntaje que no tiene**: los discos
+  sin calibrar no salen ni en el muro, ni en los pisos, ni en el listado, y la
+  pestaña distingue "el canon no está construido" de "el canon está sin puntuar"
+  — con el botón, que en ese caso dice *Poner los puntajes*.
+
 ### Pendiente del dueño (una sola vez)
 
 - [ ] Levantar el índice: entra a `/revision` y dale a **"Levantar el Salón"**

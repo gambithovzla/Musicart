@@ -32,9 +32,17 @@ type Avance = {
 
 export function LevantarSalon({
   total,
+  sinPuntaje = 0,
   enmarcado = true,
 }: {
   total: number;
+  /**
+   * Discos que entraron al índice pero se quedaron sin puntaje. Cuando los hay,
+   * el botón cambia de oficio: lo que falta no es traer más discos, es ponerles
+   * su número — y decirlo con esas palabras es la diferencia entre un curador
+   * que sabe qué está arreglando y uno que le da a un botón a ver qué pasa.
+   */
+  sinPuntaje?: number;
   /** En el Salón vacío la sección ya va enmarcada por sus reglas: ahí no. */
   enmarcado?: boolean;
 }) {
@@ -71,12 +79,18 @@ export function LevantarSalon({
       {enmarcado && (
         <>
           <p className="rotulo">
-            {total === 0 ? "Levantar el Salón" : "Seguir llenando el Salón"}
+            {total === 0
+              ? "Levantar el Salón"
+              : sinPuntaje > 0
+                ? "Ponerle puntaje al Salón"
+                : "Seguir llenando el Salón"}
           </p>
           <p className="mt-2 text-[12px] leading-relaxed text-tinta-suave">
             {total === 0
               ? "El índice del canon está vacío: por eso la pestaña del Salón se ve sin discos. Dale aquí y empieza a llenarse (tarda unos minutos; puede hacer falta más de un toque)."
-              : `El canon tiene ${total} discos. Cada toque trae otro tramo y busca carátulas que falten.`}
+              : sinPuntaje > 0
+                ? `${sinPuntaje} de los ${total} discos del canon están sin puntaje (por eso salen como «0 de 100»). Dale aquí y se les pone en cuestión de segundos.`
+                : `El canon tiene ${total} discos. Cada toque trae otro tramo y busca carátulas que falten.`}
           </p>
         </>
       )}
@@ -92,7 +106,9 @@ export function LevantarSalon({
           ? "Construyendo…"
           : total === 0
             ? "Levantarlo ahora"
-            : "Traer más discos"}
+            : sinPuntaje > 0
+              ? "Poner los puntajes"
+              : "Traer más discos"}
       </button>
 
       {cargando && (

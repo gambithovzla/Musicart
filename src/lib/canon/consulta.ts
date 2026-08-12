@@ -86,6 +86,12 @@ export async function getCanonCurado(limite = 40): Promise<{
  * El muro de los inmortales: el club de los 100. Si el índice todavía es
  * pequeño y nadie llegó a 100, baja el listón en vez de enseñar un muro vacío
  * (mejor "los más altos que tenemos" que una promesa incumplida).
+ *
+ * Lo que NO se enseña nunca es un disco sin calibrar. El 0 no es un puntaje
+ * bajo, es la ausencia de puntaje (ver `contarSinPuntaje`), y colarlo aquí fue
+ * la cara visible del peor fallo que ha tenido el Salón: un muro de inmortales
+ * con Thriller marcado "0 de 100". Antes que enseñar un número falso, el muro
+ * se queda vacío y la pestaña dice la verdad — que todavía se está levantando.
  */
 export async function getMuro(limite = 24): Promise<SalonAlbum[]> {
   const cien = await prisma.canonAlbum.findMany({
@@ -96,10 +102,33 @@ export async function getMuro(limite = 24): Promise<SalonAlbum[]> {
   if (cien.length > 0) return cien.map(aSalonAlbum);
 
   const mejores = await prisma.canonAlbum.findMany({
+    where: { score: { gt: 0 } },
     orderBy: [{ score: "desc" }, { raw: "desc" }],
     take: limite,
   });
   return mejores.map(aSalonAlbum);
+}
+
+export type EstadoSalon = {
+  /** Discos en el índice. */
+  total: number;
+  /** Los que ya tienen puntaje: los únicos que el Salón puede enseñar. */
+  conPuntaje: number;
+  /** Los que entraron al índice pero nunca llegaron a calibrarse. */
+  sinPuntaje: number;
+};
+
+/**
+ * En qué punto está el Salón. Sirve para no confundir dos situaciones que se
+ * ven igual desde fuera (una pestaña sin discos) y se arreglan distinto: no
+ * haber traído el canon todavía, o haberlo traído y no haberle puesto números.
+ */
+export async function estadoDelSalon(): Promise<EstadoSalon> {
+  const [total, sinPuntaje] = await Promise.all([
+    prisma.canonAlbum.count(),
+    prisma.canonAlbum.count({ where: { score: 0 } }),
+  ]);
+  return { total, conPuntaje: total - sinPuntaje, sinPuntaje };
 }
 
 export type PisoConteo = Piso & { total: number };
@@ -108,6 +137,9 @@ export type PisoConteo = Piso & { total: number };
 export async function contarPorPiso(): Promise<PisoConteo[]> {
   const filas = await prisma.canonAlbum.groupBy({
     by: ["score"],
+    // Sin calibrar no es "Notable": es que todavía no tiene número. Contarlos
+    // en el piso de abajo inflaba el Salón con discos que no se pueden abrir.
+    where: { score: { gt: 0 } },
     _count: { _all: true },
   });
 
@@ -143,9 +175,13 @@ export async function listarCanon(f: FiltrosCanon = {}): Promise<ListadoCanon> {
   const pagina = Math.max(f.pagina ?? 1, 1);
 
   const where = {
-    ...(f.min !== undefined || f.max !== undefined
-      ? { score: { ...(f.min !== undefined ? { gte: f.min } : {}), ...(f.max !== undefined ? { lte: f.max } : {}) } }
-      : {}),
+    // El `gt: 0` va siempre: un disco sin calibrar no está listo para el
+    // escaparate, y enseñarlo sería enseñar un "0 de 100" que no significa nada.
+    score: {
+      gt: 0,
+      ...(f.min !== undefined ? { gte: f.min } : {}),
+      ...(f.max !== undefined ? { lte: f.max } : {}),
+    },
     ...(f.decada ? { decade: f.decada } : {}),
     ...(f.pais ? { country: f.pais.toUpperCase() } : {}),
     // `genresJson` es un String con un array dentro: buscar la etiqueta entre
@@ -422,6 +458,7 @@ export async function progresoDelOyente(
   tramo = 100,
 ): Promise<ProgresoCanon> {
   const cima = await prisma.canonAlbum.findMany({
+    where: { score: { gt: 0 } },
     orderBy: [{ score: "desc" }, { raw: "desc" }],
     take: tramo,
   });

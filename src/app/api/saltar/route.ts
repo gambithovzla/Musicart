@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     const date = todayKey(tz);
 
     // Tope de gasto: si no queda, lo dejamos en la cola para más tarde.
-    if (!(await hayPresupuestoHoy(date))) {
+    if (!(await hayPresupuestoHoy(date, "extra"))) {
       await enqueueAlbum({
         title,
         artist,

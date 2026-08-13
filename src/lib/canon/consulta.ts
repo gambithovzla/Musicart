@@ -280,17 +280,27 @@ export async function discoDePuntaje(
   score: number,
   identity: ListenerIdentity,
   semilla = new Date().toISOString().slice(0, 10),
+  /** Ids del canon que el dial ya entregó antes (los recuerda quien llama).
+   *  Sin esto el dial es un botón que da SIEMPRE el mismo disco: la afinidad
+   *  manda, el ruido es determinista y la semilla solo cambia de día en día, así
+   *  que pulsarlo diez veces devolvía diez veces lo mismo. */
+  yaDados: string[] = [],
 ): Promise<DiscoDePuntaje | null> {
   const objetivo = Math.min(100, Math.max(55, Math.round(score)));
+  const dados = new Set(yaDados);
 
   // Buscamos en el puntaje exacto y, si ahí no queda nada que no haya oído, se
   // abre a ±2 antes que dejarlo con las manos vacías.
   for (const margen of [0, 1, 2]) {
-    const candidatos = await prisma.canonAlbum.findMany({
+    const todos = await prisma.canonAlbum.findMany({
       where: { score: { gte: objetivo - margen, lte: objetivo + margen } },
       take: 400,
     });
-    if (candidatos.length === 0) continue;
+    if (todos.length === 0) continue;
+
+    // Lo ya entregado sale de la baraja mientras quede otra cosa que dar.
+    const sinRepetir = todos.filter((c) => !dados.has(c.id));
+    const candidatos = sinRepetir.length > 0 ? sinRepetir : todos;
 
     const yaEscuchados = await clavesYaEscuchadas(identity);
     const frescos = candidatos.filter(

@@ -35,6 +35,7 @@ import {
   artistaEsDeAlgunPais,
   nombresDePaises,
 } from "./origin-guard";
+import { palabrasDelPedido, afinidadConPedido } from "./pedido-match";
 
 const MAX_REVIEWS = 10;
 const MAX_RECENT_PICKS = 14;
@@ -310,6 +311,58 @@ export async function borrarPickDeHoy(
 }
 
 /**
+ * POR QUÉ el oyente acabó con un disco del catálogo en vez del que pidió.
+ *
+ * No es telemetría: es lo que hay que DECIRLE. Todos estos caminos terminaban
+ * igual —un disco cualquiera, servido en tres segundos, sin una palabra— y
+ * desde fuera son indistinguibles de "la app dejó de leer lo que le pido".
+ * Con la causa a mano, la razón bajo el disco puede decir la verdad sin
+ * preguntarle a ningún LLM (que muchas veces es justo lo que está caído).
+ */
+export type CausaFallback =
+  /** No hay clave de IA, o el curador no contestó en ningún intento. */
+  | "sin-ia"
+  /** Se acabó el tope de discos nuevos del día. */
+  | "tope"
+  /** Se agotó el reloj de la función fabricando. */
+  | "sin-tiempo"
+  /** La IA respondió, pero no dimos con un disco nuevo que sirviera. */
+  | "sin-hallazgo"
+  | null;
+
+/**
+ * La frase honesta que abre la razón del día cuando NO se pudo fabricar lo que
+ * el oyente pidió. La escribe el código sobre un hecho duro (por qué falló), no
+ * un modelo: es la misma ley anti-alucinación aplicada a lo que la app promete.
+ */
+function avisoPorCausa(causa: CausaFallback, peticion: string | null): string | null {
+  if (!causa || !peticion) return null;
+  const pedido = `«${peticion.trim().slice(0, 120)}»`;
+  switch (causa) {
+    case "sin-ia":
+      return (
+        `Hoy no pude fabricarte el disco que pediste (${pedido}): el curador no ` +
+        `está respondiendo. Te dejo uno de la casa mientras se arregla.`
+      );
+    case "tope":
+      return (
+        `Hoy se acabó el cupo de discos nuevos, así que no pude salir a buscarte ` +
+        `${pedido}. Te dejo uno del catálogo; mañana vuelvo a tener cupo.`
+      );
+    case "sin-tiempo":
+      return (
+        `Me quedé sin tiempo buscándote ${pedido}. Te dejo uno del catálogo — ` +
+        `vuelve a pedírmelo y lo intento otra vez.`
+      );
+    case "sin-hallazgo":
+      return (
+        `No conseguí un disco nuevo que cumpliera ${pedido}. Esto es lo más cerca ` +
+        `que llegué con lo que ya tengo publicado.`
+      );
+  }
+}
+
+/**
  * Caída segura del disco fresco: primero intenta elegir del catálogo publicado
  * (por gusto); si ni eso da, guarda la rotación global como pick. Así, mientras
  * haya un disco en el catálogo, SIEMPRE queda un pick guardado — la home no se
@@ -323,17 +376,33 @@ async function caerAlCatalogo(
   lang: string | null,
   excluirAlbumIds?: string[],
   peticion?: string | null,
+  causa: CausaFallback = null,
 ): Promise<PickPersonal | null> {
   const delCatalogo = await recomendarYGuardar(
     ctx,
-    { mood, lang, excluirAlbumIds, peticion, forzarDistinto: (excluirAlbumIds?.length ?? 0) > 0 },
+    {
+      mood,
+      lang,
+      excluirAlbumIds,
+      peticion,
+      causa,
+      forzarDistinto: (excluirAlbumIds?.length ?? 0) > 0,
+    },
     tz,
   );
   if (delCatalogo) return delCatalogo;
 
   // Última red: rotación global PERO consciente de la memoria del oyente —
   // nunca le re-sirve un disco que ya vio (y lo deja guardado para el futuro).
-  return rotacionParaOyente(ctx, date, mood, excluirAlbumIds);
+  // Hasta aquí llega el aviso: que el disco venga de la rotación no es excusa
+  // para callar que no es lo que se pidió.
+  return rotacionParaOyente(
+    ctx,
+    date,
+    mood,
+    excluirAlbumIds,
+    avisoPorCausa(causa, peticion ?? null),
+  );
 }
 
 /**
@@ -352,6 +421,8 @@ async function rotacionParaOyente(
   date: string,
   mood: string | null,
   excluirAlbumIds?: string[],
+  /** Aviso honesto si el oyente había pedido algo y no se le pudo cumplir. */
+  aviso?: string | null,
 ): Promise<PickPersonal | null> {
   const identity: ListenerIdentity = { deviceId: ctx.deviceId, userId: ctx.userId };
   const [dossiers, memoria] = await Promise.all([
@@ -400,19 +471,21 @@ async function rotacionParaOyente(
   const dias = Math.floor(Date.UTC(y, m - 1, dd) / 86_400_000);
   const elegido = pool[dias % pool.length];
 
+  const razon = aviso?.trim() || null;
   await saveTodaysPick(ctx, date, {
     albumId: elegido.album.id,
-    reason: null,
+    reason: razon,
     mood,
     regenerated: (excluirAlbumIds?.length ?? 0) > 0,
   });
   return {
     dossier: elegido,
-    reason: null,
+    reason: razon,
     mood,
     regenerated: (excluirAlbumIds?.length ?? 0) > 0,
     returnPick: false,
     absenceDays: null,
+    avisoPedido: razon,
   };
 }
 
@@ -426,6 +499,13 @@ export async function getRotacionPickGuardada(
   deviceId: string,
   userId?: string | null,
   tz?: string | null,
+  /** Lo que el oyente pidió hoy. Este camino se toma cuando NO se puede
+   *  fabricar (sin clave de IA o sin señales de gusto) y era el más mudo de
+   *  todos: el oyente escribía su antojo en el gate, la home ni preguntaba al
+   *  motor y le plantaba un disco de la rotación como si tal cosa. Aquí el
+   *  pedido no se cumple —no hay con qué—, pero al menos se tiene en cuenta al
+   *  elegir del catálogo y se dice que no se pudo. */
+  peticion?: string | null,
 ): Promise<PickPersonal | null> {
   const ctx: PickCtx = { deviceId, userId: userId ?? null };
   if (!ctx.deviceId && !ctx.userId) return null;
@@ -446,6 +526,23 @@ export async function getRotacionPickGuardada(
         };
       }
     }
+    // Con pedido de por medio pasamos por el catálogo (que ahora sí lo lee) en
+    // vez de ir directos a la rotación ciega. Esto corre en el render de la
+    // home, así que va SIN IA a propósito: nada de esperas de minutos aquí.
+    const pedido = peticion?.trim() || null;
+    if (pedido) {
+      const causa: CausaFallback = hayClaveIA() ? "sin-hallazgo" : "sin-ia";
+      const delCatalogo = await recomendarYGuardar(
+        ctx,
+        { mood: null, peticion: pedido, causa, sinIa: true },
+        tz,
+      );
+      if (delCatalogo) return delCatalogo;
+      return await rotacionParaOyente(
+        ctx, date, null, [], avisoPorCausa(causa, pedido),
+      );
+    }
+
     return await rotacionParaOyente(ctx, date, null, []);
   } catch (err) {
     console.error("[recommend] rotación para la home falló:", err);
@@ -483,6 +580,15 @@ export async function generarPickDelDia(
   // duros (MusicBrainz), no solo con el prompt. Ver `src/lib/origin-guard.ts`.
   const paisesPedidos = detectarPaisesPedido(peticion);
   const paisesTexto = nombresDePaises(paisesPedidos);
+
+  // Cómo fue la faena, para poder CONTARLA después. Distingue "no encontré
+  // nada" (el curador habló y no dimos con el disco) de "el curador no
+  // contesta" (clave vencida, sin saldo, un 429): para el oyente es la
+  // diferencia entre un mal día y una app rota, y hasta ahora las dos se veían
+  // exactamente igual — un disco cualquiera, sin explicación.
+  let fallosLlm = 0;
+  let propuestasVivas = 0;
+  let sinTiempo = false;
 
   // El reloj de la fabricación. Fabricar un disco fresco son varias llamadas al
   // LLM y una pasada del pipeline (minutos), y todo esto vive dentro de una
@@ -555,7 +661,19 @@ export async function generarPickDelDia(
     // Sin señales de gusto no fabricamos (sería un disco al azar): que decida la
     // rotación global. (Normalmente no llegamos aquí: la home filtra antes.)
     if (!profile && reviews.length === 0) {
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
+      return await caerAlCatalogo(
+        ctx, date, tz, mood ?? null, langPick, [...excluir], peticion, "sin-hallazgo",
+      );
+    }
+
+    // Sin clave de IA no hay disco fresco posible. Antes lo descubríamos a la
+    // mala —32 llamadas que fallan al instante y una caída al catálogo en tres
+    // segundos, sin explicación—; ahora se dice de una vez y con su nombre.
+    if (!hayClaveIA()) {
+      console.warn("[recommend] no hay clave de IA configurada; voy al catálogo.");
+      return await caerAlCatalogo(
+        ctx, date, tz, mood ?? null, langPick, [...excluir], peticion, "sin-ia",
+      );
     }
 
     const parsedProfile = profile
@@ -576,9 +694,11 @@ export async function generarPickDelDia(
     // sin costo de generación nueva). Así abrir la app a testers no se dispara.
     // El admin/dueño está EXENTO: a él nunca le caemos al catálogo por tope (sería
     // repetirle un disco, justo lo que evitamos).
-    if (!opts?.omitirPresupuesto && !(await hayPresupuestoHoy(date))) {
+    if (!opts?.omitirPresupuesto && !(await hayPresupuestoHoy(date, "ritual"))) {
       console.warn("[recommend] tope de generación diario alcanzado; voy al catálogo.");
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
+      return await caerAlCatalogo(
+        ctx, date, tz, mood ?? null, langPick, [...excluir], peticion, "tope",
+      );
     }
 
     // Obras a evitar, comparables por contenido (artista + núcleo del título),
@@ -687,6 +807,7 @@ export async function generarPickDelDia(
           console.warn(
             "[recommend] se acabó el tiempo buscando propuesta; voy con lo que haya.",
           );
+          sinTiempo = true;
           return null;
         }
         // Una llamada que falla (timeout del modelo, un 429, un JSON a medias)
@@ -699,10 +820,16 @@ export async function generarPickDelDia(
         let p: DiscoPropuesto;
         try {
           p = await proponerDiscoDescubrimiento(argsPropuesta(rechazados));
+          propuestasVivas++;
         } catch (err) {
+          fallosLlm++;
+          const motivo = (err as Error).message;
           console.warn(
-            `[recommend] falló la propuesta ${i + 1}/${MAX_PROPUESTAS}: ${(err as Error).message}; reintento.`,
+            `[recommend] falló la propuesta ${i + 1}/${MAX_PROPUESTAS}: ${motivo}; reintento.`,
           );
+          // También a la bitácora: cuando el curador está caído, el dueño tiene
+          // que poder leerlo desde el teléfono, no solo en los logs de Vercel.
+          bitacora.push(`El curador no contestó — ${motivo.slice(0, 160)}`);
           continue;
         }
         if (esConflictiva(p)) {
@@ -769,6 +896,7 @@ export async function generarPickDelDia(
         console.warn(
           `[recommend] sin tiempo para otra pasada del pipeline (intento ${intento + 1}); voy al catálogo.`,
         );
+        sinTiempo = true;
         break;
       }
       const propuesta = await conseguirPropuesta();
@@ -925,11 +1053,19 @@ export async function generarPickDelDia(
     }
 
     // Agotamos los intentos de fabricar algo nuevo: última red, el catálogo.
+    // Con la causa en la mano, porque no es lo mismo rendirse buscando que no
+    // haber podido ni preguntar.
+    const causa: CausaFallback =
+      propuestasVivas === 0 && fallosLlm > 0
+        ? "sin-ia"
+        : sinTiempo
+        ? "sin-tiempo"
+        : "sin-hallazgo";
     console.warn(
-      "[recommend] no logré fabricar un disco nuevo tras varios intentos; voy al catálogo.",
+      `[recommend] no logré fabricar un disco nuevo tras varios intentos (causa: ${causa}); voy al catálogo.`,
     );
     const delCatalogo = await caerAlCatalogo(
-      ctx, date, tz, mood ?? null, langPick, [...excluir], peticion,
+      ctx, date, tz, mood ?? null, langPick, [...excluir], peticion, causa,
     );
     // La bitácora viaja con el disco: si acabamos sirviendo algo del catálogo,
     // lo que hay que poder leer es POR QUÉ no salió lo que se pidió.
@@ -937,7 +1073,16 @@ export async function generarPickDelDia(
   } catch (err) {
     console.error("[recommend] disco fresco falló, voy al catálogo:", err);
     try {
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir], peticion);
+      return await caerAlCatalogo(
+        ctx,
+        date,
+        tz,
+        mood ?? null,
+        langPick,
+        [...excluir],
+        peticion,
+        propuestasVivas === 0 && fallosLlm > 0 ? "sin-ia" : "sin-hallazgo",
+      );
     } catch {
       return null;
     }
@@ -1076,6 +1221,13 @@ async function recomendarYGuardar(
     /** Lo que el oyente pidió hoy en lenguaje natural. Aunque el catálogo sea
      *  cerrado, elegimos el disco que más se acerque al pedido. */
     peticion?: string | null;
+    /** Por qué venimos al catálogo en vez de fabricar. Manda sobre el aviso: si
+     *  ya sabemos que no se pudo cumplir el pedido, se dice eso y no se gasta
+     *  otra llamada al verificador (que además suele ser lo que está caído). */
+    causa?: CausaFallback;
+    /** Elegir sin llamar a ningún modelo. Lo usa el render de la home, donde una
+     *  espera de quince segundos es una pantalla en blanco. */
+    sinIa?: boolean;
   },
   tz?: string | null,
 ): Promise<PickPersonal | null> {
@@ -1240,6 +1392,7 @@ async function recomendarYGuardar(
     let razonDeIa = true;
     let eleccion: { albumId: string; reason: string };
     try {
+      if (opts.sinIa) throw new Error("elección sin IA (a propósito)");
       eleccion = await elegirConLlm({
         profile: parsedProfile,
         reviews,
@@ -1283,6 +1436,10 @@ async function recomendarYGuardar(
           reviews,
           catalogo: catalogoFiltrado,
           picksRecientes,
+          // El pedido también manda aquí abajo. Antes este camino —el que se
+          // toma justo cuando la IA no responde— elegía solo por afinidad de
+          // géneros y el pedido del oyente se evaporaba sin dejar rastro.
+          peticion: opts.peticion ?? null,
         });
         if (!porGusto) throw err;
         eleccion = porGusto;
@@ -1296,14 +1453,22 @@ async function recomendarYGuardar(
 
     // ¿Cumple lo que pidió? Se comprueba ANTES de retocar la razón, porque el
     // aviso se pega al final y ya nadie lo reescribe.
-    const aviso = opts.peticion
-      ? await avisoSiNoCumplePedido({
-          peticion: opts.peticion,
-          title: dossier.album.title,
-          artist: dossier.album.artist.name,
-          lang: opts.lang && opts.lang !== "Cualquiera" ? opts.lang : null,
-        })
-      : null;
+    //
+    // Si YA sabemos por qué no se pudo fabricar (no hay clave, se acabó el tope,
+    // se acabó el reloj), esa es la verdad que hay que contar y no cuesta nada.
+    // Si además la IA se cayó al elegir, el pedido no lo ha leído nadie: eso
+    // también se dice. Solo cuando no hay causa conocida vamos al verificador.
+    const causa: CausaFallback = opts.causa ?? (razonDeIa ? null : "sin-ia");
+    const aviso =
+      avisoPorCausa(causa, opts.peticion ?? null) ??
+      (opts.peticion
+        ? await avisoSiNoCumplePedido({
+            peticion: opts.peticion,
+            title: dossier.album.title,
+            artist: dossier.album.artist.name,
+            lang: opts.lang && opts.lang !== "Cualquiera" ? opts.lang : null,
+          })
+        : null);
 
     let reason = eleccion.reason?.trim().slice(0, 600) || null;
     if (returnRitual && !reason) {
@@ -1723,6 +1888,11 @@ function elegirPorGusto(input: {
   reviews: ReviewConAlbum[];
   catalogo: DossierConAlbum[];
   picksRecientes: PickConAlbum[];
+  /** Lo que el oyente pidió hoy. Sin IA no podemos entenderlo como lo entiende
+   *  el curador, pero sí cruzar sus palabras con el artista, el título, las
+   *  etiquetas y la década del disco (`src/lib/pedido-match.ts`). Es tosco y es
+   *  infinitamente mejor que ignorarlo. */
+  peticion?: string | null;
 }): { albumId: string; reason: string } | null {
   const generos = [
     ...(input.profile ? comoLista(input.profile.genres) : []),
@@ -1740,25 +1910,50 @@ function elegirPorGusto(input: {
     }
   }
 
-  if (generos.length === 0 && artistas.length === 0 && tagsGustados.size === 0) {
+  const palabras = palabrasDelPedido(input.peticion);
+
+  if (
+    palabras.length === 0 &&
+    generos.length === 0 &&
+    artistas.length === 0 &&
+    tagsGustados.size === 0
+  ) {
     return null; // sin señales de gusto → que decida la rotación global
   }
 
   const recientes = new Set(input.picksRecientes.map((p) => p.albumId));
-  const candidatos: { dossier: DossierConAlbum; score: number; motivo: string }[] = [];
+  const candidatos: {
+    dossier: DossierConAlbum;
+    score: number;
+    motivo: string;
+    tocaPedido: boolean;
+  }[] = [];
 
   for (const d of input.catalogo) {
     if (recientes.has(d.album.id)) continue;
-    const tags = (parseJson<Partial<FactsPayload>>(d.album.factsJson, {}).tags ?? []).map(
-      normalizar,
-    );
+    const tagsCrudas = parseJson<Partial<FactsPayload>>(d.album.factsJson, {}).tags ?? [];
+    const tags = tagsCrudas.map(normalizar);
     const artista = normalizar(d.album.artist.name);
     let score = 0;
     let motivo = "";
 
+    // El pedido de hoy pesa más que el gusto histórico: es lo que la persona
+    // acaba de escribir, no lo que dijo hace tres meses. Por eso va primero y
+    // con multiplicador — si algo del catálogo roza el pedido, gana.
+    const afinPedido = afinidadConPedido(palabras, {
+      title: d.album.title,
+      artist: d.album.artist.name,
+      year: d.album.year,
+      tags: tagsCrudas,
+    });
+    if (afinPedido > 0) {
+      score += afinPedido * 4;
+      motivo = "es lo más cerca que tengo de lo que pediste";
+    }
+
     if (artistas.some((a) => a && (artista.includes(a) || a.includes(artista)))) {
       score += 6;
-      motivo = `${d.album.artist.name} es de los tuyos`;
+      if (!motivo) motivo = `${d.album.artist.name} es de los tuyos`;
     }
     if (generos.some((g) => tags.some((t) => t.includes(g) || g.includes(t)))) {
       score += 3;
@@ -1768,14 +1963,20 @@ function elegirPorGusto(input: {
     score += tagMatch;
     if (!motivo && tagMatch > 0) motivo = "conecta con lo que ya te gustó";
 
-    if (score > 0) candidatos.push({ dossier: d, score, motivo });
+    if (score > 0) candidatos.push({ dossier: d, score, motivo, tocaPedido: afinPedido > 0 });
   }
 
   if (candidatos.length === 0) return null;
   candidatos.sort((a, b) => b.score - a.score);
 
+  // Si algo del catálogo roza el pedido, el resto ni compite: la rotación por
+  // día se hace SOLO entre los que lo tocan. Rotar sobre todo el catálogo era
+  // justo lo que hacía que un pedido de rock acabara en un disco cualquiera.
+  const tocanElPedido = candidatos.filter((c) => c.tocaPedido);
+  const pool = tocanElPedido.length > 0 ? tocanElPedido : candidatos;
+
   // Entre los mejores, una elección estable por día (varía cada día).
-  const top = candidatos.slice(0, Math.max(3, Math.ceil(candidatos.length * 0.3)));
+  const top = pool.slice(0, Math.max(3, Math.ceil(pool.length * 0.3)));
   const dia = Math.floor(Date.now() / 86_400_000);
   const elegido = top[dia % top.length];
 

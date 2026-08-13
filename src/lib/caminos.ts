@@ -434,7 +434,7 @@ export async function abrirPaso(
     // presupuesto del día). Reutilizar catálogo no consume, pero eso no lo
     // sabemos hasta correr el pipeline, así que comprobamos antes.
     const date = todayKey(null);
-    if (!(await hayPresupuestoHoy(date))) {
+    if (!(await hayPresupuestoHoy(date, "extra"))) {
       return { ok: false, reason: "presupuesto" };
     }
 

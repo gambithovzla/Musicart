@@ -13,7 +13,14 @@ import {
 import { getMadriguera } from "@/lib/madriguera";
 import { getCaminoEnCurso } from "@/lib/caminos";
 import { hasProfile } from "@/app/actions";
-import { DEVICE_COOKIE, TZ_COOKIE, LANG_COOKIE, parseTodayLang } from "@/lib/device";
+import {
+  DEVICE_COOKIE,
+  TZ_COOKIE,
+  LANG_COOKIE,
+  PEDIDO_COOKIE,
+  parseTodayLang,
+  parseTodayPedido,
+} from "@/lib/device";
 import { searchLinks } from "@/lib/sources/odesli";
 import { albumThemeStyle } from "@/lib/theme";
 import { deriveGenres } from "@/lib/genres";
@@ -123,9 +130,13 @@ export default async function Home() {
   // GUARDA y REGISTRA el disco mostrado (y evita los que el oyente ya vio): así
   // ningún disco "solo visto por rotación" vuelve a salir como si fuera nuevo.
   // Si no hay identidad (ni device ni cuenta) usamos la rotación ciega clásica.
+  // El antojo que escribió hoy en el gate. Aquí no se puede fabricar nada (por
+  // eso estamos en la rotación), pero sí tenerlo en cuenta al elegir del
+  // catálogo y, sobre todo, decirle que hoy no se le pudo cumplir.
+  const pedidoDeHoy = parseTodayPedido(jar.get(PEDIDO_COOKIE)?.value, dateKey);
   const rotacion =
     !personal && (deviceId || userId)
-      ? await getRotacionPickGuardada(deviceId, userId, tz)
+      ? await getRotacionPickGuardada(deviceId, userId, tz, pedidoDeHoy)
       : null;
   const pick = personal?.dossier ?? rotacion?.dossier ?? (await getTodayPick(tz));
 
@@ -227,7 +238,7 @@ export default async function Home() {
             impactNote: pick.impactNote,
             hook: firstSentence(pick.intro),
             dateLabel: formatDateEs(tz),
-            reason: personal?.reason ?? null,
+            reason: personal?.reason ?? rotacion?.reason ?? null,
             personalized: Boolean(personal),
             showProfileInvite: !tienePerfil,
             returnWelcome: personal?.returnPick ?? false,

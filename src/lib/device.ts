@@ -11,6 +11,10 @@ export const LANG_COOKIE = "musicart_lang"; // valor: "YYYY-MM-DD|idioma"
 // fabricar su disco fresco. Valor: "YYYY-MM-DD|texto". Se reinicia cada día.
 export const PEDIDO_COOKIE = "musicart_pedido";
 export const THEME_COOKIE = "musicart_theme"; // valor: "light" | "dark" (default dark)
+// Discos que EL DIAL del Salón ya entregó (ids del canon, los más nuevos
+// primero). Sin esta memoria el dial repite: su elección es determinista, así
+// que el mismo puntaje devuelve el mismo disco una y otra vez. Valor: "id,id,…".
+export const DIAL_COOKIE = "musicart_dial";
 // Discos ya mostrados hoy (para que "Rehacer" no cicle entre los del día).
 // Valor: "YYYY-MM-DD|albumId,albumId,…". Se reinicia cada día.
 export const SEEN_TODAY_COOKIE = "musicart_seen_today";

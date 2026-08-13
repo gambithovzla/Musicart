@@ -173,6 +173,10 @@ src/lib/budget.ts        Fase 6.6: tope de discos nuevos/día (DAILY_GENERATION_
 src/lib/reason-guard.ts  Fase 7.8: barrera anti-muletilla de la razón del día —
                          veta las palabras que ya usó en días recientes y, si
                          reincide, reescribe la razón (nunca rompe: deja la original).
+src/lib/pedido-match.ts  Lee el pedido del oyente SIN IA (cruza sus palabras con
+                         artista, título, etiquetas y década). Es la red de abajo:
+                         el día que el LLM no responde o se acaba el tope, el
+                         pedido seguía existiendo pero no lo leía nadie.
 src/lib/origin-guard.ts  Fase 7.9: barrera dura del ORIGEN del artista — si el pedido
                          nombra un país ("artistas venezolanos"), comprueba con
                          MusicBrainz que el artista lo sea; si no, se descarta la
@@ -315,6 +319,18 @@ npm run push                                     # envío Web Push del disco del
   (botón "Levantar el Salón" en `/revision` → `/api/salon/construir`, con
   presupuesto de tiempo) y el worker de Railway lo termina de noche: el Salón ya
   no depende de que alguien tenga una terminal delante.
+- **La app nunca se cae por la IA, pero tampoco puede MENTIR**: si el disco no
+  se pudo fabricar (sin clave, tope agotado, reloj agotado, no encontré nada),
+  la razón del día abre diciéndolo — `CausaFallback` + `avisoPorCausa` en
+  `recommend.ts`, escrito por el CÓDIGO (el verificador es LLM y suele ser justo
+  lo que está caído). Sin eso, un fallo de IA se vive como "la app dejó de leer
+  lo que le pido": disco de siempre, en tres segundos y sin explicación. Para
+  saber si el curador está vivo hay un botón en `/revision` (no hace falta
+  terminal ni logs de Vercel).
+- **El tope diario (6.6) es compartido** entre el disco del día, el Salón, los
+  Caminos y los saltos, con un 30% RESERVADO para el disco del día
+  (`hayPresupuestoHoy(date, "extra" | "ritual")`). Curiosear el Salón ya no deja
+  al ritual sin cupo.
 - **Escalas:** dificultad del álbum 1-5 (estrellas); impacto cultural 1-100
   (honesto, con leyenda + `impactNote` clicleable); puntaje del usuario 1-10
   (umbral "loved" = 8). Migraciones ya reescalaron datos viejos.

@@ -13,6 +13,13 @@ import {
   queueKey,
 } from "@/lib/curator";
 import { runDossierPipeline } from "@/lib/dossier/pipeline";
+import {
+  llm,
+  llmGeneration,
+  hayClaveIA,
+  generationModel,
+  runtimeModelName,
+} from "@/lib/dossier/llm";
 import { recomputeImpact } from "@/lib/dossier/impact";
 import { parseJson, type FactsPayload } from "@/lib/types";
 import {
@@ -473,4 +480,109 @@ export async function borrarAlbum(
   } catch (e) {
     return { ok: false, message: `No se pudo borrar. ${(e as Error).message}` };
   }
+}
+
+/**
+ * ¿EL CURADOR ESTÁ VIVO? (diagnóstico del dueño, sin terminal.)
+ *
+ * Existe porque la app está diseñada para no caerse nunca: si la IA no responde
+ * —clave vencida, sin saldo, un modelo mal escrito en las variables, un 429—
+ * el disco del día cae al catálogo y se sirve igual, en tres segundos y sin una
+ * palabra. Desde fuera eso no se ve como "la IA está caída": se vive como "la
+ * app dejó de leer lo que le pido y me repite discos". Este botón hace UNA
+ * llamada de verdad a cada modelo y dice qué contestaron.
+ *
+ * Cuesta céntimos (dos llamadas de 5 tokens) y solo corre cuando lo pulsas.
+ */
+export async function probarCurador(): Promise<{
+  hayClave: boolean;
+  proveedor: string;
+  pruebas: {
+    nombre: string;
+    modelo: string;
+    ok: boolean;
+    ms: number;
+    detalle: string;
+  }[];
+}> {
+  await requireAdmin();
+
+  const hayClave = hayClaveIA();
+  const proveedor =
+    process.env.LLM_PROVIDER?.toLowerCase() ||
+    (process.env.OPENAI_API_KEY ? "openai" : process.env.ANTHROPIC_API_KEY ? "anthropic" : "—");
+
+  if (!hayClave) {
+    return {
+      hayClave,
+      proveedor,
+      pruebas: [
+        {
+          nombre: "Clave de IA",
+          modelo: "—",
+          ok: false,
+          ms: 0,
+          detalle:
+            "No hay OPENAI_API_KEY ni ANTHROPIC_API_KEY. Sin clave no se fabrica " +
+            "ningún disco nuevo: todo sale del catálogo ya publicado.",
+        },
+      ],
+    };
+  }
+
+  // Dos modelos, dos trabajos: el barato atiende el runtime (elegir del
+  // catálogo, verificar el pedido) y el de generación propone y escribe. Pueden
+  // fallar por separado — un GENERATION_MODEL mal escrito rompe justo la parte
+  // que fabrica el disco a tu medida, y el resto sigue funcionando.
+  const pruebas: {
+    nombre: string;
+    modelo: string;
+    ok: boolean;
+    ms: number;
+    detalle: string;
+  }[] = [];
+
+  const sondas: { nombre: string; modelo: string; llamar: () => Promise<string> }[] = [
+    {
+      nombre: "Runtime (elige y verifica)",
+      modelo: runtimeModelName(),
+      llamar: () =>
+        llm({ system: "Responde solo: ok", user: "ok", maxTokens: 5, timeoutMs: 15_000 }),
+    },
+    {
+      nombre: "Generación (propone y escribe)",
+      modelo: generationModel(),
+      llamar: () =>
+        llmGeneration({
+          system: "Responde solo: ok",
+          user: "ok",
+          maxTokens: 5,
+          timeoutMs: 20_000,
+        }),
+    },
+  ];
+
+  for (const sonda of sondas) {
+    const t0 = Date.now();
+    try {
+      const raw = await sonda.llamar();
+      pruebas.push({
+        nombre: sonda.nombre,
+        modelo: sonda.modelo,
+        ok: true,
+        ms: Date.now() - t0,
+        detalle: `Contestó: "${raw.trim().slice(0, 40)}"`,
+      });
+    } catch (e) {
+      pruebas.push({
+        nombre: sonda.nombre,
+        modelo: sonda.modelo,
+        ok: false,
+        ms: Date.now() - t0,
+        detalle: (e as Error).message.slice(0, 240),
+      });
+    }
+  }
+
+  return { hayClave, proveedor, pruebas };
 }

@@ -40,7 +40,7 @@ export async function abrirDiscoDelCanon(
     // El tope de gasto diario manda también aquí: el Salón tiene miles de
     // discos y sin esta puerta una tarde de curioseo se comería el presupuesto.
     const date = hoyKey();
-    if (!(await hayPresupuestoHoy(date))) {
+    if (!(await hayPresupuestoHoy(date, "extra"))) {
       return { ok: false, reason: "presupuesto" };
     }
 

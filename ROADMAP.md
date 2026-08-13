@@ -966,3 +966,5 @@ trabajo sigue siendo la 9**.
 | Identidad anónima por deviceId antes que auth | Permite construir y validar la personalización ya, sin fricción de registro |
 | `master` es la rama de producción en Vercel | Configurado manualmente en Vercel Settings (el repo usa `master`, no `main`) |
 | Worker de generación como cron en Railway (`npm run worker`) | Generar tarda minutos: excede los timeouts de Vercel; Railway ya es infraestructura del dueño y usa la URL interna del Postgres |
+| Cuando la IA no está, el pedido del oyente se responde IGUAL — y se dice | La app nunca se cae, así que un fallo de IA se vivía como "dejó de leer lo que le pido": mismo disco de siempre, en tres segundos y sin explicación. Ahora el fallback lee el pedido sin IA (`src/lib/pedido-match.ts`) y la razón del día abre diciendo por qué no se pudo cumplir (`CausaFallback`) |
+| El tope diario reserva un 30% para el disco del día | Salón, Caminos y saltos comparten el mismo cupo y son los que más se pulsan seguidos: una tarde de curioseo dejaba al ritual del día sin cupo, o sea repitiendo disco y saltándose el pedido |

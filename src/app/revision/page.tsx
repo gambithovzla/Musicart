@@ -7,7 +7,7 @@ import { isAdminEmail } from "@/lib/admin";
 import { prisma } from "@/lib/db";
 import { getProductMetrics } from "@/lib/analytics";
 import { todayKey } from "@/lib/daily";
-import { generacionesHoy, dailyGenerationBudget } from "@/lib/budget";
+import { generacionesHoy, dailyGenerationBudget, estadoPresupuesto } from "@/lib/budget";
 import { dossierHasAudio } from "@/lib/dossier/render-audio";
 import { publishDossier, discardDossier } from "./actions";
 import { AnalyticsPanel } from "./AnalyticsPanel";
@@ -18,6 +18,7 @@ import { BuscarYCrear } from "./BuscarYCrear";
 import { CuradorAlbumes, type AlbumCurable } from "./CuradorAlbumes";
 import { ClubDeLosCien } from "./ClubDeLosCien";
 import { LevantarSalon } from "@/components/LevantarSalon";
+import { EstadoCurador } from "./EstadoCurador";
 import { getCanonCurado, estadoDelSalon } from "@/lib/canon/consulta";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +70,7 @@ export default async function RevisionPage() {
 
   const generadosHoy = await generacionesHoy(todayKey());
   const topeDiario = dailyGenerationBudget();
+  const cupo = await estadoPresupuesto(todayKey());
 
   // Lista de curaduría: un disco por álbum publicado, con el puntaje del curador
   // y si está en la vitrina. Deduplicamos por álbum (puede haber >1 dossier).
@@ -161,6 +163,11 @@ export default async function RevisionPage() {
             ajusta con la variable DAILY_GENERATION_BUDGET.
           </span>
         </p>
+        <EstadoCurador
+          usados={cupo.usados}
+          tope={cupo.tope}
+          quedanExtra={cupo.quedanExtra}
+        />
         <GenerarDiscoForm />
         <RecalcularImpactos />
       </section>

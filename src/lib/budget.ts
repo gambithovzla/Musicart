@@ -20,9 +20,47 @@ export async function generacionesHoy(date: string): Promise<number> {
   return row?.count ?? 0;
 }
 
+/**
+ * Para qué se pide el cupo. No todo lo que gasta IA vale lo mismo:
+ *   · "ritual" → el disco del día, que es la app.
+ *   · "extra"  → abrir un disco del Salón, un paso de un Camino, un salto de la
+ *                madriguera. Son puertas laterales, y son las que más fácil se
+ *                pulsan seguidas.
+ * Antes compartían un solo contador y el que llegaba primero se lo comía todo:
+ * una tarde curioseando el Salón dejaba sin cupo al disco del día siguiente, que
+ * entonces caía al catálogo, repetía disco y se saltaba el pedido — sin decirlo.
+ */
+export type UsoPresupuesto = "ritual" | "extra";
+
+/** Parte del tope que queda RESERVADA para el disco del día (el resto es libre). */
+const RESERVA_RITUAL = 0.3;
+
 /** ¿Queda presupuesto para fabricar un disco nuevo hoy? */
-export async function hayPresupuestoHoy(date: string): Promise<boolean> {
-  return (await generacionesHoy(date)) < dailyGenerationBudget();
+export async function hayPresupuestoHoy(
+  date: string,
+  uso: UsoPresupuesto = "ritual",
+): Promise<boolean> {
+  const tope = dailyGenerationBudget();
+  const techo =
+    uso === "extra" ? Math.max(1, Math.floor(tope * (1 - RESERVA_RITUAL))) : tope;
+  return (await generacionesHoy(date)) < techo;
+}
+
+/** Cuánto queda hoy para cada uso (para contarlo en el panel del dueño). */
+export async function estadoPresupuesto(date: string): Promise<{
+  usados: number;
+  tope: number;
+  quedanRitual: number;
+  quedanExtra: number;
+}> {
+  const [usados, tope] = [await generacionesHoy(date), dailyGenerationBudget()];
+  const techoExtra = Math.max(1, Math.floor(tope * (1 - RESERVA_RITUAL)));
+  return {
+    usados,
+    tope,
+    quedanRitual: Math.max(0, tope - usados),
+    quedanExtra: Math.max(0, techoExtra - usados),
+  };
 }
 
 /** Registra que se fabricó un disco nuevo hoy (incremento atómico). */

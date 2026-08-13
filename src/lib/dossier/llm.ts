@@ -35,6 +35,12 @@ export function generationModel(): string {
   return process.env.GENERATION_MODEL || runtimeModel();
 }
 
+/** Modelo del runtime (elegir del catálogo, verificar el pedido, chat). Para el
+ *  panel del dueño: saber CON QUÉ está hablando la app es medio diagnóstico. */
+export function runtimeModelName(): string {
+  return runtimeModel();
+}
+
 /** ¿Hay una clave de IA configurada? Para decidir si podemos fabricar discos en vivo. */
 export function hayClaveIA(): boolean {
   return Boolean(process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);

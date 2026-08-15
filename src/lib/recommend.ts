@@ -34,8 +34,15 @@ import {
   detectarPaisesPedido,
   artistaEsDeAlgunPais,
   nombresDePaises,
+  quitarPalabrasDePais,
+  type PaisPedido,
 } from "./origin-guard";
-import { palabrasDelPedido, afinidadConPedido } from "./pedido-match";
+import {
+  palabrasDelPedido,
+  afinidadConPedido,
+  generosParaBusqueda,
+} from "./pedido-match";
+import { artistasDePais } from "./sources/musicbrainz";
 
 const MAX_REVIEWS = 10;
 const MAX_RECENT_PICKS = 14;
@@ -550,6 +557,48 @@ export async function getRotacionPickGuardada(
   }
 }
 
+// La escena de un país cambia poco y MusicBrainz va a una consulta por segundo:
+// dentro del mismo proceso la pedimos una sola vez por país + género.
+const cacheEscena = new Map<string, string[]>();
+
+/**
+ * Artistas reales de los países que pidió el oyente, con su género si lo nombró
+ * ("rock venezolano" → artistas con country:VE y etiqueta rock). Es una lista de
+ * PISTAS para el curador, no una lista cerrada: puede proponer otro artista de
+ * esa misma escena, y el origen se sigue comprobando después.
+ *
+ * Nunca rompe la fabricación: si MusicBrainz no contesta, devuelve [] y el
+ * curador propone como hasta ahora.
+ */
+async function artistasDeLaEscena(
+  paises: PaisPedido[],
+  peticion: string | null,
+): Promise<string[]> {
+  const generos = generosParaBusqueda(quitarPalabrasDePais(palabrasDelPedido(peticion)));
+  const out: string[] = [];
+  // Como mucho dos países: la lista es una pista, no un censo, y cada consulta
+  // cuesta más de un segundo de reloj.
+  for (const pais of paises.slice(0, 2)) {
+    const clave = `${pais.code}|${generos.join(",")}`;
+    const enCache = cacheEscena.get(clave);
+    if (enCache) {
+      out.push(...enCache);
+      continue;
+    }
+    try {
+      const artistas = await artistasDePais(pais.code, generos, 30);
+      const nombres = artistas.map((a) =>
+        a.tags.length > 0 ? `${a.name} (${a.tags.slice(0, 2).join(", ")})` : a.name,
+      );
+      cacheEscena.set(clave, nombres);
+      out.push(...nombres);
+    } catch (err) {
+      console.warn("[recommend] no pude listar la escena del país:", err);
+    }
+  }
+  return out;
+}
+
 /**
  * Fabrica el disco fresco del día: la IA propone un disco real de toda la música
  * (según gusto + diario + ánimo) y el pipeline lo investiga, narra, verifica y
@@ -766,6 +815,8 @@ export async function generarPickDelDia(
       // País/nacionalidad detectados en el pedido: van al prompt como requisito
       // aparte para que no se pierda dentro del texto libre del oyente.
       paisesPedidos: paisesTexto || null,
+      // Nombres REALES de esa escena (MusicBrainz). Ver `pistasPais` abajo.
+      artistasDelPais: pistasPais,
       artistasRecientes,
       ganchosTexto,
     });
@@ -788,6 +839,32 @@ export async function generarPickDelDia(
       rechazados.push(`"${p.title}" de ${p.artist} (rechazado: ${motivo} — PROHIBIDO repetir)`);
       bitacora.push(`«${p.title}» de ${p.artist} — ${motivo}`);
     };
+
+    // Quiénes SON de ese país, de verdad. Las barreras de origen (7.9) saben
+    // RECHAZAR ("Café Tacvba es de México"), pero nadie le decía nunca al
+    // curador quién SÍ es venezolano: puesto a recordar de memoria una escena
+    // poco documentada, el modelo vuelve al famoso del país de al lado, se le
+    // rechaza, y así hasta que se acaba el reloj y el oyente recibe un disco de
+    // la casa. Esta lista sale de MusicBrainz (país + etiqueta de género): es la
+    // diferencia entre pedirle que adivine y darle la escena en la mano.
+    const pistasPais =
+      paisesPedidos.length > 0 ? await artistasDeLaEscena(paisesPedidos, peticion) : [];
+    if (paisesPedidos.length > 0) {
+      bitacora.push(
+        pistasPais.length > 0
+          ? `Artistas de ${paisesTexto} que le pasé al curador (MusicBrainz): ${pistasPais.length}`
+          : `MusicBrainz no me dio ningún artista de ${paisesTexto} para este pedido`,
+      );
+    }
+    // Los de la lista ya vienen filtrados por país en la propia consulta, así
+    // que de esos SÍ consta el origen. Importa por los dos lados: nos ahorra la
+    // consulta de la barrera, y evita el aviso absurdo de "no pude confirmar
+    // que sea de Venezuela" sobre una banda que salió del listado venezolano
+    // (a muchos artistas MusicBrainz les guarda la ciudad y no el país).
+    const nombresEscena = new Set(
+      pistasPais.map((n) => normalizar(n.replace(/\s*\([^)]*\)\s*$/, ""))),
+    );
+    const esDeLaEscena = (artist: string) => nombresEscena.has(normalizar(artist));
 
     // Una propuesta es conflictiva si es una obra ya vista (memoria completa) o,
     // al rehacer, uno de los discos excluidos hoy.
@@ -849,7 +926,7 @@ export async function generarPickDelDia(
         const [origen, cumple] = await Promise.all([
           // Barrera de ORIGEN (7.9): dato duro de MusicBrainz. Solo corta los
           // desajustes claros ("venezolanos" → Green Day es de Estados Unidos).
-          paisesPedidos.length > 0
+          paisesPedidos.length > 0 && !esDeLaEscena(p.artist)
             ? artistaEsDeAlgunPais(p.artist, paisesPedidos)
             : Promise.resolve(null),
           peticion
@@ -1017,8 +1094,10 @@ export async function generarPickDelDia(
       // queremos dejar a nadie sin disco por una fuente caída), así que un disco
       // puede llegar hasta aquí SIN que nos conste que es del país que pediste.
       // Si es el caso, se dice — la promesa incumplida se avisa, no se disimula.
+      const origenYaConsta =
+        esDeLaEscena(dossier.album.artist.name) || esDeLaEscena(propuesta.artist);
       const aviso =
-        peticion && paisesPedidos.length > 0
+        peticion && paisesPedidos.length > 0 && !origenYaConsta
           ? await avisoSiNoCumplePedido({
               peticion,
               title: dossier.album.title,

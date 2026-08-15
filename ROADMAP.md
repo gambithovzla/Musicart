@@ -541,6 +541,34 @@ integra más profundamente con la escucha real.
   con el teléfono en la mano es no existir — y por eso hicieron falta tres
   rondas de conjeturas para llegar hasta aquí.
 
+- [x] **7.13 La escena, en la mano (no de memoria)** (ago 2026, cuarto reporte
+  del mismo pedido: *rock venezolano* → «Re» de Café Tacvba, mexicanos) — las
+  cuatro tareas anteriores pusieron **barreras**: detectar el país (7.9), que el
+  pedido llegue (7.10), que las barreras no fallen hacia el "sí" (7.11), que un
+  disco sin fichar no acabe la búsqueda (7.12). Todas vigilan la salida, y
+  ninguna arregla la entrada: **nadie le dijo nunca al curador quién SÍ es
+  venezolano**. Al modelo se le pedía recordar de memoria una escena poco
+  documentada; cuando no la recuerda vuelve al famoso del país de al lado
+  (Green Day, Van Halen, Juan Luis Guerra, Café Tacvba: cuatro países distintos,
+  ninguno el pedido), se le rechaza, y así hasta que se acaba el reloj y el
+  oyente recibe un disco de la casa con su aviso. El arreglo cambia el orden de
+  las cosas: **primero los datos, después el LLM**. `artistasDePais()`
+  (MusicBrainz: `country:VE AND tag:rock`) trae hasta 30 artistas reales de esa
+  escena —ordenados por cuánta gente los ha etiquetado, que es el mejor proxy de
+  "conocido" que hay sin inventarse popularidad— y esa lista entra en el prompt
+  del proponedor: elige de ahí el disco canónico que mejor conozca, y si conoce
+  otro de la misma escena puede proponerlo, pero de otro país no. Si el género
+  deja la lista casi vacía (los países pequeños se etiquetan poco), se pide el
+  país entero y se le advierte que el género lo pone él. Tres detalles que
+  importan: el origen de los artistas de la lista **ya consta**, así que no se
+  gasta la consulta de la barrera ni salta el aviso absurdo de "no pude
+  confirmar que sea de Venezuela" sobre una banda venezolana (MusicBrainz a
+  muchos les guarda la ciudad y no el país); la lista se cachea por proceso
+  (MusicBrainz va a 1 req/s); y si la fuente no contesta, se propone como hasta
+  ahora — la app nunca se cae por esto. La bitácora del cuadro de admin dice
+  cuántos artistas se le pasaron al curador, así que la próxima vez se sabe si
+  falló la fuente o el modelo.
+
 ### Criterios de aceptación
 
 - [x] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones

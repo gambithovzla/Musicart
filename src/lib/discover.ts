@@ -42,6 +42,10 @@ export async function proponerDiscoDescubrimiento(input: {
   /** País o nacionalidad detectados en el pedido ("Venezuela"): requisito duro,
    *  verificado además contra MusicBrainz (`src/lib/origin-guard.ts`). */
   paisesPedidos?: string | null;
+  /** Artistas REALES de ese país (y de ese género si lo pidió), sacados de
+   *  MusicBrainz. No es una lista cerrada: es la escena en la mano para que el
+   *  modelo deje de tirar de memoria y de traer al famoso del país vecino. */
+  artistasDelPais?: string[];
   /** Artistas recomendados en días recientes: NO repetir el mismo artista
    *  (variedad), salvo que el oyente lo pida explícitamente. */
   artistasRecientes?: string[];
@@ -82,10 +86,27 @@ Sigue siendo OBLIGATORIO que sea un álbum de estudio REAL y bien documentado (r
   // le olvidaba dentro de la frase ("artistas venezolanos, rock" → cumplía el
   // rock y se saltaba Venezuela). Además hay barrera en código: si el artista
   // no es de ahí según MusicBrainz, se rechaza la propuesta y se pide otra.
+  // La escena, en la mano. Decirle "escarba en la escena real de ese país" no
+  // basta: si no la recuerda, no la recuerda, y vuelve al famoso de al lado
+  // (pidió rock venezolano y propuso Café Tacvba, que es mexicano). Estos
+  // nombres salen de MusicBrainz filtrando por país —y por género si lo pidió—,
+  // así que son artistas de ahí de verdad, no un recuerdo del modelo.
+  const listaPais = (input.artistasDelPais ?? [])
+    .map((a) => a.trim())
+    .filter(Boolean);
+  const listaPaisTexto =
+    listaPais.length > 0
+      ? `\nARTISTAS REALES DE ${input.paisesPedidos?.trim().toUpperCase()} (datos de MusicBrainz, ya verificados como de ese país):
+${listaPais.map((a) => `- ${a}`).join("\n")}
+CÓMO USAR ESTA LISTA: elige de aquí al artista cuyo disco canónico conozcas MEJOR y que de verdad encaje con lo que pidió (género, época, energía). Si conoces otro artista de esa misma escena que encaje mejor, puedes proponerlo — pero entonces tiene que ser igual de real y de ese país. Lo que NO puedes hacer es traer un artista de otro país.
+OJO: la lista trae el país garantizado, no el género ni la calidad. Tú pones el criterio musical: elige el disco de estudio canónico y bien documentado, y descarta a los que no encajen con el pedido.
+Si NINGUNO de estos artistas te resulta conocido de verdad, propón igual al que más señales tengas de conocer —con su álbum de estudio más reconocido— antes que rendirte: un disco de esa escena que se pueda documentar vale más que un clásico famoso de otro país.\n`
+      : "";
+
   const paisTexto = input.paisesPedidos?.trim()
     ? `\nORIGEN OBLIGATORIO DE HOY: el oyente pidió artistas de ${input.paisesPedidos.trim()}.
 El artista que propongas TIENE que ser de ${input.paisesPedidos.trim()} (nacido/criado allí, o banda formada allí). Esto se comprueba después con datos duros (MusicBrainz): si no es de ahí, tu propuesta se descarta y perdemos el intento.
-Escarba en la escena real de ese país —sus discos de culto, sus clásicos locales, sus bandas históricas— y NO te refugies en artistas famosos de otro país que compartan género.\n`
+Escarba en la escena real de ese país —sus discos de culto, sus clásicos locales, sus bandas históricas— y NO te refugies en artistas famosos de otro país que compartan género.${listaPaisTexto}\n`
     : "";
 
   // Variedad de artistas: si en días recientes ya sonaron ciertos artistas, NO

@@ -123,6 +123,55 @@ export function afinidadConPedido(
   return afinidad;
 }
 
+// Cómo se llama en MusicBrainz lo que el oyente escribe en español. Casi todo
+// coincide (rock, pop, jazz, salsa, punk, metal, funk, soul, blues, ska, folk,
+// reggae, cumbia, bolero, tango, merengue…); aquí solo van los que NO.
+const GENEROS_MB: Record<string, string> = {
+  electronica: "electronic",
+  electronico: "electronic",
+  clasica: "classical",
+  clasico: "classical",
+  hip: "hip hop",
+  hop: "hip hop",
+  rap: "hip hop",
+  urbano: "urban",
+  alternativo: "alternative rock",
+  alternativa: "alternative rock",
+  psicodelico: "psychedelic rock",
+  psicodelia: "psychedelic rock",
+  experimental: "experimental",
+  tropical: "tropical",
+  bailable: "dance",
+  gaita: "gaita",
+};
+
+// Palabras del pedido que hablan de ánimo o de forma, no de género: buscarlas
+// como etiqueta en MusicBrainz no devuelve una escena, devuelve ruido.
+const NO_SON_GENERO = new Set([
+  "energia", "energico", "tranquilo", "calmado", "triste", "alegre", "suave",
+  "fuerte", "duro", "lento", "rapido", "bueno", "buena", "buenos", "buenas",
+  "calidad", "clasicos", "moderno", "actual", "nuevo", "viejo", "antiguo",
+  "años", "anos", "decada", "epoca", "cantado", "instrumental",
+]);
+
+/**
+ * Los géneros del pedido, escritos como los etiqueta MusicBrainz. Se usan para
+ * buscar artistas REALES de la escena que pidió ("rock" + Venezuela), no para
+ * juzgar discos. Devuelve como mucho dos: son un AND en la consulta y con tres
+ * ya no queda nadie.
+ */
+export function generosParaBusqueda(palabras: string[]): string[] {
+  const out: string[] = [];
+  for (const p of palabras) {
+    if (NO_SON_GENERO.has(p)) continue;
+    if (/^\d/.test(p) || decadaDe(p) !== null) continue;
+    const tag = GENEROS_MB[p] ?? p;
+    if (!out.includes(tag)) out.push(tag);
+    if (out.length >= 2) break;
+  }
+  return out;
+}
+
 /** ¿Este disco toca AL MENOS una de las palabras del pedido? */
 export function tocaElPedido(palabras: string[], disco: DiscoParaPedido): boolean {
   return afinidadConPedido(palabras, disco) > 0;

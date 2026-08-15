@@ -237,6 +237,98 @@ export async function searchArtistOrigin(
   };
 }
 
+export type MbArtistaDePais = {
+  name: string;
+  /** Área de origen o país, para enseñárselo al curador junto al nombre. */
+  area: string | null;
+  /** Etiquetas de género que MusicBrainz le pone (las 3 con más votos). */
+  tags: string[];
+};
+
+/**
+ * Artistas REALES de un país, opcionalmente filtrados por género (etiqueta).
+ *
+ * Por qué existe: cuando el oyente pide "rock venezolano", la barrera de origen
+ * sabe RECHAZAR lo que no es venezolano, pero nadie le dice al curador quién SÍ
+ * lo es — y el LLM, puesto a recordar una escena poco documentada, gravita a los
+ * famosos de al lado (Café Tacvba es mexicano, Juan Luis Guerra dominicano). Con
+ * esta lista dejamos de fiar el "quién" a su memoria: MusicBrainz sí sabe qué
+ * artistas son de Venezuela y llevan la etiqueta rock.
+ *
+ * Ante cualquier fallo devuelve [] y el curador sigue proponiendo como siempre.
+ */
+export async function artistasDePais(
+  country: string,
+  tags: string[] = [],
+  limite = 30,
+): Promise<MbArtistaDePais[]> {
+  const code = country.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return [];
+
+  const limpiarTag = (t: string) =>
+    t.toLowerCase().replace(/["\\/:^~*?!(){}\[\]]/g, " ").replace(/\s+/g, " ").trim();
+  const partes = [`country:${code}`];
+  for (const t of tags.map(limpiarTag).filter(Boolean).slice(0, 2)) {
+    partes.push(`tag:"${t}"`);
+  }
+
+  const consultar = async (query: string): Promise<MbArtistaDePais[]> => {
+    const data = await mb<{
+      artists?: {
+        name: string;
+        score: number;
+        country?: string;
+        area?: { name?: string };
+        "begin-area"?: { name?: string };
+        tags?: { count?: number; name?: string }[];
+      }[];
+    }>(`/artist/?query=${encodeURIComponent(query)}&fmt=json&limit=100`);
+
+    return (data.artists ?? [])
+      .filter((a) => a.name?.trim())
+      // La consulta ya pide ese país; esto solo descarta a los vecinos que la
+      // búsqueda difusa cuela con puntaje alto. Si el artista no trae código de
+      // país (MusicBrainz lo deja vacío a menudo y solo guarda el área), lo
+      // dejamos: la barrera de origen lo comprueba igual antes de fabricar.
+      .filter((a) => !a.country || a.country.toUpperCase() === code)
+      .map((a) => ({
+        name: a.name.trim(),
+        area: a["begin-area"]?.name ?? a.area?.name ?? null,
+        tags: (a.tags ?? [])
+          .slice()
+          .sort((x, y) => (y.count ?? 0) - (x.count ?? 0))
+          .map((t) => t.name?.trim())
+          .filter((t): t is string => Boolean(t))
+          .slice(0, 3),
+        // Proxy de "conocido": en MusicBrainz, a los artistas que le importan a
+        // alguien los etiqueta gente. No es popularidad, pero ordena mejor que
+        // el alfabeto y saca a flote a los históricos de la escena.
+        peso: (a.tags ?? []).reduce((n, t) => n + (t.count ?? 0), 0) + (a.score ?? 0) / 100,
+      }))
+      .sort((a, b) => b.peso - a.peso)
+      .slice(0, limite)
+      .map(({ name, area, tags: etiquetas }) => ({ name, area, tags: etiquetas }));
+  };
+
+  try {
+    const conGenero = await consultar(partes.join(" AND "));
+    // Con género hay escenas que dan poquísimo (el género se etiqueta a mano y
+    // los países pequeños salen mal parados). Si apenas hay nombres, pedimos el
+    // país entero: mejor un artista real de ahí que ninguno. Quien llama sabe
+    // que la lista es de país y no de género (se lo decimos en el prompt).
+    if (conGenero.length >= 6 || partes.length === 1) return conGenero;
+    const soloPais = await consultar(`country:${code}`);
+    const vistos = new Set(conGenero.map((a) => a.name.toLowerCase()));
+    return [...conGenero, ...soloPais.filter((a) => !vistos.has(a.name.toLowerCase()))].slice(
+      0,
+      limite,
+    );
+  } catch (err) {
+    console.warn("[musicbrainz] no pude listar artistas del país:", err);
+    return [];
+  }
+}
+
 // Conexiones a nivel ARTISTA (colaboraciones, bandas, fundadores…): la materia
 // prima de los saltos de descubrimiento entre artistas. Datos estructurados de
 // MusicBrainz, con su etiqueta → verificables.

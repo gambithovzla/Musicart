@@ -280,9 +280,10 @@ export function ProfileForm({
           className="mt-4 flex items-center justify-between rounded-2xl border border-white/10 bg-surface px-4 py-3 text-sm transition-colors hover:border-album/40"
         >
           <span>
-            <span className="font-medium">Panel de revisión</span>
+            <span className="font-medium">Buscar un disco y crearlo</span>
             <span className="mt-0.5 block text-xs text-dim">
-              Drafts, cola y audio TTS
+              Panel del curador: busca cualquier disco o artista y la IA lo
+              fabrica. También drafts, cola y audio.
             </span>
           </span>
           <span className="text-dim">→</span>

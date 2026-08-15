@@ -188,6 +188,20 @@ export function detectarPaisesPedido(peticion: string | null | undefined): PaisP
   return encontrados;
 }
 
+/**
+ * Quita del pedido las palabras que nombran el país ("venezolano", "Venezuela").
+ * Lo que queda es lo que describe el SONIDO ("rock", "de los 90"), que es lo
+ * único que sirve para buscar por género: pedirle a MusicBrainz artistas con la
+ * etiqueta "venezolano" no devuelve nada.
+ */
+export function quitarPalabrasDePais(palabras: string[]): string[] {
+  const raices = PAISES.flatMap((p) => p.claves.flatMap((c) => c.split(" ")));
+  return palabras.filter((palabra) => {
+    const p = normalizar(palabra);
+    return !raices.some((raiz) => p.startsWith(raiz));
+  });
+}
+
 /** Nombre en español de un código ISO conocido (para explicar el rechazo). */
 function nombreDePais(code: string | null): string | null {
   if (!code) return null;

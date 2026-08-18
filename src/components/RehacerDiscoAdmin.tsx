@@ -13,12 +13,24 @@ import { LANG_COOKIE, PEDIDO_COOKIE } from "@/lib/device";
 
 const IDIOMAS = ["Español", "English", "Italiano", "Français", "Português", "Cualquiera"];
 
-export function RehacerDiscoAdmin({ dateKey }: { dateKey: string }) {
+export function RehacerDiscoAdmin({
+  dateKey,
+  /** Lo que pasó la última vez que se fabricó el disco de HOY, venga de donde
+   *  venga (la pantalla de carga de la home también deja su rastro). Sin esto,
+   *  el diagnóstico solo existía si pulsabas "Rehacer": el día que el disco
+   *  salía repetido por su cuenta no había nada que leer. */
+  bitacoraPrevia = [],
+}: {
+  dateKey: string;
+  bitacoraPrevia?: string[];
+}) {
   const router = useRouter();
   const [estado, setEstado] = useState<"idle" | "eligiendo" | "trabajando" | "error">("idle");
   const [instruccion, setInstruccion] = useState("");
   const [aviso, setAviso] = useState<string | null>(null);
-  const [intentos, setIntentos] = useState<string[] | null>(null);
+  const [intentos, setIntentos] = useState<string[] | null>(
+    bitacoraPrevia.length > 0 ? bitacoraPrevia : null,
+  );
 
   async function rehacer(lang: string) {
     setEstado("trabajando");
@@ -123,7 +135,7 @@ export function RehacerDiscoAdmin({ dateKey }: { dateKey: string }) {
       {intentos && intentos.length > 0 && estado === "idle" && (
         <details className="mx-auto mt-2 max-w-[22rem] text-left">
           <summary className="cursor-pointer text-xs text-dim">
-            Qué intenté antes de rendirme ({intentos.length})
+            Qué pasó al fabricar el disco de hoy ({intentos.length})
           </summary>
           <ul className="mt-1 space-y-1">
             {intentos.map((t, i) => (

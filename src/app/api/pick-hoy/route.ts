@@ -22,10 +22,12 @@ import {
   LANG_COOKIE,
   PEDIDO_COOKIE,
   SEEN_TODAY_COOKIE,
+  BITACORA_COOKIE,
   parseTodayLang,
   parseTodayPedido,
   parseSeenToday,
   buildSeenToday,
+  buildBitacora,
 } from "@/lib/device";
 
 export const dynamic = "force-dynamic";
@@ -128,6 +130,18 @@ export async function POST(req: Request) {
       maxAge: 86_400,
       sameSite: "lax",
     });
+    // La bitácora, guardada para el dueño. La fabricación normal la dispara la
+    // pantalla de carga, que tira esta respuesta: sin la cookie, el día que el
+    // disco sale repetido "solo" no queda rastro de por qué. Aquí sobrevive
+    // hasta que se refresque la home y él pueda leerla.
+    const bitacora = isAdminEmail(session?.user?.email) ? pick?.intentos ?? [] : [];
+    if (bitacora.length > 0) {
+      res.cookies.set(BITACORA_COOKIE, buildBitacora(date, bitacora), {
+        path: "/",
+        maxAge: 86_400,
+        sameSite: "lax",
+      });
+    }
     return res;
   } catch (err) {
     console.error("[api/pick-hoy] error fabricando el disco del día:", err);

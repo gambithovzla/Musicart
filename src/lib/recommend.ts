@@ -28,7 +28,12 @@ import { cargarNotasTexto } from "./listener-notes";
 import { curatorVoz } from "./curators";
 import { runDossierPipeline } from "./dossier/pipeline";
 import { LOVED_THRESHOLD, RATING_MAX, DISLIKED_THRESHOLD } from "./review";
-import { hayPresupuestoHoy, registrarGeneracion } from "./budget";
+import {
+  hayPresupuestoHoy,
+  registrarGeneracion,
+  generacionesHoy,
+  dailyGenerationBudget,
+} from "./budget";
 import { afinarRazon, ganchosQuemados, textoGanchosProhibidos } from "./reason-guard";
 import {
   detectarPaisesPedido,
@@ -370,6 +375,38 @@ function avisoPorCausa(causa: CausaFallback, peticion: string | null): string | 
 }
 
 /**
+ * La frase que dice, sin rodeos, que el disco de hoy NO es nuevo.
+ *
+ * Existe porque la honestidad tenía un agujero por el que se colaba justo lo
+ * peor: `avisoPorCausa` solo habla cuando el oyente PIDIÓ algo. Un día
+ * cualquiera —sin pedido— la caída al catálogo era MUDA, y para quien ya
+ * recorrió el catálogo entero (el caso del dueño, cuyo catálogo publicado ES su
+ * propio historial) esa caída es SIEMPRE una repetición. O sea: discos
+ * repetidos, en silencio y sin manera de saber por qué. Esto lo escribe el
+ * CÓDIGO sobre un hecho duro —el disco está en su memoria— y sobre la causa que
+ * ya traíamos en la mano; ningún modelo puede taparlo.
+ */
+function avisoPorRepeticion(causa: CausaFallback, yaHayAviso = false): string {
+  // Si ya se explicó la causa arriba (había pedido), aquí solo falta el dato.
+  if (yaHayAviso) return "Además, este disco ya te lo había recomendado antes.";
+  const porque = (() => {
+    switch (causa) {
+      case "sin-ia":
+        return "hoy no pude fabricarte uno nuevo porque el curador no está respondiendo";
+      case "tope":
+        return "hoy se acabó el cupo de discos nuevos";
+      case "sin-tiempo":
+        return "me quedé sin tiempo mientras te fabricaba uno nuevo";
+      case "sin-hallazgo":
+        return "hoy no logré dar con uno nuevo que se sostuviera";
+      default:
+        return "ya te enseñé todo lo que tengo publicado";
+    }
+  })();
+  return `Este disco ya te lo había recomendado: ${porque}. Pídeme otro y lo vuelvo a intentar.`;
+}
+
+/**
  * Caída segura del disco fresco: primero intenta elegir del catálogo publicado
  * (por gusto); si ni eso da, guarda la rotación global como pick. Así, mientras
  * haya un disco en el catálogo, SIEMPRE queda un pick guardado — la home no se
@@ -384,7 +421,16 @@ async function caerAlCatalogo(
   excluirAlbumIds?: string[],
   peticion?: string | null,
   causa: CausaFallback = null,
+  /** Qué se intentó antes de rendirse, en cristiano. Viaja con el disco para que
+   *  el dueño pueda leerlo desde el teléfono: hasta ahora la bitácora solo se
+   *  adjuntaba en UNA de las salidas (la de agotar intentos), así que las
+   *  caídas más comunes —sin clave, tope agotado, un error de más afuera—
+   *  llegaban sin una palabra de explicación. */
+  bitacora?: string[],
 ): Promise<PickPersonal | null> {
+  const conBitacora = (pick: PickPersonal | null): PickPersonal | null =>
+    pick && bitacora && bitacora.length > 0 ? { ...pick, intentos: bitacora } : pick;
+
   const delCatalogo = await recomendarYGuardar(
     ctx,
     {
@@ -397,18 +443,21 @@ async function caerAlCatalogo(
     },
     tz,
   );
-  if (delCatalogo) return delCatalogo;
+  if (delCatalogo) return conBitacora(delCatalogo);
 
   // Última red: rotación global PERO consciente de la memoria del oyente —
   // nunca le re-sirve un disco que ya vio (y lo deja guardado para el futuro).
   // Hasta aquí llega el aviso: que el disco venga de la rotación no es excusa
   // para callar que no es lo que se pidió.
-  return rotacionParaOyente(
-    ctx,
-    date,
-    mood,
-    excluirAlbumIds,
-    avisoPorCausa(causa, peticion ?? null),
+  return conBitacora(
+    await rotacionParaOyente(
+      ctx,
+      date,
+      mood,
+      excluirAlbumIds,
+      avisoPorCausa(causa, peticion ?? null),
+      causa,
+    ),
   );
 }
 
@@ -430,6 +479,9 @@ async function rotacionParaOyente(
   excluirAlbumIds?: string[],
   /** Aviso honesto si el oyente había pedido algo y no se le pudo cumplir. */
   aviso?: string | null,
+  /** Por qué venimos a parar aquí: se necesita para decir la verdad cuando el
+   *  disco que toca ya se le había mostrado. */
+  causa: CausaFallback = null,
 ): Promise<PickPersonal | null> {
   const identity: ListenerIdentity = { deviceId: ctx.deviceId, userId: ctx.userId };
   const [dossiers, memoria] = await Promise.all([
@@ -478,7 +530,11 @@ async function rotacionParaOyente(
   const dias = Math.floor(Date.UTC(y, m - 1, dd) / 86_400_000);
   const elegido = pool[dias % pool.length];
 
-  const razon = aviso?.trim() || null;
+  // Si aquí abajo ya no queda nada sin ver, lo que sale es un repetido: se dice.
+  const avisoRepetido =
+    noVistos.length === 0 ? avisoPorRepeticion(causa, Boolean(aviso?.trim())) : null;
+  const razon =
+    [aviso?.trim() || null, avisoRepetido].filter(Boolean).join(" ").trim() || null;
   await saveTodaysPick(ctx, date, {
     albumId: elegido.album.id,
     reason: razon,
@@ -638,6 +694,17 @@ export async function generarPickDelDia(
   let fallosLlm = 0;
   let propuestasVivas = 0;
   let sinTiempo = false;
+  // El curador dejó de contestar del todo (varios fallos seguidos): no es un mal
+  // día de búsqueda, es que la IA no está. Se cuentan aparte porque al oyente le
+  // decimos cosas distintas.
+  let curadorCaido = false;
+
+  // La faena contada en cristiano. Vive AQUÍ ARRIBA, fuera del `try`, porque
+  // antes se declaraba a mitad de camino y solo viajaba en una de las salidas:
+  // las caídas más silenciosas (sin clave, tope agotado, un error inesperado)
+  // llegaban al dueño sin una sola línea de explicación. Es diagnóstico, no
+  // ritual: solo se le enseña al admin.
+  const bitacora: string[] = [];
 
   // El reloj de la fabricación. Fabricar un disco fresco son varias llamadas al
   // LLM y una pasada del pipeline (minutos), y todo esto vive dentro de una
@@ -710,8 +777,10 @@ export async function generarPickDelDia(
     // Sin señales de gusto no fabricamos (sería un disco al azar): que decida la
     // rotación global. (Normalmente no llegamos aquí: la home filtra antes.)
     if (!profile && reviews.length === 0) {
+      bitacora.push("No tengo señales tuyas todavía (ni perfil ni reseñas): no fabrico a ciegas.");
       return await caerAlCatalogo(
         ctx, date, tz, mood ?? null, langPick, [...excluir], peticion, "sin-hallazgo",
+        bitacora,
       );
     }
 
@@ -720,8 +789,10 @@ export async function generarPickDelDia(
     // segundos, sin explicación—; ahora se dice de una vez y con su nombre.
     if (!hayClaveIA()) {
       console.warn("[recommend] no hay clave de IA configurada; voy al catálogo.");
+      bitacora.push("No hay clave de IA configurada: hoy no se puede fabricar nada nuevo.");
       return await caerAlCatalogo(
         ctx, date, tz, mood ?? null, langPick, [...excluir], peticion, "sin-ia",
+        bitacora,
       );
     }
 
@@ -745,8 +816,12 @@ export async function generarPickDelDia(
     // repetirle un disco, justo lo que evitamos).
     if (!opts?.omitirPresupuesto && !(await hayPresupuestoHoy(date, "ritual"))) {
       console.warn("[recommend] tope de generación diario alcanzado; voy al catálogo.");
+      bitacora.push(
+        `Se acabó el cupo de discos nuevos de hoy (${await generacionesHoy(date)} de ${dailyGenerationBudget()}).`,
+      );
       return await caerAlCatalogo(
         ctx, date, tz, mood ?? null, langPick, [...excluir], peticion, "tope",
+        bitacora,
       );
     }
 
@@ -834,7 +909,6 @@ export async function generarPickDelDia(
     // porque el proponedor no dio con nada, porque las fuentes no conocían el
     // disco o porque el artista no era del país. Tres rondas de conjeturas.
     // Ahora el cuadro de admin lo enseña al terminar.
-    const bitacora: string[] = [];
     const rechazar = (p: Obra, motivo: string) => {
       rechazados.push(`"${p.title}" de ${p.artist} (rechazado: ${motivo} — PROHIBIDO repetir)`);
       bitacora.push(`«${p.title}» de ${p.artist} — ${motivo}`);
@@ -875,6 +949,14 @@ export async function generarPickDelDia(
     // pedido) en pocas llamadas del proponedor (texto, baratas). Así el pipeline
     // (caro) solo corre sobre un disco que YA sabemos nuevo y acorde al pedido.
     const MAX_PROPUESTAS = 8;
+    // Cuántas veces seguidas puede no contestar el curador antes de que demos por
+    // hecho que está caído. Importa por el RELOJ: cada llamada muerta se lleva su
+    // plazo entero, así que insistir ocho veces contra un proveedor que no
+    // responde consume el tiempo de la función y nos deja sin margen para
+    // fabricar nada — con lo que el oyente acaba recibiendo un disco repetido
+    // *y* tarde. Mejor rendirse pronto y decirlo con su nombre.
+    const MAX_FALLOS_SEGUIDOS = 3;
+    let fallosSeguidos = 0;
     const conseguirPropuesta = async (): Promise<DiscoPropuesto | null> => {
       for (let i = 0; i < MAX_PROPUESTAS; i++) {
         // Proponer y verificar son baratos en dinero pero no en reloj (dos
@@ -884,6 +966,7 @@ export async function generarPickDelDia(
           console.warn(
             "[recommend] se acabó el tiempo buscando propuesta; voy con lo que haya.",
           );
+          bitacora.push("Se me acabó el tiempo buscando qué proponerte.");
           sinTiempo = true;
           return null;
         }
@@ -898,8 +981,10 @@ export async function generarPickDelDia(
         try {
           p = await proponerDiscoDescubrimiento(argsPropuesta(rechazados));
           propuestasVivas++;
+          fallosSeguidos = 0;
         } catch (err) {
           fallosLlm++;
+          fallosSeguidos++;
           const motivo = (err as Error).message;
           console.warn(
             `[recommend] falló la propuesta ${i + 1}/${MAX_PROPUESTAS}: ${motivo}; reintento.`,
@@ -907,6 +992,16 @@ export async function generarPickDelDia(
           // También a la bitácora: cuando el curador está caído, el dueño tiene
           // que poder leerlo desde el teléfono, no solo en los logs de Vercel.
           bitacora.push(`El curador no contestó — ${motivo.slice(0, 160)}`);
+          if (fallosSeguidos >= MAX_FALLOS_SEGUIDOS) {
+            console.warn(
+              `[recommend] el curador falló ${fallosSeguidos} veces seguidas; lo doy por caído.`,
+            );
+            bitacora.push(
+              `Falló ${fallosSeguidos} veces seguidas: doy al curador por caído y dejo de insistir.`,
+            );
+            curadorCaido = true;
+            return null;
+          }
           continue;
         }
         if (esConflictiva(p)) {
@@ -973,10 +1068,16 @@ export async function generarPickDelDia(
         console.warn(
           `[recommend] sin tiempo para otra pasada del pipeline (intento ${intento + 1}); voy al catálogo.`,
         );
+        bitacora.push(
+          `Se me acabó el tiempo antes de poder investigar el disco (intento ${intento + 1}).`,
+        );
         sinTiempo = true;
         break;
       }
       const propuesta = await conseguirPropuesta();
+      // Sin curador no hay propuestas, y sin propuestas no hay nada que fabricar:
+      // insistir solo gasta el reloj que necesita la caída al catálogo.
+      if (curadorCaido) break;
       // El proponedor solo nombró discos ya vistos en esta ronda. NO nos rendimos:
       // la lista de rechazos (`rechazados`) creció, así que el siguiente intento
       // empuja al proponedor MÁS LEJOS de sus favoritos canónicos (que son justo
@@ -1107,7 +1208,11 @@ export async function generarPickDelDia(
             })
           : null;
       if (aviso) {
-        const resto = reason ? ` ${reason.slice(0, 600 - aviso.length)}`.trimEnd() : "";
+        // Ojo con el recorte: `slice` con un número negativo corta por el final en
+        // vez de devolver vacío, así que el tope se aplana en cero a propósito.
+        const resto = reason
+          ? ` ${reason.slice(0, Math.max(0, 600 - aviso.length))}`.trimEnd()
+          : "";
         reason = `${aviso}${resto}`;
       }
 
@@ -1120,6 +1225,10 @@ export async function generarPickDelDia(
         absenceDays: returnRitual?.absenceDays ?? null,
       });
 
+      bitacora.push(
+        `Fabricado: «${dossier.album.title}» de ${dossier.album.artist.name}` +
+          `${result.reused ? " (ya lo tenía escrito, lo reutilicé)" : " (nuevo, escrito hoy)"}.`,
+      );
       return {
         dossier,
         reason,
@@ -1128,6 +1237,7 @@ export async function generarPickDelDia(
         returnPick: Boolean(returnRitual),
         absenceDays: returnRitual?.absenceDays ?? null,
         avisoPedido: aviso,
+        intentos: bitacora,
       };
     }
 
@@ -1135,7 +1245,7 @@ export async function generarPickDelDia(
     // Con la causa en la mano, porque no es lo mismo rendirse buscando que no
     // haber podido ni preguntar.
     const causa: CausaFallback =
-      propuestasVivas === 0 && fallosLlm > 0
+      curadorCaido || (propuestasVivas === 0 && fallosLlm > 0)
         ? "sin-ia"
         : sinTiempo
         ? "sin-tiempo"
@@ -1143,14 +1253,22 @@ export async function generarPickDelDia(
     console.warn(
       `[recommend] no logré fabricar un disco nuevo tras varios intentos (causa: ${causa}); voy al catálogo.`,
     );
-    const delCatalogo = await caerAlCatalogo(
-      ctx, date, tz, mood ?? null, langPick, [...excluir], peticion, causa,
+    // La última línea de la bitácora es el veredicto, para no tener que
+    // deducirlo leyendo las anteriores.
+    bitacora.push(
+      causa === "sin-ia"
+        ? "Me rendí: el curador (la IA) no está respondiendo. Te dejo un disco del catálogo."
+        : causa === "sin-tiempo"
+        ? "Me rendí: se acabó el tiempo de fabricación. Te dejo un disco del catálogo."
+        : "Me rendí: no di con ningún disco nuevo que se sostuviera. Te dejo uno del catálogo.",
     );
-    // La bitácora viaja con el disco: si acabamos sirviendo algo del catálogo,
-    // lo que hay que poder leer es POR QUÉ no salió lo que se pidió.
-    return delCatalogo ? { ...delCatalogo, intentos: bitacora } : null;
+    return await caerAlCatalogo(
+      ctx, date, tz, mood ?? null, langPick, [...excluir], peticion, causa,
+      bitacora,
+    );
   } catch (err) {
     console.error("[recommend] disco fresco falló, voy al catálogo:", err);
+    bitacora.push(`Se rompió la fabricación — ${(err as Error).message.slice(0, 160)}`);
     try {
       return await caerAlCatalogo(
         ctx,
@@ -1160,7 +1278,8 @@ export async function generarPickDelDia(
         langPick,
         [...excluir],
         peticion,
-        propuestasVivas === 0 && fallosLlm > 0 ? "sin-ia" : "sin-hallazgo",
+        curadorCaido || (propuestasVivas === 0 && fallosLlm > 0) ? "sin-ia" : "sin-hallazgo",
+        bitacora,
       );
     } catch {
       return null;
@@ -1538,7 +1657,7 @@ async function recomendarYGuardar(
     // Si además la IA se cayó al elegir, el pedido no lo ha leído nadie: eso
     // también se dice. Solo cuando no hay causa conocida vamos al verificador.
     const causa: CausaFallback = opts.causa ?? (razonDeIa ? null : "sin-ia");
-    const aviso =
+    const avisoPedido =
       avisoPorCausa(causa, opts.peticion ?? null) ??
       (opts.peticion
         ? await avisoSiNoCumplePedido({
@@ -1548,6 +1667,19 @@ async function recomendarYGuardar(
             lang: opts.lang && opts.lang !== "Cualquiera" ? opts.lang : null,
           })
         : null);
+
+    // Y lo que faltaba por decir: que este disco YA se lo habíamos puesto.
+    // El catálogo es cerrado, así que cuando el oyente ya lo recorrió entero
+    // —el dueño lo tiene recorrido por definición— cualquier caída aquí es una
+    // repetición. Callarla es lo que se vive como "la app se rompió y nadie me
+    // avisó": mismo disco de siempre, sin una palabra. Lo comprobamos contra su
+    // memoria completa (por id y por obra), no contra una corazonada.
+    const yaLoVio = memoria.vistosIds.has(dossier.album.id) || obraVetada(dossier);
+    const aviso =
+      [avisoPedido, yaLoVio ? avisoPorRepeticion(causa, Boolean(avisoPedido)) : null]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || null;
 
     let reason = eleccion.reason?.trim().slice(0, 600) || null;
     if (returnRitual && !reason) {
@@ -1577,7 +1709,11 @@ async function recomendarYGuardar(
     // El aviso va PRIMERO y entero: es lo que el oyente necesita leer antes que
     // ninguna otra cosa. Lo que se recorta, si algo sobra, es la razón.
     if (aviso) {
-      const resto = reason ? ` ${reason.slice(0, 600 - aviso.length)}`.trimEnd() : "";
+      // Ojo con el recorte: `slice` con un número negativo corta por el final en
+      // vez de devolver vacío, así que el tope se aplana en cero a propósito.
+      const resto = reason
+        ? ` ${reason.slice(0, Math.max(0, 600 - aviso.length))}`.trimEnd()
+        : "";
       reason = `${aviso}${resto}`;
     }
 

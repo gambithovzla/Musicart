@@ -19,6 +19,7 @@ import {
   hayClaveIA,
   generationModel,
   runtimeModelName,
+  usaDialectoDeRazonamiento,
 } from "@/lib/dossier/llm";
 import { recomputeImpact } from "@/lib/dossier/impact";
 import { parseJson, type FactsPayload } from "@/lib/types";
@@ -564,11 +565,17 @@ export async function probarCurador(): Promise<{
 
   for (const sonda of sondas) {
     const t0 = Date.now();
+    // Con qué dialecto se le está hablando: los modelos de razonamiento (o1, o3,
+    // gpt-5) usan otros parámetros, y poner uno de esos sin saberlo era romper
+    // TODAS las llamadas con la cuenta llena de saldo.
+    const dialecto = usaDialectoDeRazonamiento(sonda.modelo)
+      ? " · modelo de razonamiento"
+      : "";
     try {
       const raw = await sonda.llamar();
       pruebas.push({
         nombre: sonda.nombre,
-        modelo: sonda.modelo,
+        modelo: `${sonda.modelo}${dialecto}`,
         ok: true,
         ms: Date.now() - t0,
         detalle: `Contestó: "${raw.trim().slice(0, 40)}"`,
@@ -576,7 +583,7 @@ export async function probarCurador(): Promise<{
     } catch (e) {
       pruebas.push({
         nombre: sonda.nombre,
-        modelo: sonda.modelo,
+        modelo: `${sonda.modelo}${dialecto}`,
         ok: false,
         ms: Date.now() - t0,
         detalle: (e as Error).message.slice(0, 240),

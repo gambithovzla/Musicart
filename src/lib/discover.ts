@@ -6,7 +6,15 @@
 
 import { llm, llmGeneration, extractJson } from "./dossier/llm";
 
-const LLM_TIMEOUT_MS = 12_000;
+// Cuánto esperamos al curador. Estuvo en 12 s y era poco para lo que se le
+// pide: el proponedor corre con GENERATION_MODEL (el modelo bueno, más lento) y
+// con un prompt largo — perfil, diario, patrones, hasta 120 discos que no puede
+// repetir. Cuando ese plazo vence, la llamada cuenta como fallo, y con los
+// fallos suficientes la app se rinde y sirve un disco del catálogo… que para
+// quien ya lo recorrió entero es exactamente el disco repetido que este plazo
+// mezquino venía a provocar. El reloj total lo sigue vigilando el presupuesto de
+// `generarPickDelDia`, que es su sitio.
+const LLM_TIMEOUT_MS = 22_000;
 
 export type DiscoPropuesto = {
   title: string;

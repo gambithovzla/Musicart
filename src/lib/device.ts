@@ -18,6 +18,13 @@ export const DIAL_COOKIE = "musicart_dial";
 // Discos ya mostrados hoy (para que "Rehacer" no cicle entre los del día).
 // Valor: "YYYY-MM-DD|albumId,albumId,…". Se reinicia cada día.
 export const SEEN_TODAY_COOKIE = "musicart_seen_today";
+// Diagnóstico del curador (solo admin): qué se intentó al fabricar el disco de
+// hoy y por qué salió lo que salió. Vive en una cookie porque la fabricación
+// normal la dispara la pantalla de carga y su respuesta se tira a la basura:
+// sin esto, el único sitio donde se podía leer la bitácora era el botón de
+// "Rehacer", y el día que el disco sale repetido sin haber tocado nada no había
+// forma de saber qué pasó sin abrir los logs de Vercel desde el teléfono.
+export const BITACORA_COOKIE = "musicart_bitacora"; // valor: "YYYY-MM-DD|línea¦línea"
 
 export function getDeviceId(): string {
   if (typeof window === "undefined") return "";
@@ -79,4 +86,34 @@ export function parseSeenToday(
 export function buildSeenToday(dateKey: string, albumIds: string[]): string {
   const unicos = [...new Set(albumIds.filter(Boolean))];
   return `${dateKey}|${unicos.join(",")}`;
+}
+
+/** Bitácora del curador guardada hoy (o vacío si la cookie es de otro día). */
+export function parseBitacora(raw: string | undefined, dateKey: string): string[] {
+  if (!raw) return [];
+  const sep = raw.indexOf("|");
+  if (sep === -1) return [];
+  if (raw.slice(0, sep) !== dateKey) return [];
+  try {
+    return decodeURIComponent(raw.slice(sep + 1))
+      .split("¦")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  } catch {
+    // Cookie manoseada o a medias: el diagnóstico no puede tumbar la home.
+    return [];
+  }
+}
+
+/** Serializa la bitácora del día. Recortada: una cookie no aguanta 4 KB de prosa. */
+export function buildBitacora(dateKey: string, lineas: string[]): string {
+  const texto = lineas
+    .filter(Boolean)
+    .slice(-10)
+    .map((l) => l.replace(/¦/g, " ").slice(0, 200))
+    .join("¦")
+    // Se recorta ANTES de codificar: cortar la cadena ya codificada puede
+    // partir un %XX por la mitad y dejar la cookie ilegible.
+    .slice(0, 1200);
+  return `${dateKey}|${encodeURIComponent(texto)}`;
 }

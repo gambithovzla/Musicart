@@ -18,8 +18,10 @@ import {
   TZ_COOKIE,
   LANG_COOKIE,
   PEDIDO_COOKIE,
+  BITACORA_COOKIE,
   parseTodayLang,
   parseTodayPedido,
+  parseBitacora,
 } from "@/lib/device";
 import { searchLinks } from "@/lib/sources/odesli";
 import { albumThemeStyle } from "@/lib/theme";
@@ -220,7 +222,12 @@ export default async function Home() {
         }}
       />
       <div className="relative">
-        {isAdminEmail(session?.user?.email) && <RehacerDiscoAdmin dateKey={dateKey} />}
+        {isAdminEmail(session?.user?.email) && (
+          <RehacerDiscoAdmin
+            dateKey={dateKey}
+            bitacoraPrevia={parseBitacora(jar.get(BITACORA_COOKIE)?.value, dateKey)}
+          />
+        )}
         <MoodCheckin
           mood={personal?.mood ?? null}
           canChange={!personal?.regenerated}

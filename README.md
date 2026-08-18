@@ -176,7 +176,10 @@ npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
   (endpoint `https://tu-dominio/api/stripe/webhook`). Opcional: `FREEMIUM_DOSSIER_LIMIT`
   (default 5), `DAILY_GENERATION_BUDGET` (tope de discos nuevos/día para oyentes,
   default 15; Fase 6.6), `LLM_PROVIDER`/`LLM_MODEL` (default `gpt-4o-mini`; plan
-  6.8: `GENERATION_MODEL` premium solo para escribir el dossier).
+  6.8: `GENERATION_MODEL` premium solo para escribir el dossier — vale tanto un
+  modelo clásico (`gpt-4o`) como uno de razonamiento (`o3`, `gpt-5`: el adapter
+  cambia solo al dialecto que toca, `max_completion_tokens` sin `temperature`).
+  Para comprobar cuál está atendiendo, `/revision` → «¿El curador está vivo?»).
   Blob TTS: `BLOB_READ_WRITE_TOKEN`. Web Push (Fase 5.1):
   `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
   (genera las claves con `npx web-push generate-vapid-keys`); el envío diario

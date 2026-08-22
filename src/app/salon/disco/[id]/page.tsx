@@ -3,6 +3,11 @@
 // Esta página es la que sostiene toda la sección. Un ranking sin recibos es una
 // opinión disfrazada de dato; aquí cada puntaje se abre y enseña las señales
 // que lo produjeron, ninguna escrita por un modelo.
+//
+// Compuesta con la imprenta (Fase 10) al tocarla para el compartir de la 9.9:
+// venía de la época de la plantilla —tarjeta con `bg-surface`, un emoji 🏛 de
+// carátula ausente y todo centrado—. Ahora es una FICHA: rótulo, lámina con su
+// pie, filete, el veredicto y debajo los recibos numerados.
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -11,6 +16,7 @@ import { isAdminEmail } from "@/lib/admin";
 import { getCanonAlbum, listarCanon } from "@/lib/canon/consulta";
 import { pisoDe } from "@/lib/canon/score";
 import { AbrirDisco } from "../../AbrirDisco";
+import { CompartirSalon } from "../../CompartirSalon";
 import { CuradorCanon } from "../../CuradorCanon";
 import { GaleriaCanon } from "../../GaleriaCanon";
 import { SelloPuntaje } from "../../SelloPuntaje";
@@ -29,6 +35,18 @@ export async function generateMetadata({
     title: `${album.title}, ${album.score}/100 · Musicart`,
     description: `Por qué ${album.title} de ${album.artist} es un ${album.score} de 100 en el canon.`,
   };
+}
+
+/** Cabecera de sección con su folio, igual que en la portada del Salón. */
+function Folio({ n, titulo }: { n: number; titulo: string }) {
+  return (
+    <div className="cabecera-seccion">
+      <span className="rotulo">{titulo}</span>
+      <span className="dato text-[11px] text-tinta-suave">
+        № {String(n).padStart(2, "0")}
+      </span>
+    </div>
+  );
 }
 
 export default async function DiscoDelCanonPage({
@@ -52,67 +70,80 @@ export default async function DiscoDelCanonPage({
   const otros = vecinos.albums.filter((a) => a.id !== album.id).slice(0, 6);
 
   return (
-    <main className="px-6 pb-16 pt-14">
+    <main className="px-5 pb-24 pt-8">
       <Link
         href="/salon"
-        className="text-xs uppercase tracking-[0.3em] text-dim underline-offset-4 hover:underline"
+        className="dato pulsable flex min-h-[44px] items-center text-[11px] uppercase tracking-[0.14em] text-tinta-suave"
       >
         ← El Salón
       </Link>
 
-      <header className="mt-6 flex flex-col items-center text-center">
-        {album.coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={album.coverUrl}
-            alt={`Carátula de ${album.title}`}
-            className="h-44 w-44 rounded-2xl object-cover shadow-[0_20px_60px_-25px_rgba(0,0,0,0.9)]"
-          />
-        ) : (
-          <div className="flex h-44 w-44 items-center justify-center rounded-2xl border border-white/10 bg-surface text-4xl">
-            🏛
+      <header className="mt-2">
+        <p className="rotulo">Sección II · Ficha del canon</p>
+        <div className="mt-4 flex items-start gap-4">
+          {album.coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={album.coverUrl}
+              alt={`Carátula de ${album.title}`}
+              className="recuadro h-28 w-28 shrink-0 object-cover"
+            />
+          ) : (
+            // Sin carátula NO va un emoji: va un adorno tipográfico (regla 6).
+            <div className="recuadro-tenue flex h-28 w-28 shrink-0 items-center justify-center text-3xl text-acento">
+              ✻
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <h1 className="font-serif text-[27px] font-semibold leading-[0.95]">
+              {album.title}
+            </h1>
+            <p className="mt-2 text-[13px] leading-snug text-tinta-suave">
+              {album.artist}
+              {album.year ? (
+                <span className="dato ml-1.5 text-[12px]">{album.year}</span>
+              ) : null}
+            </p>
           </div>
-        )}
+        </div>
+        <div className="filete-grueso mt-5" />
+      </header>
 
-        <h1 className="font-serif mt-6 text-3xl font-semibold leading-tight">
-          {album.title}
-        </h1>
-        <p className="mt-1.5 text-dim">
-          {album.artist}
-          {album.year ? ` · ${album.year}` : ""}
-        </p>
-
-        <div className="mt-7 flex flex-col items-center">
-          <SelloPuntaje score={album.score} tam="lg" />
-          <p className="mt-3 text-xs uppercase tracking-[0.25em] text-album-light">
-            {piso.nombre}
-          </p>
-          <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-dim">
+      {/* El veredicto: la cifra manda, y a su lado qué significa esa altura. */}
+      <section className="mt-6 flex items-center gap-4">
+        <SelloPuntaje score={album.score} tam="lg" />
+        <div className="min-w-0">
+          <p className="rotulo">{piso.nombre}</p>
+          <p className="mt-1.5 text-[12px] leading-relaxed text-tinta-suave">
             {piso.descripcion}
           </p>
         </div>
-      </header>
+      </section>
 
-      <section className="mt-9 rounded-3xl border border-white/10 bg-surface p-6">
-        <h2 className="font-serif text-lg font-semibold">
-          Por qué es un {album.score}
-        </h2>
+      <section className="mt-10">
+        <Folio n={1} titulo={`Por qué es un ${album.score}`} />
         {album.evidencia.length > 0 ? (
-          <ul className="mt-4 space-y-2.5">
+          // Los recibos van numerados: lo que se numera, se numera (regla 7).
+          <ul className="mt-4 border-t border-regla">
             {album.evidencia.map((e, i) => (
-              <li key={i} className="flex gap-2.5 text-sm leading-relaxed">
-                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-album" />
-                <span className="text-foreground/85">{e}</span>
+              <li
+                key={i}
+                className="flex items-baseline gap-3 border-b border-regla py-3"
+              >
+                <span className="dato shrink-0 text-[11px] text-tinta-suave">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="text-[13px] leading-relaxed">{e}</span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="mt-3 text-sm leading-relaxed text-dim">
+          <p className="mt-4 text-[13px] leading-relaxed text-tinta-suave">
             De este disco tengo menos rastro documental que de otros del canon.
             Está aquí, pero en sus márgenes.
           </p>
         )}
-        <p className="mt-5 border-t border-white/10 pt-4 text-xs leading-relaxed text-dim">
+        <p className="mt-5 text-[12px] leading-relaxed text-tinta-suave">
           {album.bloqueado ? (
             <>
               Este puntaje lo puso el curador de Musicart a mano, no la fórmula.
@@ -130,10 +161,10 @@ export default async function DiscoDelCanonPage({
         </p>
       </section>
 
-      <div className="mt-8">
+      <div className="mt-10">
         <AbrirDisco canonId={album.id} yaFabricado={album.albumId} />
         {!album.albumId && (
-          <p className="mt-3 text-center text-xs leading-relaxed text-dim">
+          <p className="mt-3 text-[12px] leading-relaxed text-tinta-suave">
             Todavía no le he escrito su historia. Si la pides, la investigo,
             la escribo y la verifico — tarda un par de minutos.
           </p>
@@ -141,12 +172,12 @@ export default async function DiscoDelCanonPage({
       </div>
 
       {(album.generos.length > 0 || album.country) && (
-        <div className="mt-8 flex flex-wrap justify-center gap-2">
+        <div className="mt-8 flex flex-wrap gap-2">
           {album.generos.map((g) => (
             <Link
               key={g}
               href={`/salon/lista?genero=${encodeURIComponent(g)}`}
-              className="rounded-full border border-white/15 px-3.5 py-1.5 text-xs text-foreground/75"
+              className="dato pulsable flex min-h-[44px] items-center border border-tinta px-3 text-[12px] uppercase tracking-[0.08em]"
             >
               {g}
             </Link>
@@ -154,7 +185,7 @@ export default async function DiscoDelCanonPage({
           {album.country && (
             <Link
               href={`/salon/lista?pais=${album.country}`}
-              className="rounded-full border border-white/15 px-3.5 py-1.5 text-xs text-foreground/75"
+              className="dato pulsable flex min-h-[44px] items-center border border-regla px-3 text-[12px] uppercase tracking-[0.08em] text-tinta-suave"
             >
               {nombrePais(album.country)}
             </Link>
@@ -162,13 +193,25 @@ export default async function DiscoDelCanonPage({
         </div>
       )}
 
+      {/* Compartir la cifra (9.9). La imagen social la pone
+          `opengraph-image.tsx` de esta misma ruta: carátula, el sello del
+          puntaje y su primer recibo — nunca un número suelto. */}
+      <div className="filete mt-10 pt-6">
+        <CompartirSalon
+          ruta={`/salon/disco/${album.id}`}
+          titulo={`${album.title}, ${album.score}/100 · Musicart`}
+          texto={`${album.title} de ${album.artist} es un ${album.score} de 100 en el canon. Aquí está por qué.`}
+          etiqueta={`Compartir este ${album.score}`}
+        />
+      </div>
+
       {otros.length > 0 && (
         <section className="mt-12">
-          <h2 className="font-serif text-lg font-semibold">A la misma altura</h2>
-          <p className="mt-1.5 text-sm text-dim">
+          <Folio n={2} titulo="A la misma altura" />
+          <p className="mt-3 text-[13px] leading-relaxed text-tinta-suave">
             Otros discos que el canon pone donde este.
           </p>
-          <div className="mt-5">
+          <div className="mt-4">
             <GaleriaCanon albums={otros} />
           </div>
         </section>

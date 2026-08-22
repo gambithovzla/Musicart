@@ -778,8 +778,26 @@ Musicart YA tenía un número 1-100: el impacto cultural (`Album.impact`, 6.5).
   diferencia no cabía. **Ninguna URL cambió**: `/caminos`, `/salon`, `/vitrina`,
   `/explorar/[slug]` y `/explorar/hitos` siguen igual, y la pestaña Explorar se
   queda encendida mientras estás dentro de cualquiera de ellas.
-- [ ] **9.9 Compartir el Salón** — OG image del Salón y de cada disco del canon
-  ("soy un 96/100"), al estilo de la de la Vitrina en 7.6.
+- [x] **9.9 Compartir el Salón** (ago 2026) — imagen social de la sección y de
+  cada disco del canon, y el sello de compartir en las dos. Lo que se comparte
+  de un disco del Salón es SU CIFRA, así que la imagen la compone como la
+  pestaña (`SelloPuntaje`): el mismo peso de tinta según la altura —un 100 en
+  negativo, un 95 con marco macizo— y, debajo, **su primer recibo**. Compartir
+  un número sin decir de dónde sale es justo lo que el Salón existe para no
+  hacer. Tres detalles que costaron su rato: **(a)** `ImageResponse` no ve el
+  `next/font` de la app ni tiene fuentes del sistema, así que sin pasárselas
+  pintaba el Salón en la grotesca de fábrica de satori —la tipografía de
+  cualquier app, o sea lo contrario de la Fase 10—: ahora Fraunces, Archivo e
+  IBM Plex Mono viajan en el repo (`src/app/salon/tipos`, con su
+  `outputFileTracingIncludes`) y se leen del disco, sin depender de que un
+  servidor de fuentes responda; **(b)** una lista de fuentes VACÍA tumba la
+  imagen ("No fonts are loaded"), así que cuando no se pueden leer se omite el
+  campo y sale con la de fábrica — una imagen fea es mejor que un enlace que no
+  enseña nada; **(c)** las dos rutas son `force-dynamic` y toleran que la base
+  no responda: el índice crece cada noche, y una cifra congelada en el último
+  despliegue sería mentira. De paso, la ficha del disco se compuso con la
+  imprenta (venía de la plantilla: tarjeta con `bg-surface`, un emoji 🏛 de
+  carátula ausente —ahora la capitular del título— y todo centrado).
 - [x] **9.10 El Salón se levanta solo** (ago 2026, tras el reporte del dueño:
   «me metí en el Salón y no aparece absolutamente nada») — el índice dependía de
   que alguien corriera `npm run canon` **en una terminal**, y el dueño anda en el
@@ -980,6 +998,32 @@ que se hunden contra el papel · nada de emojis · lo que se numera, se numera.
 por decisión del dueño, que priorizó el Salón de la Fama; la 10 fue un encargo
 transversal suyo y no altera el orden de las fases de producto: **la fase de
 trabajo sigue siendo la 9**.
+
+De la Fase 9 ya no queda código pendiente: cerrada la 9.9, **lo único que falta
+es la 9.6**, y esa no se escribe — se toca. El dueño entra a `/revision`, le da
+a "Levantar el Salón" (o espera al worker de esa noche) y se marca cuando el
+índice esté de verdad levantado en producción. Los criterios de aceptación de la
+fase se comprueban ahí mismo, con el índice puesto.
+
+### Ideas en cola (aún NO son fases; no empezar sin decirlo el dueño)
+
+- **"Conociendo a…" — el atlas** (propuesta del dueño, ago 2026): entrar a la
+  música **por un lugar**. Es el tercer eje que faltaba (Caminos entra por
+  género, el Salón por prestigio) y encaja con la tesis: conocer un país a
+  través de sus discos. Tres decisiones ya razonadas, para no re-litigarlas
+  cuando le toque: **(a)** un ATLAS por regiones con buscador, **no** un
+  desplegable de 195 países — en un teléfono es scroll infinito, y para la mayor
+  parte del mundo no hay canon verificable que enseñar; **(b)** el motor NO es
+  filtrar `CanonAlbum` por país (Wikidata escora al mundo anglosajón: Venezuela
+  daría dos discos y Estados Unidos quinientos) sino el curador proponiendo, con
+  `origin-guard.ts` comprobando en MusicBrainz que cada artista sea de verdad de
+  allí; **(c)** el retrato de un país es igual para todos, así que se cachea
+  **global** por país (a diferencia de los Caminos, que son de cada oyente) y
+  solo se personaliza la entrada — barato y al instante para el segundo
+  visitante. Efecto colateral que lo justifica solo: la tabla ISO de gentilicios
+  y áreas de MusicBrainz que hay que construir amplía `origin-guard` de ~45
+  países a todos, y eso mejora **el disco del día** ("quiero algo de Senegal").
+  Vivirá como puerta IV de `/explorar`; el BottomNav se queda en cuatro (9.8).
 
 ---
 

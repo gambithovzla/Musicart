@@ -97,7 +97,8 @@ entinta según la edición, y sin eso el dorado desaparece sobre papel claro.
 
 **Estado de la migración:** hechas a mano `layout` + `Cabecera` (folio corrido)
 · `BottomNav` (pie de imprenta) · home/`DailyReveal` · `/caminos` ·
-`/salon` (+ `GaleriaCanon`, `SelloPuntaje`, `Dial`) · `/explorar` +
+`/salon` (+ `GaleriaCanon`, `SelloPuntaje`, `Dial`, la ficha
+`/salon/disco/[id]` y `AbrirDisco`) · `/explorar` +
 `PuertasExplorar` · `ThemeToggle` · `GenreTags` · `/prensa`. El resto de
 pantallas (dossier, diario, perfil, onboarding, revisión, vitrina, rebobinada,
 dueto) heredan paleta, tipografías y el barrido de esquinas, pero **conservan
@@ -151,6 +152,11 @@ src/app/salon/           Fase 9: El Salón de la Fama. Muro de los 100/100, el
                          puntaje a mano (locked), añadir al canon lo que el
                          índice no trajo, quitar lo que se coló. Vista de
                          conjunto en /revision (ClubDeLosCien).
+                         Compartir (9.9): opengraph-image.tsx de la sección y de
+                         cada disco ("soy un 96/100", con su recibo) +
+                         CompartirSalon. Las tipografías de esas imágenes viven
+                         en salon/tipos (ImageResponse no ve el next/font de la
+                         app; ojo al outputFileTracingIncludes).
 src/app/dueto/           Disco compartido semanal entre dos cuentas (5.5).
 src/app/perfil/          Edición de perfil, push, dueto, Stripe, privacidad.
 src/app/entrar/          Inicio de sesión (Google + email) y fusión del device.

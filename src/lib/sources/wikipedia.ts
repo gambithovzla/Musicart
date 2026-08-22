@@ -1,6 +1,6 @@
 // Wikipedia (es con fallback a en): intro + secciones profundas (Fase 6.9).
 
-type WikiExtract = { title: string; text: string; url: string; lang: string };
+export type WikiExtract = { title: string; text: string; url: string; lang: string };
 
 export type WikiSectionPassage = {
   title: string;
@@ -198,6 +198,33 @@ export async function getAlbumDeepContext(
   return buildWikiContext([`${album} álbum ${artist}`, `${album} album ${artist}`]).then(
     ({ intro, deepSections }) => ({ intro, sections: deepSections }),
   );
+}
+
+/**
+ * Solo la entrada del artículo del artista, sin las secciones profundas.
+ *
+ * Existe aparte de `getArtistContext` porque la barrera del origen (7.9) la
+ * llama en caliente, mientras el oyente espera su disco: ahí no se pueden pagar
+ * las cinco o seis peticiones que cuesta traer "Recepción", "Legado" y compañía
+ * para leer una sola frase. Esto son dos o tres, y con eso basta — la
+ * nacionalidad de un artista vive SIEMPRE en la primera frase del artículo.
+ */
+export async function getArtistIntro(artist: string): Promise<WikiExtract | null> {
+  let article: { title: string; lang: "es" | "en" } | null = null;
+  for (const q of [artist, `${artist} musician`]) {
+    article = (await resolveArticle("es", q)) ?? (await resolveArticle("en", q));
+    if (article) break;
+  }
+  if (!article) return null;
+
+  const text = await getIntroExtract(article.lang, article.title);
+  if (!text) return null;
+  return {
+    title: article.title,
+    text,
+    url: wikiUrl(article.lang, article.title),
+    lang: article.lang,
+  };
 }
 
 export async function getArtistContext(artist: string): Promise<WikiExtract | null> {

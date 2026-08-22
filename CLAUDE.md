@@ -183,10 +183,16 @@ src/lib/pedido-match.ts  Lee el pedido del oyente SIN IA (cruza sus palabras con
                          artista, título, etiquetas y década). Es la red de abajo:
                          el día que el LLM no responde o se acaba el tope, el
                          pedido seguía existiendo pero no lo leía nadie.
-src/lib/origin-guard.ts  Fase 7.9: barrera dura del ORIGEN del artista — si el pedido
-                         nombra un país ("artistas venezolanos"), comprueba con
-                         MusicBrainz que el artista lo sea; si no, se descarta la
-                         propuesta y se pide otra (ante la duda, deja pasar).
+src/lib/origin-guard.ts  Fase 7.9 + 7.11: barrera dura del ORIGEN del artista — si el
+                         pedido nombra un país ("artistas venezolanos"), comprueba
+                         que el artista lo sea EN TRES FUENTES por orden de
+                         fiabilidad (MusicBrainz → Wikidata → primera frase de la
+                         Wikipedia; la primera que sabe gana, las de respaldo con
+                         tope de 6 s). Si no lo es, se descarta la propuesta y se
+                         pide otra; ante la duda, deja pasar. El orden vive en el
+                         array FUENTES: añadir una cuarta es añadirla ahí.
+                         diagnosticoDeOrigen() las prueba TODAS (lo usan el botón
+                         de /revision y npm run probar:origen).
 src/lib/review.ts        Claves del comentario libre y canción favorita; escala
                          1-10 (RATING_MAX, LOVED_THRESHOLD, splitAnswers).
 src/lib/musical-thread.ts Fase 5.4: conecta reseñas del diario entre sí (cacheada).
@@ -271,6 +277,7 @@ npm run db:migrate   # prisma migrate dev
 npm run db:seed      # seed idempotente (manual; el build ya no siembra)
 npm run dossier -- "Álbum" "Artista" --publish   # generar un dossier (CLI, requiere API key)
 npm run worker -- --batch 2                      # corrida del worker de catálogo (curador + pipeline)
+npm run probar:origen -- "Sentimiento Muerto" "rock venezolano"  # ¿saben las tres fuentes de dónde es? (7.11, sin IA)
 npm run canon                                    # construye el índice del canon (Fase 9; sin IA, ~1000 discos)
 npm run canon -- --limite 150                    # corrida corta de prueba
 npm run canon -- --portadas 200                  # solo rellenar carátulas pendientes

@@ -19,6 +19,7 @@ import { CuradorAlbumes, type AlbumCurable } from "./CuradorAlbumes";
 import { ClubDeLosCien } from "./ClubDeLosCien";
 import { LevantarSalon } from "@/components/LevantarSalon";
 import { EstadoCurador } from "./EstadoCurador";
+import { EstadoOrigen } from "./EstadoOrigen";
 import { getCanonCurado, estadoDelSalon } from "@/lib/canon/consulta";
 
 export const dynamic = "force-dynamic";
@@ -168,6 +169,7 @@ export default async function RevisionPage() {
           tope={cupo.tope}
           quedanExtra={cupo.quedanExtra}
         />
+        <EstadoOrigen />
         <GenerarDiscoForm />
         <RecalcularImpactos />
       </section>

@@ -22,6 +22,12 @@ import {
   usaDialectoDeRazonamiento,
 } from "@/lib/dossier/llm";
 import { recomputeImpact } from "@/lib/dossier/impact";
+import {
+  detectarPaisesPedido,
+  diagnosticoDeOrigen,
+  type SondaOrigen,
+  type VeredictoOrigen,
+} from "@/lib/origin-guard";
 import { parseJson, type FactsPayload } from "@/lib/types";
 import {
   dossierAudioInputFromRow,
@@ -592,4 +598,42 @@ export async function probarCurador(): Promise<{
   }
 
   return { hayClave, proveedor, pruebas };
+}
+
+/**
+ * «¿Sabe la app de dónde es este artista?» — el diagnóstico de las tres fuentes
+ * del origen (7.9, ampliada en ago 2026).
+ *
+ * Por qué hace falta: MusicBrainz, Wikidata y la Wikipedia son APIs públicas de
+ * terceros. Si una se cae o cambia, la barrera NO se rompe — se calla y deja
+ * pasar, que es lo correcto pero también lo invisible: desde fuera solo se ve
+ * que vuelven los avisos de "no pude confirmar que sea de Venezuela", o peor,
+ * que se cuela un artista de otro país. Esto pregunta a las tres delante de ti
+ * y enseña qué contestó cada una. No gasta IA: son datos abiertos.
+ */
+export async function probarOrigen(
+  artista: string,
+  pedido: string,
+): Promise<{
+  paises: string[];
+  sondas: SondaOrigen[];
+  veredicto: VeredictoOrigen["veredicto"];
+  origen: string | null;
+  fuente: string | null;
+}> {
+  await requireAdmin();
+
+  const paises = detectarPaisesPedido(pedido);
+  if (paises.length === 0) {
+    return { paises: [], sondas: [], veredicto: "desconocido", origen: null, fuente: null };
+  }
+
+  const { sondas, veredicto } = await diagnosticoDeOrigen(artista.trim(), paises);
+  return {
+    paises: paises.map((p) => p.nombre),
+    sondas,
+    veredicto: veredicto.veredicto,
+    origen: veredicto.origen,
+    fuente: veredicto.fuente ?? null,
+  };
 }

@@ -476,6 +476,33 @@ integra más profundamente con la escucha real.
   (c) El respaldo del catálogo (`elegirConLlm`) prioriza el origen sobre el
   género cuando no puede cumplir todo y está OBLIGADO a reconocerlo en la
   primera frase de la razón en vez de fingir que cumplió.
+- [x] **7.11 La barrera del origen pregunta en TRES sitios** (ago 2026, idea del
+  dueño: «que busques otra fuente fiable, que a los de países pequeños no los
+  tiene MusicBrainz») — tenía toda la razón, y el agujero estaba justo donde más
+  duele: MusicBrainz es magnífico con el canon anglosajón y flojo con el artista
+  de nicho de un país pequeño, que es EXACTAMENTE lo que se pide cuando alguien
+  escribe "algo de mi país". Con esos, la barrera decía "no lo sé" y no
+  comprobaba nada — y el oyente recibía el aviso de "no pude confirmar que sea
+  de Venezuela" casi siempre, que es la manera más rápida de que un aviso
+  honesto se vuelva ruido y se deje de leer. Ahora se pregunta en cadena, de más
+  fiable a menos, y la primera que sabe gana: **(1) MusicBrainz** como hasta
+  ahora; **(2) Wikidata** (`origenDeArtista`), dato igual de estructurado —un
+  código ISO— con mucha mejor cobertura fuera del mundo anglosajón, y por la API
+  de siempre, NO por SPARQL: esto se pregunta en caliente y el endpoint SPARQL
+  se satura (lección de la 9.11); **(3) la primera frase de la Wikipedia** ("es
+  una banda venezolana de…"), que para los artistas más oscuros suele ser la
+  única que sabe algo. Los tres detalles que la hacen fiable: la de Wikipedia es
+  texto libre, así que **solo cuenta si la frase nombra UN país** —"una banda
+  venezolana que canta en inglés" nombra dos y ahí preferimos callarnos—; en
+  Wikidata un homónimo que no sea músico se descarta (hay políticos que se
+  llaman como una banda, y darles su país sería peor que no saber nada); y las
+  dos fuentes de respaldo van **con reloj** (6 s), porque buscar en más sitios
+  no puede significar hacer esperar más al oyente. Las dudas se siguen
+  resolviendo igual: sin dato, "desconocido", y no se descarta a nadie.
+  Y como estas tres son APIs públicas de terceros que al caerse no rompen nada
+  —se callan, que es lo correcto y lo invisible—, el fallo ahora se ve: botón
+  **"¿Sabe de dónde es este artista?"** en `/revision` (sin terminal, sin gastar
+  IA) y `npm run probar:origen -- "Artista" "pedido"` para la terminal.
 - [x] **7.10 El pedido no se pierde por el camino** (ago 2026, tras el reporte
   del dueño: «le di rehacer, puse *rock venezolano de calidad* y me recomendó un
   disco en inglés que no tiene nada que ver») — la 7.9 puso las barreras, pero
@@ -1020,9 +1047,12 @@ fase se comprueban ahí mismo, con el índice puesto.
   allí; **(c)** el retrato de un país es igual para todos, así que se cachea
   **global** por país (a diferencia de los Caminos, que son de cada oyente) y
   solo se personaliza la entrada — barato y al instante para el segundo
-  visitante. Efecto colateral que lo justifica solo: la tabla ISO de gentilicios
-  y áreas de MusicBrainz que hay que construir amplía `origin-guard` de ~45
-  países a todos, y eso mejora **el disco del día** ("quiero algo de Senegal").
+  visitante. Parte del camino ya está andado: desde la **7.11** la COMPROBACIÓN
+  del origen mira en tres fuentes, así que a un artista de un país pequeño ya se
+  le puede verificar la procedencia. Lo que sigue faltando es la DETECCIÓN: la
+  tabla de gentilicios cubre 54 países, y uno que no esté en ella ni activa la
+  barrera ni podrá tener su retrato. Ampliarla es trabajo de esta idea, y de
+  paso mejora **el disco del día** ("quiero algo de Cabo Verde").
   Vivirá como puerta IV de `/explorar`; el BottomNav se queda en cuatro (9.8).
 
 ---

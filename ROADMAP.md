@@ -1110,11 +1110,27 @@ discos con una bandera encima.
   `CreandoDiscoHoy`) y "Cuéntame su historia" por disco. Puerta IV en
   `/explorar`. Medido en un teléfono de 393×852: cero textos por debajo de 11px
   y cero objetivos táctiles por debajo de 44px en el retrato.
-- [ ] **11.6 Compartir un retrato** — imagen social del retrato de un país, al
-  estilo de la del Salón (9.9).
-- [ ] **11.7 El país del oyente** — si su perfil dice de dónde es, ofrecerle su
-  país primero. Es la puerta de entrada más natural a esta sección y todavía no
-  está.
+- [x] **11.6 Compartir un retrato** (ago 2026) — imagen social de la sección y
+  de cada país. Lo que se comparte de un país NO es una carátula suelta: es el
+  **índice del retrato**, los cinco papeles con su disco al lado. Quien lo ve en
+  un chat entiende la promesa sin abrir el enlace, y eso es justo lo que
+  distingue esto de una playlist con bandera. Dos mudanzas que venían pidiéndose
+  solas: las tipografías de las imágenes pasaron de `src/app/salon/tipos` a
+  **`src/lib/imprenta-og`** (ya no son del Salón, son de la publicación) y
+  `CompartirSalon` pasó a ser **`src/components/Compartir`** (el gesto es el
+  mismo para una sección, un disco del canon o el retrato de un país). Ojo al
+  `outputFileTracingIncludes` de `next.config.ts`: imagen social nueva = una
+  línea más ahí, o sale con la fuente de fábrica.
+- [x] **11.7 El país del oyente** (ago 2026) — casi nadie llega al Atlas
+  pensando en Mongolia: se llega pensando en el sitio de uno. Ahora el perfil
+  tiene un campo **opcional** "¿de dónde eres?" (un desplegable nativo, que en
+  un formulario es lo mejor que hay en un teléfono — lo que NO puede ser un
+  desplegable es la navegación del Atlas) y la sección te recibe con tu país
+  arriba del índice. De propina, el disco del día también se entera: saber de
+  dónde eres no filtra nada —nadie quiere solo música de su país— pero cambia el
+  tono, porque a un venezolano no le explicas quién fue Simón Díaz igual que a
+  un japonés. No se pregunta en el onboarding a propósito: la entrada ya es
+  larga y esto no es imprescindible para dar el primer disco.
 
 ### Criterios de aceptación
 

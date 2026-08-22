@@ -1,18 +1,18 @@
 "use client";
 
-// Compartir el Salón y sus discos (9.9).
+// Compartir una sección o una de sus fichas (9.9, y el Atlas en la 11.6).
 //
-// Sirve para las dos cosas —la sección entera y un disco suelto— porque el
-// gesto es el mismo y lo único que cambia es qué se dice. La imagen bonita la
-// ponen los `opengraph-image.tsx` de cada ruta; esto solo entrega el enlace,
-// con Web Share si el teléfono lo tiene y copiándolo si no.
+// Sirve para todas —una sección entera, un disco del canon, el retrato de un
+// país— porque el gesto es el mismo y lo único que cambia es qué se dice. La
+// imagen bonita la ponen los `opengraph-image.tsx` de cada ruta; esto solo
+// entrega el enlace, con Web Share si el teléfono lo tiene y copiándolo si no.
 //
 // Es un SELLO hueco, no una pastilla: 52px de alto, se hunde al pulsarlo y
 // responde al dedo (regla VIII), sin `hover` de por medio.
 
 import { useState, useTransition } from "react";
 
-export function CompartirSalon({
+export function Compartir({
   ruta,
   titulo,
   texto,

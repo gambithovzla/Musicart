@@ -16,7 +16,7 @@ import { isAdminEmail } from "@/lib/admin";
 import { getCanonAlbum, listarCanon } from "@/lib/canon/consulta";
 import { pisoDe } from "@/lib/canon/score";
 import { AbrirDisco } from "../../AbrirDisco";
-import { CompartirSalon } from "../../CompartirSalon";
+import { Compartir } from "@/components/Compartir";
 import { CuradorCanon } from "../../CuradorCanon";
 import { GaleriaCanon } from "../../GaleriaCanon";
 import { SelloPuntaje } from "../../SelloPuntaje";
@@ -197,7 +197,7 @@ export default async function DiscoDelCanonPage({
           `opengraph-image.tsx` de esta misma ruta: carátula, el sello del
           puntaje y su primer recibo — nunca un número suelto. */}
       <div className="filete mt-10 pt-6">
-        <CompartirSalon
+        <Compartir
           ruta={`/salon/disco/${album.id}`}
           titulo={`${album.title}, ${album.score}/100 · Musicart`}
           texto={`${album.title} de ${album.artist} es un ${album.score} de 100 en el canon. Aquí está por qué.`}

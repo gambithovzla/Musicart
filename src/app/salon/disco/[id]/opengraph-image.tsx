@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { getCanonAlbum } from "@/lib/canon/consulta";
 import { pisoDe } from "@/lib/canon/score";
-import { fuentesDeLaImprenta } from "../../tipos";
+import { fuentesDeLaImprenta } from "@/lib/imprenta-og";
 
 export const alt = "Un disco del canon · Musicart";
 export const size = { width: 1200, height: 630 };

@@ -5,6 +5,14 @@ export const alt = "La vitrina · Musicart";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
+// No se prerenderiza en el build. Dos motivos: la vitrina cambia cuando el
+// curador mete un disco (una imagen congelada en el último despliegue enseñaría
+// una vitrina vieja), y sobre todo, prerenderizarla ata el BUILD a que la base
+// de datos responda — si Postgres tiene un mal minuto justo entonces, el
+// despliegue entero falla por una imagen social. Las del Salón (9.9) ya se
+// hicieron así.
+export const dynamic = "force-dynamic";
+
 // Imagen social de la vitrina: un colage de las carátulas atesoradas junto al
 // título. Si aún no hay discos, una tarjeta editorial limpia.
 export default async function VitrinaOg() {

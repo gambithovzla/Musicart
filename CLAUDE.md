@@ -23,8 +23,13 @@ imprenta»— completada** (ago 2026). La fase de trabajo sigue siendo la 9.
   puntaje NO lo escribe ningún LLM (sale de datos duros y de calibrar por
   percentil contra todo el índice) y el índice tiene miles de discos **sin**
   fabricarles dossier: la historia se hace perezosa al tocarlos.
+- **Fase 11 — «Conociendo a…», el atlas** (`/atlas`): entrar a la música por un
+  LUGAR. Eliges un país y son cinco discos que cuentan algo de él (raíz · himno
+  · cruce · grito · ahora). Los propone el curador y **a cada artista se le
+  comprueba el origen** con la barrera de la 7.11; lo que no se puede confirmar
+  se enseña diciéndolo. El retrato es global por país, no de cada oyente.
 
-En las dos, el disco del día NO se toca. Ver las decisiones de diseño en el
+En las tres, el disco del día NO se toca. Ver las decisiones de diseño en el
 ROADMAP antes de tocar nada de estas fases.
 
 ## Reglas de trabajo para la IA
@@ -122,6 +127,8 @@ prisma/schema.prisma     Modelos: Artist, Album (difficulty 1-5, impact 1-100),
                          (tope de gasto diario 6.6), PushSubscription, Rewind,
                          MusicalThread, DuetPair/DuetPick, DossierChat, DossierView,
                          Camino (Fase 8: tema, titulo, intro, stepsJson, status),
+                         RetratoPais (Fase 11: el retrato de un país — uno por
+                         código ISO, global; status listo|vacio + nota),
                          CanonAlbum (Fase 9: el índice del canon — score 1-100
                          calibrado, raw, locked, signalsJson, evidenceJson).
                          Campos *Json son String.
@@ -157,6 +164,12 @@ src/app/salon/           Fase 9: El Salón de la Fama. Muro de los 100/100, el
                          CompartirSalon. Las tipografías de esas imágenes viven
                          en salon/tipos (ImageResponse no ve el next/font de la
                          app; ojo al outputFileTracingIncludes).
+src/app/atlas/           Fase 11: el Atlas. /atlas es el ÍNDICE por regiones con
+                         buscador (no un desplegable de 195 países: en un
+                         teléfono es scroll infinito) y /atlas/[code] el retrato.
+                         Las dos operaciones caras viven en /api/atlas/retrato
+                         (maxDuration 300) y /api/atlas/disco (300), como el
+                         disco del día.
 src/app/dueto/           Disco compartido semanal entre dos cuentas (5.5).
 src/app/perfil/          Edición de perfil, push, dueto, Stripe, privacidad.
 src/app/entrar/          Inicio de sesión (Google + email) y fusión del device.
@@ -203,6 +216,20 @@ src/lib/caminos.ts       Fase 8: motor de los Caminos — proponerCamino (5 paso
                          su papel y su puente, UNA llamada al LLM), abrirPaso
                          (fabricación perezosa vía pipeline, respeta el tope 6.6),
                          marcarEscuchado (abre el siguiente) y reemplazarPaso.
+src/lib/paises.ts        Fase 11: LA GEOGRAFÍA, en un solo sitio — 192 países en
+                         15 regiones, con gentilicios (es/en) y áreas de
+                         MusicBrainz. La lee el Atlas (para ofrecer países) y
+                         origin-guard (para detectar y verificar). Si añades un
+                         país, va aquí y solo aquí.
+src/lib/atlas.ts         Fase 11: motor del Atlas — retratoDePais() (propone con
+                         UNA llamada, verifica el origen de los 5 artistas,
+                         descarta a los que no son de ahí y guarda el retrato
+                         GLOBAL por país), abrirDiscoDelAtlas() (dossier perezoso
+                         con el tope 6.6). Guarda también el fracaso, con la
+                         razón escrita por el CÓDIGO y sin reintentar en 24 h.
+src/lib/atlas-tipos.ts   Fase 11: la parte PURA (papeles, tipos). Aparte por lo
+                         mismo que caminos-pasos.ts: la UI de cliente no puede
+                         importar el motor sin arrastrar el pipeline.
 src/lib/caminos-pasos.ts Fase 8: la parte PURA (tipos, etiquetas de papel,
                          pasoAbierto/pasoActual). Existe aparte porque la UI de
                          cliente no puede importar caminos.ts (arrastra el
@@ -248,9 +275,9 @@ src/lib/device.ts        Identidad anónima por dispositivo (localStorage + cook
                          musicart_device para personalizar en el servidor).
 src/lib/theme.ts|palette.ts  Theming de la UI con la paleta de la portada.
 src/components/          BottomNav (9.8: SOLO 4 pestañas — Hoy · Explorar ·
-                         Diario · Perfil; Caminos/Salón/Vitrina viven dentro de
-                         /explorar vía PuertasExplorar, que explica en qué se
-                         diferencian. No añadas pestañas sin quitar otra),
+                         Diario · Perfil; Caminos/Salón/Atlas/Vitrina viven
+                         dentro de /explorar vía PuertasExplorar, que explica en
+                         qué se diferencian. No añadas pestañas sin quitar otra),
                          Onboarding (entrada por pasos, 6.7), CreandoDiscoHoy (carga
                          del disco fresco), RehacerDiscoAdmin, DailyReveal,
                          ImpactoCultural + DificultadEscucha (clicleables),
@@ -278,6 +305,7 @@ npm run db:seed      # seed idempotente (manual; el build ya no siembra)
 npm run dossier -- "Álbum" "Artista" --publish   # generar un dossier (CLI, requiere API key)
 npm run worker -- --batch 2                      # corrida del worker de catálogo (curador + pipeline)
 npm run probar:origen -- "Sentimiento Muerto" "rock venezolano"  # ¿saben las tres fuentes de dónde es? (7.11, sin IA)
+npm run probar:paises                            # la tabla de países y cómo se lee (11.1; sin red, sin base)
 npm run canon                                    # construye el índice del canon (Fase 9; sin IA, ~1000 discos)
 npm run canon -- --limite 150                    # corrida corta de prueba
 npm run canon -- --portadas 200                  # solo rellenar carátulas pendientes

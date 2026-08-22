@@ -476,6 +476,33 @@ integra más profundamente con la escucha real.
   (c) El respaldo del catálogo (`elegirConLlm`) prioriza el origen sobre el
   género cuando no puede cumplir todo y está OBLIGADO a reconocerlo en la
   primera frase de la razón en vez de fingir que cumplió.
+- [x] **7.11 La barrera del origen pregunta en TRES sitios** (ago 2026, idea del
+  dueño: «que busques otra fuente fiable, que a los de países pequeños no los
+  tiene MusicBrainz») — tenía toda la razón, y el agujero estaba justo donde más
+  duele: MusicBrainz es magnífico con el canon anglosajón y flojo con el artista
+  de nicho de un país pequeño, que es EXACTAMENTE lo que se pide cuando alguien
+  escribe "algo de mi país". Con esos, la barrera decía "no lo sé" y no
+  comprobaba nada — y el oyente recibía el aviso de "no pude confirmar que sea
+  de Venezuela" casi siempre, que es la manera más rápida de que un aviso
+  honesto se vuelva ruido y se deje de leer. Ahora se pregunta en cadena, de más
+  fiable a menos, y la primera que sabe gana: **(1) MusicBrainz** como hasta
+  ahora; **(2) Wikidata** (`origenDeArtista`), dato igual de estructurado —un
+  código ISO— con mucha mejor cobertura fuera del mundo anglosajón, y por la API
+  de siempre, NO por SPARQL: esto se pregunta en caliente y el endpoint SPARQL
+  se satura (lección de la 9.11); **(3) la primera frase de la Wikipedia** ("es
+  una banda venezolana de…"), que para los artistas más oscuros suele ser la
+  única que sabe algo. Los tres detalles que la hacen fiable: la de Wikipedia es
+  texto libre, así que **solo cuenta si la frase nombra UN país** —"una banda
+  venezolana que canta en inglés" nombra dos y ahí preferimos callarnos—; en
+  Wikidata un homónimo que no sea músico se descarta (hay políticos que se
+  llaman como una banda, y darles su país sería peor que no saber nada); y las
+  dos fuentes de respaldo van **con reloj** (6 s), porque buscar en más sitios
+  no puede significar hacer esperar más al oyente. Las dudas se siguen
+  resolviendo igual: sin dato, "desconocido", y no se descarta a nadie.
+  Y como estas tres son APIs públicas de terceros que al caerse no rompen nada
+  —se callan, que es lo correcto y lo invisible—, el fallo ahora se ve: botón
+  **"¿Sabe de dónde es este artista?"** en `/revision` (sin terminal, sin gastar
+  IA) y `npm run probar:origen -- "Artista" "pedido"` para la terminal.
 - [x] **7.10 El pedido no se pierde por el camino** (ago 2026, tras el reporte
   del dueño: «le di rehacer, puse *rock venezolano de calidad* y me recomendó un
   disco en inglés que no tiene nada que ver») — la 7.9 puso las barreras, pero
@@ -778,8 +805,26 @@ Musicart YA tenía un número 1-100: el impacto cultural (`Album.impact`, 6.5).
   diferencia no cabía. **Ninguna URL cambió**: `/caminos`, `/salon`, `/vitrina`,
   `/explorar/[slug]` y `/explorar/hitos` siguen igual, y la pestaña Explorar se
   queda encendida mientras estás dentro de cualquiera de ellas.
-- [ ] **9.9 Compartir el Salón** — OG image del Salón y de cada disco del canon
-  ("soy un 96/100"), al estilo de la de la Vitrina en 7.6.
+- [x] **9.9 Compartir el Salón** (ago 2026) — imagen social de la sección y de
+  cada disco del canon, y el sello de compartir en las dos. Lo que se comparte
+  de un disco del Salón es SU CIFRA, así que la imagen la compone como la
+  pestaña (`SelloPuntaje`): el mismo peso de tinta según la altura —un 100 en
+  negativo, un 95 con marco macizo— y, debajo, **su primer recibo**. Compartir
+  un número sin decir de dónde sale es justo lo que el Salón existe para no
+  hacer. Tres detalles que costaron su rato: **(a)** `ImageResponse` no ve el
+  `next/font` de la app ni tiene fuentes del sistema, así que sin pasárselas
+  pintaba el Salón en la grotesca de fábrica de satori —la tipografía de
+  cualquier app, o sea lo contrario de la Fase 10—: ahora Fraunces, Archivo e
+  IBM Plex Mono viajan en el repo (`src/app/salon/tipos`, con su
+  `outputFileTracingIncludes`) y se leen del disco, sin depender de que un
+  servidor de fuentes responda; **(b)** una lista de fuentes VACÍA tumba la
+  imagen ("No fonts are loaded"), así que cuando no se pueden leer se omite el
+  campo y sale con la de fábrica — una imagen fea es mejor que un enlace que no
+  enseña nada; **(c)** las dos rutas son `force-dynamic` y toleran que la base
+  no responda: el índice crece cada noche, y una cifra congelada en el último
+  despliegue sería mentira. De paso, la ficha del disco se compuso con la
+  imprenta (venía de la plantilla: tarjeta con `bg-surface`, un emoji 🏛 de
+  carátula ausente —ahora la capitular del título— y todo centrado).
 - [x] **9.10 El Salón se levanta solo** (ago 2026, tras el reporte del dueño:
   «me metí en el Salón y no aparece absolutamente nada») — el índice dependía de
   que alguien corriera `npm run canon` **en una terminal**, y el dueño anda en el
@@ -980,6 +1025,35 @@ que se hunden contra el papel · nada de emojis · lo que se numera, se numera.
 por decisión del dueño, que priorizó el Salón de la Fama; la 10 fue un encargo
 transversal suyo y no altera el orden de las fases de producto: **la fase de
 trabajo sigue siendo la 9**.
+
+De la Fase 9 ya no queda código pendiente: cerrada la 9.9, **lo único que falta
+es la 9.6**, y esa no se escribe — se toca. El dueño entra a `/revision`, le da
+a "Levantar el Salón" (o espera al worker de esa noche) y se marca cuando el
+índice esté de verdad levantado en producción. Los criterios de aceptación de la
+fase se comprueban ahí mismo, con el índice puesto.
+
+### Ideas en cola (aún NO son fases; no empezar sin decirlo el dueño)
+
+- **"Conociendo a…" — el atlas** (propuesta del dueño, ago 2026): entrar a la
+  música **por un lugar**. Es el tercer eje que faltaba (Caminos entra por
+  género, el Salón por prestigio) y encaja con la tesis: conocer un país a
+  través de sus discos. Tres decisiones ya razonadas, para no re-litigarlas
+  cuando le toque: **(a)** un ATLAS por regiones con buscador, **no** un
+  desplegable de 195 países — en un teléfono es scroll infinito, y para la mayor
+  parte del mundo no hay canon verificable que enseñar; **(b)** el motor NO es
+  filtrar `CanonAlbum` por país (Wikidata escora al mundo anglosajón: Venezuela
+  daría dos discos y Estados Unidos quinientos) sino el curador proponiendo, con
+  `origin-guard.ts` comprobando en MusicBrainz que cada artista sea de verdad de
+  allí; **(c)** el retrato de un país es igual para todos, así que se cachea
+  **global** por país (a diferencia de los Caminos, que son de cada oyente) y
+  solo se personaliza la entrada — barato y al instante para el segundo
+  visitante. Parte del camino ya está andado: desde la **7.11** la COMPROBACIÓN
+  del origen mira en tres fuentes, así que a un artista de un país pequeño ya se
+  le puede verificar la procedencia. Lo que sigue faltando es la DETECCIÓN: la
+  tabla de gentilicios cubre 54 países, y uno que no esté en ella ni activa la
+  barrera ni podrá tener su retrato. Ampliarla es trabajo de esta idea, y de
+  paso mejora **el disco del día** ("quiero algo de Cabo Verde").
+  Vivirá como puerta IV de `/explorar`; el BottomNav se queda en cuatro (9.8).
 
 ---
 

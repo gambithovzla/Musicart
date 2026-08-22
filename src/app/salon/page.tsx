@@ -22,6 +22,7 @@ import {
   estadoDelSalon,
 } from "@/lib/canon/consulta";
 import { LevantarSalon } from "@/components/LevantarSalon";
+import { CompartirSalon } from "./CompartirSalon";
 import { Dial } from "./Dial";
 import { GaleriaCanon } from "./GaleriaCanon";
 import { SelloPuntaje } from "./SelloPuntaje";
@@ -215,7 +216,18 @@ export default async function SalonPage() {
         </section>
       )}
 
-      <div className="filete mt-12 pt-4 text-center">
+      {/* Compartir la sección (9.9). Va al pie, no en la portada: primero se
+          ve el canon, después se presume de él. */}
+      <div className="filete mt-12 pt-6">
+        <CompartirSalon
+          ruta="/salon"
+          titulo="El Salón de la Fama · Musicart"
+          texto="El Salón de la Fama de Musicart: los discos que la historia consagró, cada uno con un puntaje de 1 a 100 y los datos que lo respaldan."
+          etiqueta="Compartir el Salón"
+        />
+      </div>
+
+      <div className="filete mt-10 pt-4 text-center">
         <Link
           href="/salon/lista"
           className="dato text-[11px] uppercase tracking-[0.14em] underline underline-offset-4"

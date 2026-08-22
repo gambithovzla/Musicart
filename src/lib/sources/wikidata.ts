@@ -461,3 +461,159 @@ export async function premiosDeAlbumes(
 
   return out;
 }
+
+// ─── El origen de un artista (segunda fuente de la barrera 7.9) ──────────────
+//
+// Esto NO usa SPARQL, y es a propósito. La barrera del origen se pregunta en
+// caliente, mientras el oyente espera su disco: el endpoint SPARQL es público,
+// se satura y tarda lo suyo (por eso la ingesta del canon va por tramos y con
+// reintentos largos). La API de siempre de Wikidata, en cambio, contesta en
+// milisegundos y busca por nombre mucho mejor que un `rdfs:label` exacto.
+//
+// Por qué Wikidata como segunda fuente y no otra cosa: es el catálogo con más
+// cobertura fuera del mundo anglosajón que además da el dato ESTRUCTURADO (un
+// código de país, no una frase). Un artista venezolano de nicho que MusicBrainz
+// no tiene suele estar aquí, porque tiene artículo en Wikipedia en español.
+
+const API_WIKIDATA = "https://www.wikidata.org/w/api.php";
+
+/**
+ * Instancias que ya son, por sí solas, "esto hace música". La lista es corta a
+ * propósito: solo los tipos que se usan de verdad en Wikidata para las bandas.
+ * Si un grupo está tipado de otra manera, no pasa nada — cae al camino de abajo
+ * (señales musicales) o se queda en "no lo sé", que es un desenlace aceptable.
+ */
+const TIPOS_DE_GRUPO = new Set([
+  "Q215380", // grupo musical
+  "Q2088357", // conjunto musical
+  "Q5741069", // banda de rock
+]);
+
+const HUMANO = "Q5";
+
+/**
+ * Señales de que un humano se dedica a la música. No enumeramos oficios (son
+ * decenas y en varios idiomas): si tiene género musical, instrumento o sello
+ * discográfico, es de lo nuestro.
+ */
+const SENALES_MUSICALES = [
+  "P136", // género musical
+  "P1303", // instrumento
+  "P264", // sello discográfico
+];
+
+/** País de origen (grupos) y nacionalidad (personas). */
+const PROPIEDADES_DE_PAIS = ["P495", "P27"];
+
+type Snak = { mainsnak?: { datavalue?: { value?: { id?: string } } } };
+type Entidad = { claims?: Record<string, Snak[]> };
+
+async function wikidataApi<T>(params: Record<string, string>): Promise<T> {
+  const url = `${API_WIKIDATA}?${new URLSearchParams({
+    format: "json",
+    origin: "*",
+    ...params,
+  })}`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error(`Wikidata API ${res.status}`);
+  return (await res.json()) as T;
+}
+
+/** Los QID que una propiedad apunta, sin repetir. */
+function idsDe(entidad: Entidad, propiedad: string): string[] {
+  const out: string[] = [];
+  for (const snak of entidad.claims?.[propiedad] ?? []) {
+    const id = snak.mainsnak?.datavalue?.value?.id;
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
+function pareceMusico(entidad: Entidad): boolean {
+  const tipos = idsDe(entidad, "P31");
+  if (tipos.some((t) => TIPOS_DE_GRUPO.has(t))) return true;
+  if (!tipos.includes(HUMANO)) return false;
+  // Un humano cualquiera no vale: hay políticos y futbolistas que se llaman
+  // igual que una banda, y darles su país sería peor que no saber nada.
+  return SENALES_MUSICALES.some((p) => (entidad.claims?.[p]?.length ?? 0) > 0);
+}
+
+/**
+ * De qué país es un artista, según Wikidata. Devuelve códigos ISO (puede haber
+ * más de uno: la doble nacionalidad existe y es legítima).
+ *
+ * Nunca lanza: cualquier fallo es un `[]`, y quien llama lo trata como "no lo
+ * sé" — la barrera solo corta con datos, nunca con silencios.
+ */
+export async function origenDeArtista(nombre: string): Promise<string[]> {
+  const limpio = nombre.trim();
+  if (!limpio) return [];
+
+  try {
+    // 1. Candidatos por nombre, en los dos idiomas: un artista latinoamericano
+    //    suele estar etiquetado en español y uno africano en inglés.
+    const busquedas = await Promise.all(
+      (["es", "en"] as const).map((idioma) =>
+        wikidataApi<{ search?: { id: string }[] }>({
+          action: "wbsearchentities",
+          search: limpio,
+          language: idioma,
+          uselang: idioma,
+          type: "item",
+          limit: "5",
+        }).catch(() => ({ search: [] })),
+      ),
+    );
+    const ids: string[] = [];
+    for (const b of busquedas) {
+      for (const item of b.search ?? []) {
+        if (!ids.includes(item.id)) ids.push(item.id);
+      }
+    }
+    if (ids.length === 0) return [];
+
+    // 2. Sus datos, de un tirón. El orden de `wbsearchentities` es el de
+    //    relevancia, así que nos quedamos con el PRIMER candidato que sea de
+    //    música: seguir mirando es empezar a adivinar.
+    const datos = await wikidataApi<{ entities?: Record<string, Entidad> }>({
+      action: "wbgetentities",
+      ids: ids.slice(0, 8).join("|"),
+      props: "claims",
+    });
+
+    let paisesQid: string[] = [];
+    for (const id of ids) {
+      const entidad = datos.entities?.[id];
+      if (!entidad || !pareceMusico(entidad)) continue;
+      paisesQid = PROPIEDADES_DE_PAIS.flatMap((p) => idsDe(entidad, p));
+      break;
+    }
+    if (paisesQid.length === 0) return [];
+
+    // 3. De QID a código ISO (P297). Sin este paso tendríamos "Q717", que no se
+    //    puede comparar con lo que dicen MusicBrainz ni el pedido del oyente.
+    const paises = await wikidataApi<{ entities?: Record<string, Entidad> }>({
+      action: "wbgetentities",
+      ids: paisesQid.slice(0, 4).join("|"),
+      props: "claims",
+    });
+
+    const codigos: string[] = [];
+    for (const qidPais of paisesQid) {
+      const claim = paises.entities?.[qidPais]?.claims?.["P297"]?.[0] as
+        | { mainsnak?: { datavalue?: { value?: unknown } } }
+        | undefined;
+      const valor = claim?.mainsnak?.datavalue?.value;
+      if (typeof valor === "string" && valor.length === 2) {
+        const code = valor.toUpperCase();
+        if (!codigos.includes(code)) codigos.push(code);
+      }
+    }
+    return codigos;
+  } catch {
+    return [];
+  }
+}

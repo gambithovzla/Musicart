@@ -46,7 +46,7 @@ export function AbrirDisco({
       <button
         type="button"
         onClick={() => router.push(`/album/${yaFabricado}`)}
-        className="w-full rounded-full bg-album px-6 py-3.5 text-sm font-medium text-black"
+        className="sello w-full"
       >
         Leer su historia
       </button>
@@ -86,16 +86,17 @@ export function AbrirDisco({
 
   if (cargando) {
     return (
-      <div className="rounded-2xl border border-album/25 bg-album/5 p-5 text-center">
+      // La espera es una nota al pie enmarcada, no una tarjeta tintada.
+      <div className="recuadro p-5">
         <motion.span
           animate={{ rotate: 360 }}
           transition={{ duration: 2.4, repeat: Infinity, ease: "linear" }}
-          className="inline-block text-2xl"
+          className="circulo inline-block text-2xl text-acento"
         >
           ◎
         </motion.span>
-        <p className="mt-3 text-sm text-foreground/85">{ESPERAS[paso]}</p>
-        <p className="mt-1.5 text-xs text-dim">
+        <p className="mt-3 text-[13px] leading-relaxed">{ESPERAS[paso]}</p>
+        <p className="dato mt-2 text-[11px] leading-relaxed text-tinta-suave">
           Puede tardar un par de minutos. No cierres esta pantalla.
         </p>
       </div>
@@ -107,12 +108,12 @@ export function AbrirDisco({
       <button
         type="button"
         onClick={abrir}
-        className="w-full rounded-full bg-album px-6 py-3.5 text-sm font-medium text-black"
+        className="sello w-full"
       >
         Cuéntame su historia
       </button>
       {mensaje && (
-        <p className="mt-3 text-center text-sm leading-relaxed text-dim">
+        <p className="mt-3 text-[13px] leading-relaxed text-tinta-suave">
           {mensaje}
         </p>
       )}

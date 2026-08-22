@@ -1018,44 +1018,134 @@ que se hunden contra el papel · nada de emojis · lo que se numera, se numera.
 
 ---
 
+## 🔨 Fase 11 — «Conociendo a…»: el atlas (EN CURSO · ago 2026)
+
+**Objetivo:** entrar a la música **por un lugar**. Eliges un país y Musicart te
+lo cuenta en cinco discos — no "los cinco mejores", sino los que dicen algo de
+él: de dónde viene su música, qué le da orgullo, con qué se cruzó, contra qué se
+levantó y qué suena hoy.
+
+Idea del dueño (ago 2026): *"una manera de conocer culturalmente a un país a
+través de la música"*. Es el tercer eje que faltaba y el que mejor encaja con la
+tesis del producto — Musicart no sirve canciones, sirve contexto:
+
+| Sección | Se entra por | La pregunta que responde |
+|---|---|---|
+| Caminos (8) | un GÉNERO | "quiero entender el metal, ¿por dónde empiezo?" |
+| El Salón (9) | el PRESTIGIO | "dame un disco de 95" |
+| **El Atlas (11)** | un LUGAR | "¿a qué suena Malí y qué me dice de Malí?" |
+
+**Por qué ahora y no antes:** hacía falta la **7.11**. Con una sola fuente
+(MusicBrainz) el origen de un artista de nicho de un país pequeño no se podía
+comprobar, y un atlas sin esa comprobación no es un atlas: es una lista de
+discos con una bandera encima.
+
+### Decisiones de diseño tomadas (no re-litigar)
+
+1. **Un ATLAS por regiones con buscador, NO un desplegable de 195 países.** En
+   un teléfono, 195 opciones son un scroll infinito, y un `<select>` es
+   justamente el gesto de plantilla que la Fase 10 prohíbe. Es un índice de
+   libro: quince regiones con su folio, cada país en su fila de 60px.
+2. **El motor NO es filtrar `CanonAlbum` por país.** El índice del Salón sale de
+   Wikidata por número de artículos de Wikipedia y escora brutalmente al mundo
+   anglosajón: Venezuela daría dos discos y Estados Unidos quinientos. Aquí
+   PROPONE el curador —que sí conoce lo de fuera del canon— y después se
+   comprueba con datos duros.
+3. **Cada artista pasa la barrera de origen (7.11).** Si consta que no es de ese
+   país, el disco no entra. Y lo que no se pudo confirmar entra **diciéndolo en
+   su ficha**: "no pude confirmar con datos que X sea de Venezuela". Esa frase
+   es la diferencia entre un atlas y una postal.
+4. **El retrato es GLOBAL, no de cada oyente.** Lo que cuenta de Malí es lo
+   mismo para cualquiera: una fila por país (`RetratoPais`), y el segundo que
+   entra lo ve al instante y sin gastar un céntimo de IA. Es lo contrario que
+   los Caminos, que sí son de cada uno.
+5. **Los cinco papeles son un ARCO, no cinco niveles.** raíz · himno · cruce ·
+   grito · ahora. Un Camino ordena por dificultad; un retrato ordena por lo que
+   cada disco cuenta del país. Y el "ahora" es obligatorio: sin él, un país
+   queda como una postal del pasado, que es exactamente el exotismo que esta
+   sección no puede permitirse.
+6. **Puerta IV de `/explorar`. El BottomNav se queda en cuatro** (decisión 9.8).
+7. **El disco del día no se toca.** Como en la 8 y la 9: pestaña aparte, motor
+   aparte.
+
+### Tareas
+
+- [x] **11.1 La geografía, en un solo sitio** (`src/lib/paises.ts`) — la tabla
+  pasó de los 54 países que un oyente sabe pedir a **192 en 15 regiones**, con
+  sus gentilicios en español y en inglés y sus nombres de área de MusicBrainz.
+  Vivía dentro de `origin-guard.ts`; tener dos listas de países en el mismo repo
+  era pedir que se desincronizaran. Dos cosas que se rompen al crecer una tabla
+  así y que quedaron cazadas: con sufijo libre, la raíz corta "mali" casaba con
+  **"malísimo"** (ahora el sufijo tiene tope de tres letras), y en inglés
+  "Dominican" es de dos países y "Congolese" de otros dos — esas frases se
+  declaran **ambiguas** en vez de elegir el país más grande, porque elegir sería
+  hacer rechazar por error a un artista de Dominica. `npm run probar:paises` lo
+  comprueba entero sin red y sin base.
+- [x] **11.2 Leer también el NOMBRE del país en inglés** — la barrera solo
+  entendía gentilicios ("Venezuelan"), así que "a group of musicians **from
+  Mali**" no le decía nada: justo la forma en que la Wikipedia inglesa habla de
+  los artistas africanos y asiáticos, que son los que más falta hacen aquí.
+  Ahora también cuenta el nombre, pero **solo detrás de preposición de lugar**
+  (from/in/of/based in): sin esa condición, "Chad Smith" sería de Chad, "Jordan"
+  de Jordania y "Atlanta, Georgia" del país de Georgia.
+- [x] **11.3 El modelo y el motor** (`RetratoPais`, `src/lib/atlas.ts` +
+  `atlas-tipos.ts`) — `retratoDePais()` propone con UNA llamada al curador,
+  verifica el origen de los cinco artistas en paralelo, descarta a los que no
+  son de ahí y, si se quedó corto, pide UNA tanda de reemplazo sin ellos.
+  `abrirDiscoDelAtlas()` fabrica el dossier perezosamente con el tope de gasto
+  ("extra"), igual que un paso de un Camino o un disco del Salón. Los tipos van
+  aparte porque la UI de cliente no puede importar el motor sin arrastrar el
+  pipeline (→ jimp → `fs`) y romper el build: misma lección que
+  `caminos-pasos.ts`.
+- [x] **11.4 Guardar también el fracaso** — si no se pudo escribir un retrato
+  (sin clave de IA, el curador no responde, o no hay cinco discos verificables),
+  se guarda `status: "vacio"` con la razón **escrita por el código** y no se
+  vuelve a intentar hasta pasadas 24 h. Sin esto, cada visita a un país sin
+  material vuelve a pagar la llamada para volver a fallar. La razón la escribe
+  el código por lo mismo que la `CausaFallback` del disco del día: cuando algo
+  falla, el LLM suele ser justo lo que está caído.
+- [x] **11.5 La pestaña** (`/atlas` y `/atlas/[code]`) — el índice con su
+  buscador, el retrato con sus cinco fichas (papel, disco, por qué, origen), la
+  espera narrada mientras se escribe (`CreandoRetrato`, hermana de
+  `CreandoDiscoHoy`) y "Cuéntame su historia" por disco. Puerta IV en
+  `/explorar`. Medido en un teléfono de 393×852: cero textos por debajo de 11px
+  y cero objetivos táctiles por debajo de 44px en el retrato.
+- [ ] **11.6 Compartir un retrato** — imagen social del retrato de un país, al
+  estilo de la del Salón (9.9).
+- [ ] **11.7 El país del oyente** — si su perfil dice de dónde es, ofrecerle su
+  país primero. Es la puerta de entrada más natural a esta sección y todavía no
+  está.
+
+### Criterios de aceptación
+
+- [ ] Eliges un país y recibes cinco discos REALES con su papel y una frase que
+  dice qué cuenta cada uno de ese país.
+- [ ] Ningún disco del retrato es de un artista que conste que no es de ahí; lo
+  que no se pudo confirmar se enseña diciéndolo.
+- [ ] El segundo oyente que entra al mismo país lo ve al instante y sin gastar
+  IA.
+- [ ] Abrir un disco fabrica su dossier (o reutiliza el del catálogo) y cae con
+  elegancia si se agotó el presupuesto — nunca un 500.
+- [ ] El disco del día sigue funcionando exactamente igual que antes.
+
+---
+
 ## Estado actual (agosto 2026)
 
 **Fases 0–7 completas; Fase 8 casi cerrada (falta 8.6), Fase 9 EN CURSO y Fase
-10 (el rediseño "La imprenta") completada** (ago 2026). La 8.6 quedó pendiente
+10 (el rediseño "La imprenta") completada; Fase 11 (el Atlas) EN CURSO**
+(ago 2026). La 8.6 quedó pendiente
 por decisión del dueño, que priorizó el Salón de la Fama; la 10 fue un encargo
 transversal suyo y no altera el orden de las fases de producto: **la fase de
 trabajo sigue siendo la 9**.
 
-De la Fase 9 ya no queda código pendiente: cerrada la 9.9, **lo único que falta
-es la 9.6**, y esa no se escribe — se toca. El dueño entra a `/revision`, le da
+**La fase de trabajo es ahora la 11** (el Atlas), abierta por encargo del dueño
+en cuanto la 7.11 dio las fuentes que le faltaban. De la Fase 9 no queda código
+pendiente: cerrada la 9.9, **lo único que falta es la 9.6**, y esa no se
+escribe — se toca. El dueño entra a `/revision`, le da
 a "Levantar el Salón" (o espera al worker de esa noche) y se marca cuando el
 índice esté de verdad levantado en producción. Los criterios de aceptación de la
 fase se comprueban ahí mismo, con el índice puesto.
-
-### Ideas en cola (aún NO son fases; no empezar sin decirlo el dueño)
-
-- **"Conociendo a…" — el atlas** (propuesta del dueño, ago 2026): entrar a la
-  música **por un lugar**. Es el tercer eje que faltaba (Caminos entra por
-  género, el Salón por prestigio) y encaja con la tesis: conocer un país a
-  través de sus discos. Tres decisiones ya razonadas, para no re-litigarlas
-  cuando le toque: **(a)** un ATLAS por regiones con buscador, **no** un
-  desplegable de 195 países — en un teléfono es scroll infinito, y para la mayor
-  parte del mundo no hay canon verificable que enseñar; **(b)** el motor NO es
-  filtrar `CanonAlbum` por país (Wikidata escora al mundo anglosajón: Venezuela
-  daría dos discos y Estados Unidos quinientos) sino el curador proponiendo, con
-  `origin-guard.ts` comprobando en MusicBrainz que cada artista sea de verdad de
-  allí; **(c)** el retrato de un país es igual para todos, así que se cachea
-  **global** por país (a diferencia de los Caminos, que son de cada oyente) y
-  solo se personaliza la entrada — barato y al instante para el segundo
-  visitante. Parte del camino ya está andado: desde la **7.11** la COMPROBACIÓN
-  del origen mira en tres fuentes, así que a un artista de un país pequeño ya se
-  le puede verificar la procedencia. Lo que sigue faltando es la DETECCIÓN: la
-  tabla de gentilicios cubre 54 países, y uno que no esté en ella ni activa la
-  barrera ni podrá tener su retrato. Ampliarla es trabajo de esta idea, y de
-  paso mejora **el disco del día** ("quiero algo de Cabo Verde").
-  Vivirá como puerta IV de `/explorar`; el BottomNav se queda en cuatro (9.8).
-
----
 
 ## Decisiones técnicas tomadas (no re-litigar sin razón)
 

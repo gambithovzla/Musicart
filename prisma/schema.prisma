@@ -300,6 +300,33 @@ model Camino {
   @@index([userId, status])
 }
 
+// Fase 11 — El Atlas: el retrato musical de un país ("Conociendo a…").
+//
+// Un retrato es de TODOS, no de cada oyente: lo que cuenta de Malí es lo mismo
+// para cualquiera que entre. Por eso esto se guarda por país (`code` único) y
+// no por deviceId/userId como los Caminos — el segundo que entre a un país lo
+// ve al instante y sin gastar un céntimo de IA. Los discos van en `discosJson`
+// (DiscoDelRetrato[]); ver src/lib/atlas.ts.
+model RetratoPais {
+  code   String  @id // ISO 3166-1 alfa-2 (VE, ML, JP…)
+  titulo String
+  intro  String? // qué cuenta de este país su música
+
+  discosJson String @default("[]") // DiscoDelRetrato[]
+
+  // "listo" = tiene discos que enseñar. "vacio" = no se pudo, y `nota` dice por
+  // qué (sin clave de IA, sin presupuesto, o no encontré nada verificable).
+  // Guardar el fracaso es deliberado: sin esto, cada visita a un país sin
+  // material vuelve a pagar la llamada al curador para volver a fallar.
+  status String  @default("listo")
+  nota   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
 // Fase 9 — El Salón de la Fama: el índice del canon.
 //
 // Miles de discos con un puntaje 1-100 COMPARABLE entre sí, que es justo lo que

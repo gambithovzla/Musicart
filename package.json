@@ -14,6 +14,7 @@
     "worker": "tsx scripts/worker.ts",
     "canon": "tsx scripts/canon.ts",
     "probar:origen": "tsx scripts/probar-origen.ts",
+    "probar:paises": "tsx scripts/probar-paises.ts",
     "tts": "tsx scripts/tts.ts",
     "push": "tsx scripts/push.ts",
     "db:limpiar-recopilatorios": "tsx scripts/limpiar-recopilatorios.ts"

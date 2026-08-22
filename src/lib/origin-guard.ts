@@ -40,6 +40,7 @@
 // dejamos pasar — nunca dejamos al oyente sin disco por un fallo de la fuente.
 
 import { searchArtistOrigin } from "./sources/musicbrainz";
+import { PAISES, nombreDePais } from "./paises";
 import { origenDeArtista } from "./sources/wikidata";
 import { getArtistIntro, firstFactSentence } from "./sources/wikipedia";
 
@@ -50,183 +51,13 @@ export type PaisPedido = {
   nombre: string;
 };
 
-type Entrada = {
-  code: string;
-  nombre: string;
-  /** Raíces (sin acentos) que delatan el país: admiten sufijos (-o/-a/-os/-as). */
-  claves: string[];
-  /** El gentilicio también nombra un IDIOMA ("en inglés" no es un pedido de país). */
-  ambiguo?: boolean;
-  /** Nombres de área en MusicBrainz (inglés y español) para el respaldo. */
-  areas: string[];
-  /**
-   * Gentilicio en inglés, para leer la primera frase de la Wikipedia inglesa
-   * ("a Venezuelan rock band"). Sin esto, la tercera fuente solo serviría para
-   * los artistas que tienen artículo en español — justo los que menos falta
-   * hacen, porque son los que MusicBrainz ya suele conocer.
-   */
-  clavesEn: string[];
-};
+// La tabla de países se mudó a `paises.ts` (Fase 11): el Atlas necesitaba el
+// mundo entero ordenado por regiones, y tener dos listas de países en el mismo
+// repo era pedir que se desincronizaran. Aquí solo queda lo que esta barrera
+// sabe hacer: leer un pedido y comprobar un origen.
 
-// Diccionario de países musicalmente relevantes. No pretende ser exhaustivo:
-// cubre toda Hispanoamérica (donde más se pide "artistas de mi país") y las
-// escenas grandes. Lo que no está aquí simplemente no activa la barrera.
-const PAISES: Entrada[] = [
-  { code: "VE", nombre: "Venezuela", claves: ["venezuela", "venezolan"], clavesEn: ["venezuelan"],
-    areas: ["venezuela"] },
-  { code: "AR", nombre: "Argentina", claves: ["argentina", "argentin"], clavesEn: ["argentine", "argentinian"],
-    areas: ["argentina"] },
-  { code: "MX", nombre: "México", claves: ["mexico", "mejico", "mexican"], clavesEn: ["mexican"],
-    areas: ["mexico"] },
-  { code: "CO", nombre: "Colombia", claves: ["colombia", "colombian"], clavesEn: ["colombian"],
-    areas: ["colombia"] },
-  { code: "CL", nombre: "Chile", claves: ["chile", "chilen"], clavesEn: ["chilean"],
-    areas: ["chile"] },
-  { code: "PE", nombre: "Perú", claves: ["peru", "peruan"], clavesEn: ["peruvian"],
-    areas: ["peru"] },
-  { code: "CU", nombre: "Cuba", claves: ["cuba", "cuban"], clavesEn: ["cuban"],
-    areas: ["cuba"] },
-  {
-    code: "PR",
-    nombre: "Puerto Rico",
-    claves: ["puerto rico", "puertorriquen", "boricua"],
-    clavesEn: ["puerto rican"],
-    areas: ["puerto rico"],
-  },
-  { code: "DO", nombre: "República Dominicana", claves: ["dominican"], clavesEn: ["dominican"],
-    areas: ["dominican republic"] },
-  { code: "UY", nombre: "Uruguay", claves: ["uruguay", "uruguay"], clavesEn: ["uruguayan"],
-    areas: ["uruguay"] },
-  { code: "PY", nombre: "Paraguay", claves: ["paraguay"], clavesEn: ["paraguayan"],
-    areas: ["paraguay"] },
-  { code: "BO", nombre: "Bolivia", claves: ["bolivia", "bolivian"], clavesEn: ["bolivian"],
-    areas: ["bolivia"] },
-  { code: "EC", nombre: "Ecuador", claves: ["ecuador", "ecuatorian"], clavesEn: ["ecuadorian", "ecuadorean"],
-    areas: ["ecuador"] },
-  { code: "CR", nombre: "Costa Rica", claves: ["costa rica", "costarricense"], clavesEn: ["costa rican"],
-    areas: ["costa rica"] },
-  { code: "PA", nombre: "Panamá", claves: ["panama", "panamen"], clavesEn: ["panamanian"],
-    areas: ["panama"] },
-  { code: "GT", nombre: "Guatemala", claves: ["guatemala", "guatemaltec"], clavesEn: ["guatemalan"],
-    areas: ["guatemala"] },
-  { code: "HN", nombre: "Honduras", claves: ["honduras", "hondur"], clavesEn: ["honduran"],
-    areas: ["honduras"] },
-  { code: "SV", nombre: "El Salvador", claves: ["salvador", "salvadoren"], clavesEn: ["salvadoran", "salvadorean"],
-    areas: ["el salvador"] },
-  { code: "NI", nombre: "Nicaragua", claves: ["nicaragua", "nicaraguen"], clavesEn: ["nicaraguan"],
-    areas: ["nicaragua"] },
-  {
-    code: "ES",
-    nombre: "España",
-    claves: ["espana", "espanol"],
-    ambiguo: true, // "en español" es idioma, no país
-    clavesEn: ["spanish"],
-    areas: ["spain", "espana"],
-  },
-  {
-    code: "US",
-    nombre: "Estados Unidos",
-    claves: ["estados unidos", "estadounidense", "norteamerican", "gringo", "eeuu"],
-    clavesEn: ["american", "u.s."],
-    areas: ["united states"],
-  },
-  {
-    code: "GB",
-    nombre: "Reino Unido",
-    claves: ["reino unido", "britanic", "ingles", "inglaterra", "escoces", "escocia", "gales"],
-    ambiguo: true, // "en inglés" es idioma, no país
-    clavesEn: ["british", "english", "scottish", "welsh"],
-    areas: ["united kingdom", "england", "scotland", "wales", "northern ireland"],
-  },
-  { code: "IE", nombre: "Irlanda", claves: ["irlanda", "irlandes"], clavesEn: ["irish"],
-    areas: ["ireland"] },
-  { code: "CA", nombre: "Canadá", claves: ["canada", "canadiense"], clavesEn: ["canadian"],
-    areas: ["canada"] },
-  { code: "BR", nombre: "Brasil", claves: ["brasil", "brasilen", "brasiler"], clavesEn: ["brazilian"],
-    areas: ["brazil", "brasil"] },
-  {
-    code: "PT",
-    nombre: "Portugal",
-    claves: ["portugal", "portugues"],
-    ambiguo: true,
-    clavesEn: ["portuguese"],
-    areas: ["portugal"],
-  },
-  {
-    code: "FR",
-    nombre: "Francia",
-    claves: ["francia", "frances"],
-    ambiguo: true,
-    clavesEn: ["french"],
-    areas: ["france"],
-  },
-  {
-    code: "IT",
-    nombre: "Italia",
-    claves: ["italia", "italian"],
-    ambiguo: true,
-    clavesEn: ["italian"],
-    areas: ["italy", "italia"],
-  },
-  {
-    code: "DE",
-    nombre: "Alemania",
-    claves: ["alemania", "aleman"],
-    ambiguo: true,
-    clavesEn: ["german"],
-    areas: ["germany"],
-  },
-  { code: "NL", nombre: "Países Bajos", claves: ["holanda", "holandes", "neerlandes", "paises bajos"], clavesEn: ["dutch"],
-    areas: ["netherlands"] },
-  { code: "BE", nombre: "Bélgica", claves: ["belgica", "belga"], clavesEn: ["belgian"],
-    areas: ["belgium"] },
-  { code: "SE", nombre: "Suecia", claves: ["suecia", "sueco"], clavesEn: ["swedish"],
-    areas: ["sweden"] },
-  { code: "NO", nombre: "Noruega", claves: ["noruega", "noruego"], clavesEn: ["norwegian"],
-    areas: ["norway"] },
-  { code: "DK", nombre: "Dinamarca", claves: ["dinamarca", "danes"], clavesEn: ["danish"],
-    areas: ["denmark"] },
-  { code: "FI", nombre: "Finlandia", claves: ["finlandia", "finlandes"], clavesEn: ["finnish"],
-    areas: ["finland"] },
-  { code: "IS", nombre: "Islandia", claves: ["islandia", "islandes"], clavesEn: ["icelandic"],
-    areas: ["iceland"] },
-  { code: "PL", nombre: "Polonia", claves: ["polonia", "polaco"], clavesEn: ["polish"],
-    areas: ["poland"] },
-  { code: "GR", nombre: "Grecia", claves: ["grecia", "griego"], ambiguo: true, clavesEn: ["greek"],
-    areas: ["greece"] },
-  { code: "RU", nombre: "Rusia", claves: ["rusia", "ruso"], ambiguo: true, clavesEn: ["russian"],
-    areas: ["russia"] },
-  { code: "AU", nombre: "Australia", claves: ["australia", "australian"], clavesEn: ["australian"],
-    areas: ["australia"] },
-  { code: "NZ", nombre: "Nueva Zelanda", claves: ["nueva zelanda", "neozelandes"], clavesEn: ["new zealand"],
-    areas: ["new zealand"] },
-  { code: "JM", nombre: "Jamaica", claves: ["jamaica", "jamaiquin", "jamaican"], clavesEn: ["jamaican"],
-    areas: ["jamaica"] },
-  { code: "NG", nombre: "Nigeria", claves: ["nigeria", "nigerian"], clavesEn: ["nigerian"],
-    areas: ["nigeria"] },
-  { code: "ZA", nombre: "Sudáfrica", claves: ["sudafrica", "sudafrican"], clavesEn: ["south african"],
-    areas: ["south africa"] },
-  { code: "SN", nombre: "Senegal", claves: ["senegal", "senegales"], clavesEn: ["senegalese"],
-    areas: ["senegal"] },
-  { code: "ML", nombre: "Malí", claves: ["mali", "maliense"], clavesEn: ["malian"],
-    areas: ["mali"] },
-  { code: "EG", nombre: "Egipto", claves: ["egipto", "egipcio"], clavesEn: ["egyptian"],
-    areas: ["egypt"] },
-  { code: "MA", nombre: "Marruecos", claves: ["marruecos", "marroqui"], clavesEn: ["moroccan"],
-    areas: ["morocco"] },
-  { code: "IL", nombre: "Israel", claves: ["israel", "israeli"], clavesEn: ["israeli"],
-    areas: ["israel"] },
-  { code: "TR", nombre: "Turquía", claves: ["turquia", "turco"], ambiguo: true, clavesEn: ["turkish"],
-    areas: ["turkey"] },
-  { code: "IN", nombre: "India", claves: ["india", "indio", "hindu"], clavesEn: ["indian"],
-    areas: ["india"] },
-  { code: "JP", nombre: "Japón", claves: ["japon", "japones"], ambiguo: true, clavesEn: ["japanese"],
-    areas: ["japan"] },
-  { code: "KR", nombre: "Corea del Sur", claves: ["corea", "coreano"], ambiguo: true, clavesEn: ["korean", "south korean"],
-    areas: ["south korea", "korea"] },
-  { code: "CN", nombre: "China", claves: ["china", "chino"], ambiguo: true, clavesEn: ["chinese"],
-    areas: ["china"] },
-];
+/** Lo que se le permite crecer a una raíz: -o, -a, -os, -as, -es, -ses… */
+const SUFIJO_GENTILICIO = "[a-z]{0,3}";
 
 function normalizar(s: string): string {
   return s
@@ -254,8 +85,11 @@ export function detectarPaisesPedido(peticion: string | null | undefined): PaisP
   const encontrados: PaisPedido[] = [];
   for (const p of PAISES) {
     for (const clave of p.claves) {
-      // Raíz + cualquier sufijo (venezolan → venezolano/a/os/as), en frontera de palabra.
-      const re = new RegExp(`(?:^|\\s)${clave}[a-z]*(?=\\s|$)`, "g");
+      // Raíz + el sufijo de un gentilicio, en frontera de palabra: venezolan →
+      // venezolano/a/os/as, senegales → senegaleses. El tope de TRES letras no
+      // es cosmético: con la tabla del mundo entero (Fase 11) hay raíces cortas
+      // como "mali", y con sufijo libre "malísimo" pedía discos de Malí.
+      const re = new RegExp(`(?:^|\\s)${clave}${SUFIJO_GENTILICIO}(?=\\s|$)`, "g");
       let m: RegExpExecArray | null;
       let acierto = false;
       while ((m = re.exec(texto)) !== null) {
@@ -288,29 +122,46 @@ export function quitarPalabrasDePais(palabras: string[]): string[] {
 }
 
 /**
- * Nombre en español de un código ISO (para explicar el rechazo).
+ * Índice de nombre de área → código, construido una sola vez.
  *
- * Con Wikidata de por medio pueden llegar países que no están en la tabla de
- * arriba (que solo cubre los que el oyente sabe pedir). Decirle "es de CV" en
- * vez de "es de Cabo Verde" sería un tecnicismo gratuito, así que el respaldo
- * es el catálogo de nombres del propio idioma.
+ * MusicBrainz nombra las áreas en inglés, así que además de las que la tabla
+ * declara a mano (Reino Unido → england, scotland…) se meten el nombre inglés
+ * del país y el español. Con 190 países, buscar recorriendo la lista en cada
+ * comprobación era trabajo repetido para nada.
  */
-function nombreDePais(code: string | null): string | null {
-  if (!code) return null;
-  const conocido = PAISES.find((p) => p.code === code)?.nombre;
-  if (conocido) return conocido;
+const POR_AREA: Map<string, string> = (() => {
+  const mapa = new Map<string, string>();
+  let enIngles: Intl.DisplayNames | null = null;
   try {
-    return new Intl.DisplayNames(["es"], { type: "region" }).of(code) ?? code;
+    enIngles = new Intl.DisplayNames(["en"], { type: "region" });
   } catch {
-    return code;
+    enIngles = null;
+  }
+  for (const p of PAISES) {
+    const nombres = [...(p.areas ?? []), p.nombre, enIngles?.of(p.code) ?? ""];
+    for (const n of nombres) {
+      const clave = normalizar(n);
+      // El primero que reclama un nombre se lo queda: la tabla manda sobre el
+      // catálogo del idioma.
+      if (clave && !mapa.has(clave)) mapa.set(clave, p.code);
+    }
+  }
+  return mapa;
+})();
+
+/** El nombre del país en inglés, normalizado. "" si el runtime no lo sabe. */
+function nombreEnIngles(code: string): string {
+  try {
+    return normalizar(new Intl.DisplayNames(["en"], { type: "region" }).of(code) ?? "");
+  } catch {
+    return "";
   }
 }
 
 /** ¿Ese nombre de área (MusicBrainz, en inglés) es de alguno de los países? */
 function codePorArea(area: string | null): string | null {
   if (!area) return null;
-  const a = normalizar(area);
-  return PAISES.find((p) => p.areas.includes(a))?.code ?? null;
+  return POR_AREA.get(normalizar(area)) ?? null;
 }
 
 export type FuenteOrigen = "musicbrainz" | "wikidata" | "wikipedia";
@@ -443,15 +294,31 @@ export function paisesEnFrase(frase: string, lang: "es" | "en"): string[] {
 
   const encontrados: string[] = [];
   for (const p of PAISES) {
-    // En español el gentilicio admite sufijos (venezolan → venezolano/a/os/as);
-    // en inglés basta con la palabra y su plural.
-    const patrones =
+    // En español el gentilicio admite sufijos (venezolan → venezolano/a/os/as)
+    // y la tabla ya trae el nombre del país entre sus claves. En inglés van por
+    // separado, porque el nombre y el gentilicio se comportan distinto.
+    const sueltos =
       lang === "es"
-        ? p.claves.map((c) => `${c}[a-z]*`)
-        : [...p.clavesEn.map((c) => `${c}s?`), ...p.areas.map((a) => a)];
+        ? p.claves.map((c) => `${c}${SUFIJO_GENTILICIO}`)
+        : p.clavesEn.map((c) => `${c}s?`);
 
-    for (const patron of patrones) {
-      const re = new RegExp(`(?:^|\\s)${patron}(?=\\s|$)`, "g");
+    // Los NOMBRES de país en inglés solo cuentan detrás de una preposición de
+    // lugar ("musicians from Mali", "born in Senegal"). Sin esa condición, media
+    // Wikipedia inglesa se vuelve un mapa: "Chad Smith" sería de Chad, "Jordan"
+    // de Jordania y "Atlanta, Georgia" del país de Georgia. Con ella, esas tres
+    // dejan de contar y "from Mali" sigue funcionando, que es lo que hace falta
+    // para los artistas de países pequeños.
+    const conPreposicion =
+      lang === "en" ? [...(p.areas ?? []), nombreEnIngles(p.code), p.nombre] : [];
+
+    const busquedas = [
+      ...sueltos.map((re) => ({ re, preposicion: false })),
+      ...conPreposicion.filter(Boolean).map((re) => ({ re, preposicion: true })),
+    ];
+
+    for (const { re: patron, preposicion } of busquedas) {
+      const prefijo = preposicion ? "(?:from|in|of|based in)\\s+" : "";
+      const re = new RegExp(`(?:^|\\s)${prefijo}${patron}(?=\\s|$)`, "g");
       let m: RegExpExecArray | null;
       while ((m = re.exec(texto)) !== null) {
         const antes = texto.slice(0, m.index + 1);

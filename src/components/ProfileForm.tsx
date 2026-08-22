@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { saveProfile } from "@/app/actions";
+import { REGIONES, paisesDeRegion } from "@/lib/paises";
 import { signOutAction } from "@/app/entrar/actions";
 import { PrivacyPanel } from "@/components/PrivacyPanel";
 import { DuetPanel } from "@/components/DuetPanel";
@@ -45,6 +46,9 @@ export type ProfileAnswers = {
   favoriteSong?: string;  // tu canción favorita
   favoriteSongArtist?: string; // …de qué artista
   curator?: string;       // voz del curador elegida (id de CURATORS)
+  country?: string;       // Fase 11.7: de dónde eres (ISO-2). Lo usa el Atlas
+                          // para recibirte con tu país, y el disco del día para
+                          // conocerte un poco mejor.
   listenTime: string;
 };
 
@@ -585,6 +589,36 @@ export function ProfileForm({
             );
           })}
         </div>
+      </section>
+
+      {/* De dónde eres (11.7). Es opcional a propósito: la app funciona igual
+          sin saberlo, y no se pide en el onboarding para no alargar la entrada.
+          Aquí sí va un desplegable nativo — en un formulario el teléfono pone su
+          propio selector, que es mejor que cualquier lista que dibujemos; lo que
+          NO puede ser un desplegable es la navegación del Atlas. */}
+      <section className="mt-8">
+        <h2 className="font-serif text-lg">¿De dónde eres?</h2>
+        <p className="mt-1 text-sm text-dim">
+          Opcional. Si me lo dices, el atlas te recibe con tu país y te conozco
+          un poco mejor.
+        </p>
+        <select
+          value={answers.country ?? ""}
+          onChange={(e) => update({ country: e.target.value })}
+          aria-label="Tu país"
+          className="mt-3 min-h-[52px] w-full border border-regla bg-transparent px-3 text-[16px]"
+        >
+          <option value="">Prefiero no decirlo</option>
+          {REGIONES.map((r) => (
+            <optgroup key={r.id} label={r.nombre}>
+              {paisesDeRegion(r.id).map((p) => (
+                <option key={p.code} value={p.code}>
+                  {p.nombre}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
       </section>
 
       <section className="mt-8">

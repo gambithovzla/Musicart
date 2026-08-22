@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { getMuro, estadoDelSalon } from "@/lib/canon/consulta";
-import { fuentesDeLaImprenta } from "./tipos";
+import { fuentesDeLaImprenta } from "@/lib/imprenta-og";
 
 export const alt = "El Salón de la Fama · Musicart";
 export const size = { width: 1200, height: 630 };
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 // versalitas, titular en display, cero esquinas redondeadas y las sombras
 // duras, sin difuminar. Los colores y las fuentes van a pelo porque
 // `ImageResponse` no ve las variables CSS ni el `next/font` de la app (ver
-// `./tipos`), y siempre en la edición de noche: una imagen social se ve casi
+// `@/lib/imprenta-og`), y siempre en la edición de noche: una imagen social se ve casi
 // siempre sobre el fondo oscuro de la app que la enseña.
 const PAPEL = "#14110c";
 const PAPEL_HONDO = "#0c0a07";

@@ -160,16 +160,19 @@ src/app/salon/           Fase 9: El Salón de la Fama. Muro de los 100/100, el
                          índice no trajo, quitar lo que se coló. Vista de
                          conjunto en /revision (ClubDeLosCien).
                          Compartir (9.9): opengraph-image.tsx de la sección y de
-                         cada disco ("soy un 96/100", con su recibo) +
-                         CompartirSalon. Las tipografías de esas imágenes viven
-                         en salon/tipos (ImageResponse no ve el next/font de la
-                         app; ojo al outputFileTracingIncludes).
+                         cada disco ("soy un 96/100", con su recibo).
 src/app/atlas/           Fase 11: el Atlas. /atlas es el ÍNDICE por regiones con
                          buscador (no un desplegable de 195 países: en un
                          teléfono es scroll infinito) y /atlas/[code] el retrato.
                          Las dos operaciones caras viven en /api/atlas/retrato
                          (maxDuration 300) y /api/atlas/disco (300), como el
-                         disco del día.
+                         disco del día. Sus opengraph-image comparten el retrato
+                         (11.6). Si el perfil dice de dónde eres, tu país sale
+                         primero (11.7).
+src/lib/imprenta-og/     Las tipografías (.ttf) de TODAS las imágenes sociales:
+                         ImageResponse no ve el next/font de la app y sin ellas
+                         pinta con la grotesca de fábrica. Imagen social nueva =
+                         añadirla al outputFileTracingIncludes de next.config.
 src/app/dueto/           Disco compartido semanal entre dos cuentas (5.5).
 src/app/perfil/          Edición de perfil, push, dueto, Stripe, privacidad.
 src/app/entrar/          Inicio de sesión (Google + email) y fusión del device.
@@ -283,7 +286,9 @@ src/components/          BottomNav (9.8: SOLO 4 pestañas — Hoy · Explorar ·
                          ImpactoCultural + DificultadEscucha (clicleables),
                          ReflectionForm (1-10 + comentario + canción favorita),
                          MoodCheckin, ShareAlbum, DeviceSync, Narrator, AlbumChat,
-                         DuetPanel, PushToggle, ProfileForm, InstallPrompt…
+                         DuetPanel, PushToggle, ProfileForm (11.7: guarda country,
+                         ISO-2, opcional), Compartir (el sello de compartir de
+                         todas las secciones), InstallPrompt…
 src/app/explorar/        Rutas temáticas (Fase 4.4) + PuertasExplorar (sumario).
 src/app/prensa/          El libro de estilo EN VIVO: las siete reglas y sus
                          especímenes (sellos, cifras, escalafón, índice,

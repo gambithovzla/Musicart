@@ -15,6 +15,7 @@ import { isAdminEmail } from "@/lib/admin";
 import { paisPorCodigo } from "@/lib/paises";
 import { getRetrato } from "@/lib/atlas";
 import { ETIQUETA_PAPEL, SENTIDO_PAPEL } from "@/lib/atlas-tipos";
+import { Compartir } from "@/components/Compartir";
 import { AbrirDiscoAtlas } from "../AbrirDiscoAtlas";
 import { CreandoRetrato } from "../CreandoRetrato";
 import { RehacerRetrato } from "../RehacerRetrato";
@@ -133,6 +134,20 @@ export default async function RetratoPage({
             />
           </article>
         ))}
+
+      {/* Compartir el retrato (11.6). La imagen social la pone el
+          `opengraph-image.tsx` de esta ruta: el índice de los cinco papeles con
+          su disco, que es lo que hace entender la promesa sin abrir el enlace. */}
+      {retrato?.status === "listo" && (
+        <div className="filete mt-12 pt-6">
+          <Compartir
+            ruta={`/atlas/${pais.code}`}
+            titulo={`${retrato.titulo} · Musicart`}
+            texto={`${pais.nombre} en cinco discos, y de cada artista comprobé que sea de ahí. Esto es lo que su música cuenta del país.`}
+            etiqueta={`Compartir ${pais.nombre}`}
+          />
+        </div>
+      )}
 
       {retrato?.status === "listo" && esCurador && (
         <div className="filete mt-12 pt-6">

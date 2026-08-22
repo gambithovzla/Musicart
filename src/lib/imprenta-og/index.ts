@@ -1,4 +1,4 @@
-// Las tipografías de la imprenta, para las imágenes sociales (9.9).
+// Las tipografías de la imprenta, para las imágenes sociales (9.9 y 11.6).
 //
 // Por qué existe este archivo: `ImageResponse` no dibuja con el navegador, así
 // que NO tiene ninguna fuente del sistema ni ve el `next/font` de la app. Si no
@@ -11,13 +11,13 @@
 // sin red. Se leen una sola vez por instancia (`cache`).
 //
 // Ojo con el `outputFileTracingIncludes` de `next.config.ts`: sin él, Vercel no
-// se lleva estos .ttf al empaquetar las dos rutas y la imagen saldría con la
-// fuente de fábrica.
+// se lleva estos .ttf al empaquetar esas rutas y la imagen saldría con la
+// fuente de fábrica. Si añades una imagen social nueva, añádela también ahí.
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const CARPETA = join(process.cwd(), "src/app/salon/tipos");
+const CARPETA = join(process.cwd(), "src/lib/imprenta-og");
 
 const FICHEROS = [
   { archivo: "Fraunces-SemiBold.ttf", name: "Fraunces", weight: 600 as const },

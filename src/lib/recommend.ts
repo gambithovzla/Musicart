@@ -35,6 +35,7 @@ import {
   dailyGenerationBudget,
 } from "./budget";
 import { afinarRazon, ganchosQuemados, textoGanchosProhibidos } from "./reason-guard";
+import { nombreDePais } from "./paises";
 import {
   detectarPaisesPedido,
   artistaEsDeAlgunPais,
@@ -1883,6 +1884,7 @@ function comoLista(valor: unknown): string[] {
 }
 
 function formatPerfil(profile: Record<string, unknown>): string {
+  const texto = (k: string) => (typeof profile[k] === "string" ? (profile[k] as string).trim() : "");
   const spotifyArtistas = comoLista(profile.spotifyArtists);
   const spotifyGeneros = comoLista(profile.spotifyGenres);
   const spotifyCanciones = comoLista(profile.spotifyTracks);
@@ -1895,7 +1897,6 @@ function formatPerfil(profile: Record<string, unknown>): string {
   const bio = typeof profile.bio === "string" ? profile.bio.trim() : "";
   const tiempo = typeof profile.listenTime === "string" ? profile.listenTime : "";
   const anchors = typeof profile.anchors === "string" ? profile.anchors : "";
-  const texto = (k: string) => (typeof profile[k] === "string" ? (profile[k] as string).trim() : "");
   const discoMarca = texto("markedAlbum");
   const discoMarcaArtista = texto("markedArtist");
   const cancionFav = texto("favoriteSong");
@@ -1903,7 +1904,12 @@ function formatPerfil(profile: Record<string, unknown>): string {
   const curiosities = Array.isArray(profile.curiosities)
     ? formatCuriosities(profile.curiosities as CuriosityAnswer[])
     : "";
+  const pais = nombreDePais(texto("country") || null);
   const lineas = [
+    // De dónde es (11.7). No es un filtro —nadie quiere solo música de su
+    // país— pero saberlo cambia el tono: a un venezolano no le explicas quién
+    // fue Simón Díaz igual que a un japonés.
+    pais ? `Es de: ${pais}` : null,
     generos.length ? `Géneros favoritos: ${generos.join(", ")}` : null,
     artistas.length ? `Artistas que ama: ${artistas.join(", ")}` : null,
     spotifyArtistas.length

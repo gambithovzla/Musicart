@@ -1,0 +1,558 @@
+<title>Primera Tirada</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   LA IMPRENTA — mismos tokens que src/app/globals.css.
+   Aquí la EDICIÓN DE DÍA va en :root porque el lector del artefacto manda;
+   la de noche entra por prefers-color-scheme y por data-theme.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --papel: #e8e0cd;
+  --papel-hondo: #ddd4be;
+  --papel-alto: #f0e9d9;
+  --tinta: #16130d;
+  --tinta-suave: #6a6152;
+  --regla: rgba(22, 19, 13, 0.28);
+  --regla-tenue: rgba(22, 19, 13, 0.13);
+  --acento: #80662b;
+  --acento-suave: #9b7d37;
+  --grano: 0.07;
+  --sombra: rgba(22, 19, 13, 0.9);
+
+  --font-display: "Fraunces", Georgia, serif;
+  --font-texto: "Archivo", "Helvetica Neue", sans-serif;
+  --font-dato: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --papel: #14110c;
+    --papel-hondo: #0c0a07;
+    --papel-alto: #1c1813;
+    --tinta: #f0e7d5;
+    --tinta-suave: #a99e8a;
+    --regla: rgba(240, 231, 213, 0.22);
+    --regla-tenue: rgba(240, 231, 213, 0.1);
+    --acento: #c8a24a;
+    --acento-suave: #e8cf8e;
+    --grano: 0.05;
+    --sombra: rgba(0, 0, 0, 0.85);
+  }
+}
+
+:root[data-theme="dark"] {
+  --papel: #14110c;
+  --papel-hondo: #0c0a07;
+  --papel-alto: #1c1813;
+  --tinta: #f0e7d5;
+  --tinta-suave: #a99e8a;
+  --regla: rgba(240, 231, 213, 0.22);
+  --regla-tenue: rgba(240, 231, 213, 0.1);
+  --acento: #c8a24a;
+  --acento-suave: #e8cf8e;
+  --grano: 0.05;
+  --sombra: rgba(0, 0, 0, 0.85);
+}
+
+* { box-sizing: border-box; border-radius: 0 !important; }
+
+body {
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--font-texto);
+  font-size: 17px;
+  line-height: 1.6;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* El grano de fibra, por encima de la tinta, como en la app */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  opacity: var(--grano);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.hoja { max-width: 46rem; margin: 0 auto; padding: 0 1.25rem 6rem; }
+
+/* ── Cabecera: el folio corrido ──────────────────────────────────────── */
+.cabecera { border-bottom: 2px solid var(--tinta); padding: 2.5rem 0 1rem; margin-bottom: 2.5rem; }
+.cabecera .marca {
+  font-family: var(--font-dato);
+  font-size: 0.7rem; letter-spacing: 0.28em; text-transform: uppercase;
+  color: var(--tinta-suave); display: flex; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; margin-bottom: 1.75rem;
+}
+.cabecera h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2.9rem, 12vw, 5.2rem);
+  font-weight: 900; line-height: 0.88; letter-spacing: -0.035em;
+  margin: 0 0 1rem; text-wrap: balance;
+}
+.bajada { font-size: 1.05rem; color: var(--tinta-suave); max-width: 34rem; margin: 0 0 1.5rem; }
+
+/* ── Secciones con folio ─────────────────────────────────────────────── */
+section { margin-top: 4.5rem; }
+.cabecera-seccion {
+  display: flex; align-items: baseline; gap: 0.9rem;
+  border-bottom: 1px solid var(--tinta); padding-bottom: 0.6rem; margin-bottom: 1.75rem;
+}
+.folio {
+  font-family: var(--font-dato); font-size: 0.72rem; font-weight: 600;
+  letter-spacing: 0.14em; color: var(--acento); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cabecera-seccion h2 {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: clamp(1.5rem, 5vw, 2.05rem); line-height: 1.1;
+  letter-spacing: -0.02em; margin: 0; text-wrap: balance;
+}
+
+h3 {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: 1.25rem; line-height: 1.25; letter-spacing: -0.015em;
+  margin: 2.25rem 0 0.6rem; text-wrap: balance;
+}
+p { margin: 0 0 1rem; max-width: 38rem; }
+strong { font-weight: 600; }
+em { font-style: italic; }
+
+.rotulo {
+  font-family: var(--font-dato); font-size: 0.68rem; font-weight: 600;
+  letter-spacing: 0.2em; text-transform: uppercase; color: var(--tinta-suave);
+}
+.dato { font-family: var(--font-dato); font-variant-numeric: tabular-nums; }
+.acento { color: var(--acento); }
+
+/* ── El recuadro: marco de tinta con sombra dura. NO es una tarjeta ──── */
+.recuadro {
+  border: 1px solid var(--tinta);
+  box-shadow: 4px 4px 0 var(--sombra);
+  background: var(--papel-alto);
+  padding: 1.4rem 1.3rem;
+  margin: 1.75rem 0;
+}
+.recuadro > :last-child { margin-bottom: 0; }
+.recuadro.aviso { border-left: 5px solid var(--acento); }
+
+/* ── Filete y calderón ───────────────────────────────────────────────── */
+.filete { border: 0; border-top: 1px solid var(--regla); margin: 2.5rem 0; }
+.calderon { text-align: center; color: var(--acento); font-size: 1.3rem; margin: 3rem 0; letter-spacing: 0.6em; }
+
+/* ── Los formatos: escalafón romano ──────────────────────────────────── */
+.formato { display: grid; grid-template-columns: 3.2rem 1fr; gap: 0 1rem; padding: 1.5rem 0; border-top: 1px solid var(--regla); }
+.formato:last-of-type { border-bottom: 1px solid var(--regla); }
+.formato .numeral {
+  font-family: var(--font-display); font-weight: 900;
+  font-size: 1.6rem; line-height: 1; color: var(--acento); padding-top: 0.15rem;
+}
+.formato h3 { margin: 0 0 0.15rem; font-size: 1.3rem; }
+.formato .subt { font-family: var(--font-dato); font-size: 0.7rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--tinta-suave); margin-bottom: 0.7rem; }
+.formato p { margin-bottom: 0.7rem; }
+.formato .fuente {
+  font-family: var(--font-dato); font-size: 0.74rem; color: var(--tinta-suave);
+  border-top: 1px dotted var(--regla); padding-top: 0.55rem; margin-top: 0.9rem;
+}
+
+/* ── Guiones ─────────────────────────────────────────────────────────── */
+.guion { border: 1px solid var(--tinta); box-shadow: 4px 4px 0 var(--sombra); background: var(--papel-alto); margin: 2rem 0; }
+.guion-cab { border-bottom: 1px solid var(--tinta); padding: 0.85rem 1.2rem; display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+.guion-cab .tit { font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; }
+.guion-cuerpo { padding: 1.2rem; }
+.linea { display: grid; grid-template-columns: 4.2rem 1fr; gap: 0.5rem 0.9rem; padding: 0.65rem 0; border-bottom: 1px dotted var(--regla); }
+.linea:last-child { border-bottom: 0; padding-bottom: 0; }
+.linea .t { font-family: var(--font-dato); font-size: 0.72rem; color: var(--acento); font-variant-numeric: tabular-nums; padding-top: 0.2rem; }
+.linea .txt { margin: 0; max-width: none; }
+.linea .txt .dice { font-family: var(--font-display); font-size: 1.02rem; line-height: 1.45; }
+.linea .txt .nota { display: block; font-size: 0.83rem; color: var(--tinta-suave); margin-top: 0.3rem; }
+
+/* ── Tablas ──────────────────────────────────────────────────────────── */
+.tabla-env { overflow-x: auto; margin: 1.5rem 0; border-top: 1px solid var(--tinta); border-bottom: 1px solid var(--tinta); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; min-width: 30rem; }
+th {
+  font-family: var(--font-dato); font-size: 0.66rem; font-weight: 600;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--tinta-suave);
+  text-align: left; padding: 0.7rem 0.7rem; border-bottom: 1px solid var(--regla);
+}
+td { padding: 0.62rem 0.7rem; border-bottom: 1px solid var(--regla-tenue); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.dia { font-family: var(--font-dato); font-variant-numeric: tabular-nums; color: var(--acento); font-weight: 600; white-space: nowrap; }
+td.fmt { font-family: var(--font-dato); font-size: 0.78rem; letter-spacing: 0.04em; white-space: nowrap; }
+.semana-cab td {
+  background: var(--papel-hondo); font-family: var(--font-dato);
+  font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase;
+  font-weight: 600; padding: 0.75rem 0.7rem; border-bottom: 1px solid var(--regla);
+}
+
+/* ── Listas con puntos conductores ───────────────────────────────────── */
+ul.pliego { list-style: none; padding: 0; margin: 1rem 0; }
+ul.pliego li { padding: 0.55rem 0 0.55rem 1.6rem; border-bottom: 1px dotted var(--regla); position: relative; max-width: 38rem; }
+ul.pliego li:last-child { border-bottom: 0; }
+ul.pliego li::before { content: "✻"; position: absolute; left: 0; top: 0.55rem; color: var(--acento); font-size: 0.8rem; }
+
+.capitular::first-letter {
+  font-family: var(--font-display); font-weight: 900; font-size: 3.4rem;
+  line-height: 0.82; float: left; margin: 0.1rem 0.5rem 0 0; color: var(--acento);
+}
+
+.pie { margin-top: 5rem; border-top: 2px solid var(--tinta); padding-top: 1.2rem; }
+.pie p { font-family: var(--font-dato); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tinta-suave); }
+
+@media (max-width: 34rem) {
+  body { font-size: 16px; }
+  .hoja { padding: 0 1rem 4rem; }
+  .formato { grid-template-columns: 2.4rem 1fr; gap: 0 0.7rem; }
+  .linea { grid-template-columns: 1fr; gap: 0.2rem; }
+  .linea .t { padding-top: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div class="hoja">
+
+<header class="cabecera">
+  <div class="marca">
+    <span>Musicart · Cuaderno de trabajo</span>
+    <span>Agosto 2026</span>
+  </div>
+  <h1>Primera Tirada</h1>
+  <p class="bajada">Treinta días de contenido para TikTok, servidos por la máquina que ya tienes corriendo. Cuatro formatos, tres guiones listos y un calendario que no depende de la inspiración.</p>
+</header>
+
+<p class="capitular">La apuesta de este plan es una sola y conviene decirla antes de empezar: <strong>el TikTok no es el negocio, es la puerta.</strong> Nadie se hace rico recomendando discos en vertical. Pero casi nadie en el nicho puede sostener un dato verificado al día durante un mes, y tú sí — porque el pipeline anti-alucinación ya lo hace solo. Ese es el foso. Todo lo de abajo existe para explotarlo.</p>
+
+<div class="recuadro aviso">
+  <p class="rotulo" style="margin-bottom:0.5rem">La regla que no se rompe</p>
+  <p>Ningún dato entra a un video si no salió de un dossier verificado o de <span class="dato">recibos()</span>. Si te falta un dato para que el guion cierre, <strong>cambias el guion, no el dato.</strong> Es la misma ley que rige el código; en TikTok además es tu única defensa cuando un comentario te acuse de inventar.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="cabecera-seccion">
+    <span class="folio">№ 01</span>
+    <h2>Antes del día 1</h2>
+  </div>
+
+  <p>Cuatro decisiones que se toman una sola vez y que después no se pueden deshacer sin borrar la cuenta. Dedícales una tarde.</p>
+
+  <h3>La cuenta y la música</h3>
+  <p>Abre la cuenta como <strong>personal, no Business</strong>. La cuenta Business te encierra en la biblioteca comercial de TikTok y te silencia los videos donde suene el disco del que estás hablando — que es, literalmente, todo tu contenido. Verifícalo tú mismo antes de grabar nada: sube un video de prueba con quince segundos de un disco y mira si sobrevive veinticuatro horas.</p>
+  <p>Y aun así, <strong>no construyas el formato encima del audio</strong>. Tu voz encima, fragmentos cortos, y que el video funcione con el sonido quitado. Si un día TikTok te muta el catálogo entero, no puedes perder treinta videos.</p>
+
+  <h3>La postura sobre la IA</h3>
+  <p>Esta es la decisión difícil y hay que tomarla ahora, no el día que un video pegue y te lo pregunten cien veces en comentarios. Musicart es curaduría hecha por IA, y las comunidades musicales están hoy hostiles con eso.</p>
+  <p>Mi recomendación: <strong>no lidera la IA, lidera la verificación.</strong> Tu argumento no es «lo hizo una máquina» — es «cada dato pasa por tres fuentes y si no se confirma, no se publica». Eso es cierto, es tuyo, y es lo contrario de lo que la gente teme de la IA. La IA se menciona cuando pregunten, sin esconderla y sin ponerla en el cartel.</p>
+
+  <h3>La biografía</h3>
+  <p>Una línea que diga qué recibe el que entra, y el enlace. Nada de «apasionado de la música». Algo del orden de: <em>«Un disco al día, con su historia comprobada. La app es gratis.»</em></p>
+
+  <h3>La plantilla visual</h3>
+  <p>Aquí está tu ventaja más barata y la que menos aprovechas. Fabrica <strong>una sola plantilla</strong> con Fraunces, el papel <span class="dato">#14110c</span> y el dorado: rótulo arriba, cifra enorme al centro, filete abajo. En un feed donde todos usan la misma plantilla de CapCut, un video que parece una revista impresa se reconoce a un metro. No la cambies en treinta días.</p>
+  <p>Las imágenes de <span class="dato">opengraph-image</span> que ya tienes en <span class="dato">/salon/disco/[id]</span> y <span class="dato">/atlas/[code]</span> son exactamente eso, ya compuestas y con las tipografías de la imprenta cargadas. Empieza por capturarlas.</p>
+</section>
+
+<div class="calderon">❧</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="cabecera-seccion">
+    <span class="folio">№ 02</span>
+    <h2>Los cuatro formatos</h2>
+  </div>
+
+  <p>Cuatro y no más. Un formato reconocible se vuelve un hábito; seis formatos son seis cuentas distintas peleándose por el mismo perfil. Cada uno sale de una parte distinta de tu sistema, así que ninguno te cuesta investigación.</p>
+
+  <div class="formato">
+    <span class="numeral">I</span>
+    <div>
+      <h3>El recibo</h3>
+      <p class="subt">Del Salón de la Fama · 30–45 s</p>
+      <p>Un puntaje del canon y la prueba dura que lo sostiene. El puntaje es cebo de discusión —la gente pelea con los rankings como con nada— pero tú no estás opinando: estás enseñando el recibo. Cuando alguien grite en comentarios, respondes con un pantallazo, no con una opinión.</p>
+      <p>Es el formato con más techo y el que más comentarios genera. También el más fácil de sostener: tienes miles de discos indexados.</p>
+      <p class="fuente">Sale de: <span class="dato">CanonAlbum.score</span> + <span class="dato">recibos(signals)</span></p>
+    </div>
+  </div>
+
+  <div class="formato">
+    <span class="numeral">II</span>
+    <div>
+      <h3>El retrato</h3>
+      <p class="subt">Del Atlas · 45–60 s</p>
+      <p>Cinco discos que cuentan un país, en los cinco papeles que ya definiste: <span class="acento">la raíz</span> · <span class="acento">el himno</span> · <span class="acento">el cruce</span> · <span class="acento">el grito</span> · <span class="acento">el ahora</span>. El contenido de identidad nacional vuela en Latinoamérica, y tú tienes la barrera de origen comprobando en tres fuentes que el artista sea de verdad de ahí.</p>
+      <p>Ciento noventa y dos países en la tabla. Eso es contenido con demanda garantizada durante años, y cada video te trae una audiencia geográfica entera de golpe.</p>
+      <p class="fuente">Sale de: <span class="dato">retratoDePais()</span> + <span class="dato">origin-guard</span></p>
+    </div>
+  </div>
+
+  <div class="formato">
+    <span class="numeral">III</span>
+    <div>
+      <h3>El dato</h3>
+      <p class="subt">De cualquier dossier · 15–25 s</p>
+      <p>Un <span class="dato">wowFact</span>, seco, sin adornos. El más barato de producir y el que mejor se guarda y se reenvía — que son las dos señales que más pesan en el algoritmo. Es tu relleno de calidad: el día que no tengas tiempo, este video se hace en diez minutos.</p>
+      <p class="fuente">Sale de: <span class="dato">DossierContent.wowFacts</span></p>
+    </div>
+  </div>
+
+  <div class="formato">
+    <span class="numeral">IV</span>
+    <div>
+      <h3>La lámina</h3>
+      <p class="subt">Carrusel o imagen fija · sin video</p>
+      <p>Una imagen compuesta con el sistema de la imprenta y tres líneas de texto. No compite por retención, compite por guardado. Sirve para los días muertos y para probar ganchos sin gastar una grabación.</p>
+      <p class="fuente">Sale de: las <span class="dato">opengraph-image</span> que ya existen</p>
+    </div>
+  </div>
+</section>
+
+<div class="calderon">❧</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="cabecera-seccion">
+    <span class="folio">№ 03</span>
+    <h2>Tres guiones, listos para grabar</h2>
+  </div>
+
+  <p>Escritos con hechos que ya están verificados en tu base — los del seed. Cada dato de abajo tiene su fuente en <span class="dato">prisma/fixtures.ts</span>. Grábalos tal cual o cámbiales el tono, pero no les cambies los datos.</p>
+
+  <!-- GUION 1 -->
+  <div class="guion">
+    <div class="guion-cab">
+      <span class="tit">El recibo — <em>Rumours</em></span>
+      <span class="rotulo">Formato I · 40 s</span>
+    </div>
+    <div class="guion-cuerpo">
+      <div class="linea">
+        <span class="t">0–4 s</span>
+        <p class="txt"><span class="dice">«Este disco lo grabaron dos parejas que se estaban separando. Y ninguno podía irse del estudio.»</span>
+        <span class="nota">El gancho es el conflicto humano, no el puntaje. El puntaje llega después, como prueba.</span></p>
+      </div>
+      <div class="linea">
+        <span class="t">4–14 s</span>
+        <p class="txt"><span class="dice">«Fleetwood Mac, 1976. Lindsey Buckingham y Stevie Nicks terminando a gritos. John y Christine McVie sin hablarse fuera de los ensayos. Y el baterista, Mick Fleetwood, divorciándose en medio de todo.»</span></p>
+      </div>
+      <div class="linea">
+        <span class="t">14–24 s</span>
+        <p class="txt"><span class="dice">«Así que hicieron lo único que podían hacer: cantárselo a la cara. "Go Your Own Way" es Lindsey acusando a Stevie. Y ella tiene que hacerle los coros.»</span>
+        <span class="nota">Aquí entra el audio, bajo. Es el punto de mayor retención del video.</span></p>
+      </div>
+      <div class="linea">
+        <span class="t">24–36 s</span>
+        <p class="txt"><span class="dice">«Y esto es lo que salió: Grammy al Álbum del Año. Cuarenta millones de copias. Y "The Chain", la única canción del disco firmada por los cinco. La cadena que no pudieron romper.»</span>
+        <span class="nota">Cifras en pantalla con la plantilla. Tabulares, grandes, doradas.</span></p>
+      </div>
+      <div class="linea">
+        <span class="t">36–40 s</span>
+        <p class="txt"><span class="dice">«En mi Salón de la Fama saca [PUNTAJE]. Dime tú si le sobra o le falta.»</span>
+        <span class="nota">La pregunta abierta al final es lo que convierte espectadores en comentarios.</span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="recuadro aviso">
+    <p class="rotulo" style="margin-bottom:0.5rem">Sobre ese <span class="dato">[PUNTAJE]</span></p>
+    <p>Déjalo en blanco hasta que abras la ficha. El <span class="dato">95</span> que ves en el seed es <span class="dato">Album.impact</span>, que <strong>no es comparable entre discos</strong> — lo escribe el LLM dentro del dossier sin ver a los demás. El número del Salón es <span class="dato">CanonAlbum.score</span>, calibrado por percentil contra todo el índice. Son cosas distintas y tu propio CLAUDE.md avisa de no mezclarlas. En el video va el del Salón, leído de <span class="dato">/salon/disco/[id]</span>.</p>
+  </div>
+
+  <!-- GUION 2 -->
+  <div class="guion">
+    <div class="guion-cab">
+      <span class="tit">El dato — <em>Continuum</em></span>
+      <span class="rotulo">Formato III · 20 s</span>
+    </div>
+    <div class="guion-cuerpo">
+      <div class="linea">
+        <span class="t">0–5 s</span>
+        <p class="txt"><span class="dice">«La mejor canción de John Mayer no se estrenó en un disco de John Mayer.»</span>
+        <span class="nota">Gancho de contradicción. Funciona porque suena a error y no lo es.</span></p>
+      </div>
+      <div class="linea">
+        <span class="t">5–13 s</span>
+        <p class="txt"><span class="dice">«"Gravity" ya existía en <em>Try!</em>, el disco en vivo del John Mayer Trio, en 2005. Un año antes de <em>Continuum</em>.»</span></p>
+      </div>
+      <div class="linea">
+        <span class="t">13–20 s</span>
+        <p class="txt"><span class="dice">«Nació tocándola en clubes con Pino Palladino y Steve Jordan. Por eso no suena a canción de estudio: suena a algo que ya llevaba un año vivo.»</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- GUION 3 -->
+  <div class="guion">
+    <div class="guion-cab">
+      <span class="tit">El retrato — España, «el cruce»</span>
+      <span class="rotulo">Formato II · 50 s</span>
+    </div>
+    <div class="guion-cuerpo">
+      <div class="linea">
+        <span class="t">0–6 s</span>
+        <p class="txt"><span class="dice">«Cinco discos para entender España. No los cinco mejores: cinco que cuentan cosas distintas.»</span>
+        <span class="nota">Deja claro desde el segundo uno que no es una lista de «los mejores». Eso te ahorra la mitad de las peleas y hace el video más defendible.</span></p>
+      </div>
+      <div class="linea">
+        <span class="t">6–12 s</span>
+        <p class="txt"><span class="dice">«La raíz. El himno. El cruce. El grito. Y el ahora.»</span>
+        <span class="nota">Cinco cortes secos, un rótulo por papel. Es el momento de plantilla más reconocible que vas a tener.</span></p>
+      </div>
+      <div class="linea">
+        <span class="t">12–40 s</span>
+        <p class="txt"><span class="dice">«El cruce: <em>El Mal Querer</em>, Rosalía, 2018. Un disco de flamenco estructurado como una novela, por capítulos. Y en "Bagdad" hace algo que no había hecho nadie: coge "Cry Me a River" de Justin Timberlake y la convierte en una plegaria.»</span>
+        <span class="nota">Los otros cuatro discos NO los escribes tú: los propone el Atlas y les comprueba el origen. Si a alguno le sale «desconocido», dilo en el video — «este no lo pude confirmar» es exactamente el tipo de honestidad que construye autoridad.</span></p>
+      </div>
+      <div class="linea">
+        <span class="t">40–50 s</span>
+        <p class="txt"><span class="dice">«¿Cuál falta? Dime tu país y lo hago.»</span>
+        <span class="nota">Este cierre te fabrica la cola de contenido de los próximos dos meses, y cada petición es una persona que ya se siente dueña del video que viene.</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="calderon">❧</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="cabecera-seccion">
+    <span class="folio">№ 04</span>
+    <h2>El calendario</h2>
+  </div>
+
+  <p>Un video al día. La cadencia importa más que la calidad de cualquier video suelto — el algoritmo necesita muestras para saber a quién enseñarte, y treinta le bastan. Grábalos por tandas de siete el domingo si te sirve; publicar es diario, grabar no.</p>
+
+  <p><strong>Fíjate en dónde entra la app:</strong> no antes del día <span class="dato">18</span>. Las tres primeras semanas son contenido puro y la app vive solo en la biografía. Pedirle a alguien que se instale algo antes de haberle dado nada es el error que mata la mayoría de estas cuentas.</p>
+
+  <div class="tabla-env">
+    <table>
+      <thead>
+        <tr><th>Día</th><th>Formato</th><th>Qué publicas</th></tr>
+      </thead>
+      <tbody>
+        <tr class="semana-cab"><td colspan="3">Semana I · Calibrar — probar los cuatro y mirar cuál engancha</td></tr>
+        <tr><td class="dia">01</td><td class="fmt">I · Recibo</td><td><em>Rumours</em>. El guion de arriba, tal cual.</td></tr>
+        <tr><td class="dia">02</td><td class="fmt">III · Dato</td><td><em>Continuum</em> y «Gravity». El guion corto.</td></tr>
+        <tr><td class="dia">03</td><td class="fmt">II · Retrato</td><td>España. Empieza por el país que mejor conoces.</td></tr>
+        <tr><td class="dia">04</td><td class="fmt">IV · Lámina</td><td>El muro de los 100/100 del Salón, capturado.</td></tr>
+        <tr><td class="dia">05</td><td class="fmt">I · Recibo</td><td>Un disco muy querido con puntaje más bajo del que la gente espera.</td></tr>
+        <tr><td class="dia">06</td><td class="fmt">III · Dato</td><td><em>El Mal Querer</em>: la estructura por capítulos.</td></tr>
+        <tr><td class="dia">07</td><td class="fmt">II · Retrato</td><td>Venezuela. Aquí ya tienes público propio y la barrera de origen brilla.</td></tr>
+
+        <tr class="semana-cab"><td colspan="3">Semana II · Doblar — el formato que ganó, tres veces</td></tr>
+        <tr><td class="dia">08</td><td class="fmt">Ganador</td><td>Mira el día 1–7: el de más <strong>guardados</strong>, no el de más vistas.</td></tr>
+        <tr><td class="dia">09</td><td class="fmt">III · Dato</td><td>Un <span class="dato">wowFact</span> del disco de hoy en la app.</td></tr>
+        <tr><td class="dia">10</td><td class="fmt">Ganador</td><td>Mismo molde, disco distinto.</td></tr>
+        <tr><td class="dia">11</td><td class="fmt">I · Recibo</td><td>Responde en video al comentario más peleón que hayas recibido.</td></tr>
+        <tr><td class="dia">12</td><td class="fmt">II · Retrato</td><td>El país más pedido en comentarios del día 7.</td></tr>
+        <tr><td class="dia">13</td><td class="fmt">Ganador</td><td>Tercera repetición. Aquí ya sabes si el formato aguanta.</td></tr>
+        <tr><td class="dia">14</td><td class="fmt">IV · Lámina</td><td>Balance de la quincena: los cinco discos de puntaje más alto que tocaste.</td></tr>
+
+        <tr class="semana-cab"><td colspan="3">Semana III · La serie — darle un nombre y una hora</td></tr>
+        <tr><td class="dia">15</td><td class="fmt">Serie · 01</td><td>Arranca la serie con nombre propio. «El recibo» o «Cinco discos, un país».</td></tr>
+        <tr><td class="dia">16</td><td class="fmt">III · Dato</td><td>Relleno de calidad. Diez minutos de trabajo.</td></tr>
+        <tr><td class="dia">17</td><td class="fmt">Serie · 02</td><td>Misma hora que el 15. La hora fija es parte de la serie.</td></tr>
+        <tr><td class="dia">18</td><td class="fmt">II · Retrato</td><td><strong>Primera mención de la app</strong>, al final y sin insistir: «esto sale de una cosa que hice».</td></tr>
+        <tr><td class="dia">19</td><td class="fmt">Serie · 03</td><td>&nbsp;</td></tr>
+        <tr><td class="dia">20</td><td class="fmt">I · Recibo</td><td>El disco más sobrevalorado según tu propio índice. Video de pelea.</td></tr>
+        <tr><td class="dia">21</td><td class="fmt">Serie · 04</td><td>Cierre de semana. Anuncia que la serie sigue.</td></tr>
+
+        <tr class="semana-cab"><td colspan="3">Semana IV · El embudo — convertir lo que se acumuló</td></tr>
+        <tr><td class="dia">22</td><td class="fmt">Serie · 05</td><td>&nbsp;</td></tr>
+        <tr><td class="dia">23</td><td class="fmt">Explicativo</td><td>Qué es Musicart, en cuarenta segundos. El único video que habla de la app.</td></tr>
+        <tr><td class="dia">24</td><td class="fmt">III · Dato</td><td>&nbsp;</td></tr>
+        <tr><td class="dia">25</td><td class="fmt">Serie · 06</td><td>&nbsp;</td></tr>
+        <tr><td class="dia">26</td><td class="fmt">II · Retrato</td><td>País pedido. Cierra con «pide el tuyo».</td></tr>
+        <tr><td class="dia">27</td><td class="fmt">I · Recibo</td><td>&nbsp;</td></tr>
+        <tr><td class="dia">28</td><td class="fmt">Serie · 07</td><td>&nbsp;</td></tr>
+        <tr><td class="dia">29</td><td class="fmt">IV · Lámina</td><td>«Un mes de discos», en la plantilla de la imprenta.</td></tr>
+        <tr><td class="dia">30</td><td class="fmt">Balance</td><td>Qué aprendiste en un mes. La gente premia a quien muestra el trabajo.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="calderon">❧</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="cabecera-seccion">
+    <span class="folio">№ 05</span>
+    <h2>Qué medir</h2>
+  </div>
+
+  <p>Los seguidores son la métrica que más se mira y la que menos dice. Estas son las tres que sí.</p>
+
+  <div class="tabla-env">
+    <table>
+      <thead>
+        <tr><th>Corte</th><th>La pregunta</th><th>Qué significa un no</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="dia">Día 07</td>
+          <td>¿Algún video pasó de <span class="dato">10.000</span> vistas?</td>
+          <td>Normal que no. Siete muestras no le alcanzan al algoritmo. No cambies nada todavía.</td>
+        </tr>
+        <tr>
+          <td class="dia">Día 14</td>
+          <td>¿Cuál formato tiene más <strong>guardados por vista</strong>?</td>
+          <td>Si ninguno destaca, el problema es el gancho de los primeros tres segundos, no el tema.</td>
+        </tr>
+        <tr>
+          <td class="dia">Día 30</td>
+          <td>¿Cuántos <strong>registros en Musicart</strong> por cada mil vistas?</td>
+          <td>Menos de uno por mil: el contenido gusta pero no explica para qué sirve la app. Se arregla en el video, no en la app.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="recuadro">
+    <p class="rotulo" style="margin-bottom:0.5rem">Números honestos del día 30</p>
+    <p>Con treinta videos publicados, lo esperable es entre <span class="dato">200</span> y <span class="dato">2.000</span> seguidores y quizá un video que se despegue del resto. Eso <strong>no</strong> es fracasar: es el tamaño de muestra mínimo para saber qué funciona. Quien abandona en el día 30 lo hace comparándose con cuentas de dos años. El plan de verdad son noventa días; treinta es solo el primero de los tres.</p>
+  </div>
+
+  <h3>Lo que no hay que medir</h3>
+  <ul class="pliego">
+    <li>Vistas totales. Suben con un video suelto y no significan nada sostenido.</li>
+    <li>«Me gusta». Es la señal más barata y la que menos peso tiene.</li>
+    <li>Comentarios negativos. En un formato de puntajes son <em>combustible</em>: si nadie te discute, nadie se está implicando.</li>
+  </ul>
+</section>
+
+<div class="calderon">❧</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="cabecera-seccion">
+    <span class="folio">№ 06</span>
+    <h2>Lo que puede salir mal</h2>
+  </div>
+
+  <h3>Que TikTok te mute el catálogo</h3>
+  <p>El más probable. Se previene grabando desde el día 1 con la voz encima y fragmentos cortos, y no dependiendo nunca de que el disco suene. Si pasa, los treinta videos siguen funcionando sin audio.</p>
+
+  <h3>Que te caiga el reproche de la IA</h3>
+  <p>Va a pasar y probablemente en el video que mejor funcione. Ten la respuesta escrita antes: la verificación en tres fuentes, y que lo que no se confirma se dice en vez de inventarse. No discutas en veinte comentarios; graba un video contestando, que además rinde.</p>
+
+  <h3>Que se te acabe el tope de generación</h3>
+  <p>Si empiezas a abrir discos del Salón y del Atlas a ritmo de contenido, te comes el presupuesto diario compartido — y el <span class="dato">30%</span> reservado solo cubre el ritual del disco del día. <strong>Prepara el contenido por tandas y con antelación</strong>, no el mismo día, o el video de mañana le quita el disco a un oyente real.</p>
+
+  <h3>Que abandones en la semana 3</h3>
+  <p>El riesgo real, y el que se lleva a casi todo el mundo. Es la semana en la que ya no hay novedad, todavía no hay resultados y el trabajo se siente al vacío. La única defensa es tener los videos grabados por adelantado: <strong>si el día 15 te encuentra con siete videos ya hechos, no abandonas.</strong></p>
+</section>
+
+<footer class="pie">
+  <p>Musicart · Primera Tirada · Cuaderno de trabajo · № 01–06</p>
+</footer>
+
+</div>

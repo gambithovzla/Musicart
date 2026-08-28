@@ -133,7 +133,7 @@ export function CuriosityCard({
 
           {selected && (
             <p className="mt-3 text-center text-xs text-album-light">
-              {pending ? "Guardando…" : "✓ Guardado"}
+              {pending ? "Guardando…" : "✓ Guardado · cuenta para estos días"}
             </p>
           )}
         </motion.section>

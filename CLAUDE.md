@@ -192,9 +192,18 @@ src/lib/recommend.ts     Motor (Fase 1 + 3.3 + 5.6 + 6.4): getPersonalizedPick (
 src/lib/discover.ts      Fase 6.4: la IA PROPONE un disco real de toda la música
                          para descubrir hoy (title+artist+reason) → pipeline.
 src/lib/budget.ts        Fase 6.6: tope de discos nuevos/día (DAILY_GENERATION_BUDGET).
+src/lib/curiosities.ts   La pregunta del día. Fase 7.14: las respuestas CADUCAN —
+                         van fechadas al prompt ("[hace 2 meses]"), separadas en
+                         "de estos días" vs "de hace tiempo" (marcado como
+                         puntual) y a los 120 días ya no se miran. Sin esto, un
+                         "¿montaña o playa? → Montaña" contestado una vez pesaba
+                         para siempre igual que sus géneros favoritos.
 src/lib/reason-guard.ts  Fase 7.8: barrera anti-muletilla de la razón del día —
                          veta las palabras que ya usó en días recientes y, si
                          reincide, reescribe la razón (nunca rompe: deja la original).
+                         7.14: `textoUsaGancho()` además saca del perfil de hoy la
+                         señal ya gastada — vetar la palabra pero seguir enseñando
+                         el dato es pedirle al modelo que no piense en un elefante.
 src/lib/pedido-match.ts  Lee el pedido del oyente SIN IA (cruza sus palabras con
                          artista, título, etiquetas y década). Es la red de abajo:
                          el día que el LLM no responde o se acaba el tope, el
@@ -311,6 +320,7 @@ npm run dossier -- "Álbum" "Artista" --publish   # generar un dossier (CLI, req
 npm run worker -- --batch 2                      # corrida del worker de catálogo (curador + pipeline)
 npm run probar:origen -- "Sentimiento Muerto" "rock venezolano"  # ¿saben las tres fuentes de dónde es? (7.11, sin IA)
 npm run probar:paises                            # la tabla de países y cómo se lee (11.1; sin red, sin base)
+npm run probar:memoria                           # ¿qué recuerda el curador de lo que respondiste y cuánto pesa hoy? (7.14; sin red, sin base)
 npm run canon                                    # construye el índice del canon (Fase 9; sin IA, ~1000 discos)
 npm run canon -- --limite 150                    # corrida corta de prueba
 npm run canon -- --portadas 200                  # solo rellenar carátulas pendientes

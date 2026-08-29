@@ -596,6 +596,30 @@ integra más profundamente con la escucha real.
   cuántos artistas se le pasaron al curador, así que la próxima vez se sabe si
   falló la fuente o el modelo.
 
+- [x] **7.14 Lo que contestaste UN día dejó de ser tu personalidad** (ago 2026,
+  reporte del dueño: *"elegí montaña en una pregunta y ahora todo se basa en
+  montaña; no todos los días estoy conduciendo por montaña"*) — la pregunta del
+  día (`curiosities.ts`) guarda cada respuesta con su fecha, pero al prompt
+  llegaba **sin ella**, en la misma lista y con el mismo peso que sus géneros
+  favoritos y bajo el rótulo "Lo que me ha contado". Para el modelo, un
+  "¿montaña o playa? → Montaña" de hace meses era tan permanente como "le gusta
+  el jazz" — y encima era una señal **real**, así que la prohibición de
+  inventarle escenas (7.4) no la tocaba: la barrera anti-muletilla (7.8) vetaba
+  la *palabra* de la razón de ayer, pero al día siguiente le volvíamos a poner
+  el dato delante. Cuatro arreglos, todos en código: **(a) las respuestas
+  caducan** — van fechadas ("[hace 2 meses]"), en dos bloques separados (lo de
+  estos días, que es color de AHORA, y lo de hace tiempo, marcado como puntual)
+  y pasados `DIAS_OLVIDO` (120) no entran; **(b) la señal gastada no se enseña**
+  — si el gancho ya se usó en las razones recientes, `textoUsaGancho()` saca esa
+  respuesta del perfil de hoy: vetar la palabra pero seguir mostrando el dato es
+  pedirle al modelo que no piense en un elefante; **(c) el prompt distingue una
+  respuesta de una escena** — "montaña" es lo que contestó un día, no un sitio
+  donde está ni algo que hace, y prohibido convertirlo en acción ("mientras
+  conduces hacia la montaña") o en rasgo ("tú, que amas la montaña"); **(d) el
+  oyente puede ver y borrar** lo que ha respondido, desde su perfil
+  (`Curiosidades`), sin tener que rehacer el perfil entero. Se comprueba sin red
+  ni base con `npm run probar:memoria`, que imprime lo que el curador ve.
+
 ### Criterios de aceptación
 
 - [x] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones

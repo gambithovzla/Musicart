@@ -34,7 +34,13 @@ import {
   generacionesHoy,
   dailyGenerationBudget,
 } from "./budget";
-import { afinarRazon, ganchosQuemados, textoGanchosProhibidos } from "./reason-guard";
+import {
+  afinarRazon,
+  ganchosQuemados,
+  textoGanchosProhibidos,
+  textoUsaGancho,
+  type Gancho,
+} from "./reason-guard";
 import { nombreDePais } from "./paises";
 import {
   detectarPaisesPedido,
@@ -802,7 +808,12 @@ export async function generarPickDelDia(
       : null;
     // El perfil para el prompt incluye su memoria personal (lo que nos contó),
     // así el disco del día se afina con cada cosa que comparte.
-    const perfilTexto = [perfilATexto(parsedProfile), notasTexto]
+    // Ganchos ya gastados en las razones de días recientes. Se calculan aquí
+    // arriba porque no solo vetan palabras en el prompt: también deciden qué
+    // señales del perfil NO se le vuelven a poner delante hoy.
+    const ganchos = ganchosQuemados(picksRecientes.map((p) => p.reason));
+    const ganchosTexto = textoGanchosProhibidos(ganchos);
+    const perfilTexto = [perfilATexto(parsedProfile, { hoy: date, ganchos }), notasTexto]
       .filter(Boolean)
       .join("\n\n");
     const voz = curatorVoz(
@@ -865,12 +876,6 @@ export async function generarPickDelDia(
     const artistasRecientes = [
       ...new Set(picksRecientes.map((p) => p.album.artist.name)),
     ];
-    // Ganchos ya gastados en las razones de días recientes: van vetados en el
-    // prompt para que un detalle real de su perfil (un interés, una frase suya)
-    // no se convierta en la muletilla de todos los días.
-    const ganchos = ganchosQuemados(picksRecientes.map((p) => p.reason));
-    const ganchosTexto = textoGanchosProhibidos(ganchos);
-
     // Argumentos comunes del proponedor; lo único que cambia entre intentos es la
     // lista de rechazos acumulada (para empujar al LLM lejos de lo ya intentado).
     const argsPropuesta = (extraYaConoce: string[]) => ({
@@ -1608,7 +1613,9 @@ async function recomendarYGuardar(
         peticion: opts.peticion ?? null,
         yaVistosHistorial,
         notasTexto,
+        ganchos,
         ganchosTexto: textoGanchosProhibidos(ganchos),
+        hoy: date,
       });
     } catch (err) {
       razonDeIa = false;
@@ -1698,7 +1705,7 @@ async function recomendarYGuardar(
           title: dossier.album.title,
           artist: dossier.album.artist.name,
           year: dossier.album.year,
-          perfilTexto: [perfilATexto(parsedProfile), notasTexto]
+          perfilTexto: [perfilATexto(parsedProfile, { hoy: date, ganchos }), notasTexto]
             .filter(Boolean)
             .join("\n\n"),
           mood: opts.mood,
@@ -1766,6 +1773,11 @@ async function elegirConLlm(input: {
   notasTexto?: string | null;
   /** Palabras e imágenes ya gastadas en razones recientes (anti-muletilla). */
   ganchosTexto?: string | null;
+  /** Los mismos ganchos, sin formatear: podan las señales del perfil que hoy
+   *  no vuelven a enseñarse (ver `perfilATexto`). */
+  ganchos?: Gancho[];
+  /** Hoy (YYYY-MM-DD): para fechar las respuestas de la pregunta del día. */
+  hoy?: string;
 }): Promise<{ albumId: string; reason: string }> {
   const catalogoTexto = input.catalogo
     .map((d) => {
@@ -1782,7 +1794,10 @@ async function elegirConLlm(input: {
     })
     .join("\n");
 
-  const perfilTexto = [perfilATexto(input.profile), input.notasTexto]
+  const perfilTexto = [
+    perfilATexto(input.profile, { hoy: input.hoy, ganchos: input.ganchos }),
+    input.notasTexto,
+  ]
     .filter(Boolean)
     .join("\n\n");
   const diarioTexto = diarioATexto(input.reviews);
@@ -1822,6 +1837,7 @@ Reglas estrictas:
 1. Responde SOLO un objeto JSON: {"albumId": "...", "reason": "..."} — sin texto extra.
 2. "albumId" debe ser EXACTAMENTE uno de los albumId del catálogo.
 3. "reason": 1 a 3 frases en español, cálidas y concretas, citando SOLO señales reales del usuario que aparecen abajo (sus estrellas, sus respuestas, su perfil, su ánimo de hoy). Ej.: "Le diste 5★ a X…", "dijiste que buscas la historia…". PROHIBIDO inventarle hábitos, actividades o lugares (conducir, manejar por una carretera o montaña, hacer ejercicio, viajar, vivir en tal sitio, etc.) que no aparezcan literalmente en las señales de abajo.
+   UNA RESPUESTA DE ENCUESTA NO ES UNA ESCENA DE SU VIDA: si eligió una opción suelta ("montaña", "la noche", "salir a caminar"), eso es lo que contestó UN DÍA a una pregunta, no algo que esté haciendo ni un sitio donde esté. PROHIBIDO convertirla en acción ("mientras conduces hacia la montaña"), en rasgo permanente ("tú, que amas la montaña") ni en el decorado del disco. Verás la ANTIGÜEDAD de cada respuesta entre corchetes: lo de hace semanas o meses pesa MUCHO menos que lo de estos días, y si lo único que se te ocurre es un dato viejo, mejor habla del disco de hoy por su propio encanto.
 4. Sobre el disco solo puedes mencionar lo que aparece en el catálogo (título, artista, año, duración, etiquetas). PROHIBIDO inventar datos del álbum o del usuario.
 5. PROHIBIDO elegir un disco que aparezca en la lista "DISCOS RECOMENDADOS EN DÍAS RECIENTES" ni en "DISCOS QUE YA SE LE RECOMENDARON ANTES". Si aun así ves que todas las opciones del catálogo están en esas listas, elige el disco que lleve MÁS TIEMPO sin aparecer (el que esté más abajo en "YA SE LE RECOMENDARON ANTES").
 6. Si el usuario indicó su ánimo de hoy, dale prioridad como señal.
@@ -1883,7 +1899,18 @@ function comoLista(valor: unknown): string[] {
     : [];
 }
 
-function formatPerfil(profile: Record<string, unknown>): string {
+/** Lo que el perfil necesita saber del DÍA para no fosilizar lo puntual. */
+export type PerfilOpts = {
+  /** Hoy (YYYY-MM-DD): para fechar las respuestas de la pregunta del día. */
+  hoy?: string;
+  /** Ganchos ya gastados en razones recientes: sus señales no se repiten hoy. */
+  ganchos?: Gancho[];
+};
+
+function formatPerfil(
+  profile: Record<string, unknown>,
+  opts: PerfilOpts = {},
+): string {
   const texto = (k: string) => (typeof profile[k] === "string" ? (profile[k] as string).trim() : "");
   const spotifyArtistas = comoLista(profile.spotifyArtists);
   const spotifyGeneros = comoLista(profile.spotifyGenres);
@@ -1901,8 +1928,16 @@ function formatPerfil(profile: Record<string, unknown>): string {
   const discoMarcaArtista = texto("markedArtist");
   const cancionFav = texto("favoriteSong");
   const cancionFavArtista = texto("favoriteSongArtist");
+  // Las respuestas de la pregunta del día van FECHADAS y caducan (ver
+  // `curiosities.ts`): son la foto de un día, no un rasgo suyo. Y si la señal ya
+  // se gastó en la razón de estos días, hoy ni se la enseñamos — vetar la
+  // palabra pero seguir mostrando el dato es pedirle que no piense en él.
   const curiosities = Array.isArray(profile.curiosities)
-    ? formatCuriosities(profile.curiosities as CuriosityAnswer[])
+    ? formatCuriosities(profile.curiosities as CuriosityAnswer[], {
+        hoy: opts.hoy,
+        excluir: (r) =>
+          textoUsaGancho(`${r.answer} ${r.extra ?? ""}`, opts.ganchos ?? []),
+      })
     : "";
   const pais = nombreDePais(texto("country") || null);
   const lineas = [
@@ -1934,7 +1969,8 @@ function formatPerfil(profile: Record<string, unknown>): string {
     intereses.length ? `Intereses fuera de la música: ${intereses.join(", ")}` : null,
     bio ? `Contexto personal: "${bio}"` : null,
     anchors ? `Otros que lo marcaron: ${anchors}` : null,
-    curiosities ? `Lo que me ha contado (preguntas del día):\n${curiosities}` : null,
+    // Ya viene con sus propios encabezados fechados.
+    curiosities || null,
   ].filter(Boolean);
   return lineas.length ? lineas.join("\n") : "(perfil vacío)";
 }
@@ -1942,8 +1978,11 @@ function formatPerfil(profile: Record<string, unknown>): string {
 // Bloques de texto reutilizables (los usan el selector de catálogo y el
 // proponedor de disco fresco) para que el prompt cite solo señales reales.
 
-export function perfilATexto(profile: Record<string, unknown> | null): string {
-  return profile ? formatPerfil(profile) : "(sin perfil todavía)";
+export function perfilATexto(
+  profile: Record<string, unknown> | null,
+  opts: PerfilOpts = {},
+): string {
+  return profile ? formatPerfil(profile, opts) : "(sin perfil todavía)";
 }
 
 export function diarioATexto(reviews: ReviewConAlbum[]): string {

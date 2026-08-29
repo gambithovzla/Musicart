@@ -181,6 +181,18 @@ export function ganchosEnRazon(
   return quemados.filter((g) => deHoy.has(g.raiz) && !permitidas.has(g.raiz));
 }
 
+/**
+ * ¿Este texto usa alguno de los ganchos ya gastados? Lo usa el perfil que
+ * viaja al prompt para NO volver a ponerle delante la misma señal: vetar la
+ * palabra pero seguir enseñándole el dato es pedirle al modelo que no piense
+ * en un elefante. Si la señal ya se gastó, hoy directamente no se la damos.
+ */
+export function textoUsaGancho(texto: string, quemados: Gancho[]): boolean {
+  if (quemados.length === 0 || !texto.trim()) return false;
+  const raices = new Set(palabrasConCarga(texto).keys());
+  return quemados.some((g) => raices.has(g.raiz));
+}
+
 /** Bloque para el prompt: las palabras que hoy están vetadas. */
 export function textoGanchosProhibidos(quemados: Gancho[]): string {
   if (quemados.length === 0) return "";
@@ -215,7 +227,7 @@ Reglas estrictas:
 1. Responde SOLO un objeto JSON: {"reason": "..."} — sin texto extra.
 2. 1 o 2 frases, cálidas y concretas. Nada de relleno ni de florituras.
 3. PROHIBIDO usar estas palabras o su misma idea (aunque las digas de otra forma): ${input.prohibidas.join(", ")}.
-4. Cita SOLO señales reales del usuario que aparecen abajo (sus géneros, lo que busca en un disco, su ánimo de hoy, un disco que amó, algo que nos contó). PROHIBIDO inventarle hábitos, actividades, lugares, rutinas o escenas de su vida que no aparezcan literalmente abajo — ni siquiera como imagen "poética".
+4. Cita SOLO señales reales del usuario que aparecen abajo (sus géneros, lo que busca en un disco, su ánimo de hoy, un disco que amó, algo que nos contó). PROHIBIDO inventarle hábitos, actividades, lugares, rutinas o escenas de su vida que no aparezcan literalmente abajo — ni siquiera como imagen "poética". Y una respuesta suelta de encuesta ("montaña", "la noche") es lo que contestó un día, NO un sitio donde está ni algo que hace: no la conviertas en escena ni en rasgo permanente.
 5. Del disco solo puedes mencionar su título, su artista y su año. PROHIBIDO inventar datos del álbum.
 6. Si ninguna señal encaja de verdad con este disco, habla del disco por su propio encanto sin forzar la conexión. Es mejor eso que repetirte.`;
 

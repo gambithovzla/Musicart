@@ -7,6 +7,7 @@ import { saveProfile } from "@/app/actions";
 import { REGIONES, paisesDeRegion } from "@/lib/paises";
 import { signOutAction } from "@/app/entrar/actions";
 import { PrivacyPanel } from "@/components/PrivacyPanel";
+import { Curiosidades } from "@/components/Curiosidades";
 import { DuetPanel } from "@/components/DuetPanel";
 import { PushToggle } from "@/components/PushToggle";
 import { SpotifyConnectPanel } from "@/components/SpotifyConnectPanel";
@@ -645,6 +646,8 @@ export function ProfileForm({
           Entrar para llevar tu diario a otro dispositivo →
         </motion.a>
       )}
+
+      <Curiosidades />
 
       <PrivacyPanel hasAccount={Boolean(user)} />
     </main>

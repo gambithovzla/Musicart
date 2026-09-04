@@ -11,6 +11,7 @@ import {
 } from "./identity";
 import { listenerKey, monthKey } from "./freemium";
 import { RATING_MAX } from "./review";
+import { parseJson, type Palette } from "./types";
 
 const LLM_TIMEOUT_MS = 12_000;
 
@@ -19,7 +20,7 @@ export type RewindStats = {
   albumsRead: number;
   reviews: { title: string; artist: string; rating: number }[];
   topMoods: string[];
-  bestAlbum: { title: string; artist: string } | null;
+  bestAlbum: { title: string; artist: string; albumId: string } | null;
 };
 
 export type RewindResult = {
@@ -98,7 +99,37 @@ async function collectStats(
       rating: r.rating,
     })),
     topMoods,
-    bestAlbum: best ? { title: best.album.title, artist: best.album.artist.name } : null,
+    bestAlbum: best
+      ? { title: best.album.title, artist: best.album.artist.name, albumId: best.albumId }
+      : null,
+  };
+}
+
+/** Carátula + paleta del disco del mes: se resuelven aparte de las stats (que
+ * quedan cacheadas para siempre) para que las cartas viejas también luzcan la
+ * portada aunque se haya guardado antes de que existiera este campo. */
+async function coverOfMonth(
+  stats: RewindStats,
+): Promise<{ coverUrl: string | null; palette: Palette | null } | null> {
+  if (!stats.bestAlbum) return null;
+  // Cartas cacheadas antes de este campo no traen albumId: caemos a buscar por
+  // título + artista, que siempre estuvieron guardados.
+  const album = stats.bestAlbum.albumId
+    ? await prisma.album.findUnique({
+        where: { id: stats.bestAlbum.albumId },
+        select: { coverUrl: true, paletteJson: true },
+      })
+    : await prisma.album.findFirst({
+        where: {
+          title: stats.bestAlbum.title,
+          artist: { name: stats.bestAlbum.artist },
+        },
+        select: { coverUrl: true, paletteJson: true },
+      });
+  if (!album) return null;
+  return {
+    coverUrl: album.coverUrl,
+    palette: parseJson<Palette | null>(album.paletteJson, null),
   };
 }
 
@@ -206,6 +237,8 @@ async function getCompletedRewind(
 export type RewindPageData = {
   rewind: RewindResult;
   inProgress: boolean; // true = mes en curso (resumen en vivo, sin LLM)
+  coverUrl: string | null; // carátula del disco del mes, para vestir la carta
+  palette: Palette | null;
 };
 
 /**
@@ -216,14 +249,25 @@ export async function getRewindForPage(
   identity: ListenerIdentity,
 ): Promise<RewindPageData | null> {
   const previous = await getCompletedRewind(identity, previousMonthKey());
-  if (previous) return { rewind: previous, inProgress: false };
+  if (previous) {
+    const cover = await coverOfMonth(previous.stats);
+    return {
+      rewind: previous,
+      inProgress: false,
+      coverUrl: cover?.coverUrl ?? null,
+      palette: cover?.palette ?? null,
+    };
+  }
 
   const mk = monthKey();
   const stats = await collectStats(identity, mk);
   if (!stats) return null;
 
+  const cover = await coverOfMonth(stats);
   return {
     rewind: { content: fallbackLetter(stats), stats, monthKey: mk },
     inProgress: true,
+    coverUrl: cover?.coverUrl ?? null,
+    palette: cover?.palette ?? null,
   };
 }

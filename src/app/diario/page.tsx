@@ -22,6 +22,23 @@ function localDay(iso: string): string {
   return `${y}-${m}-${day}`;
 }
 
+// Latido semanal: lo de los últimos 7 días, sin IA ni queries extra (deriva del
+// diario que ya cargamos). La rebobinada mensual sigue dando la carta con IA.
+function recapSemanal(entries: Entry[]): {
+  discos: number;
+  mejor: Entry | null;
+  cancion: string | null;
+} | null {
+  const ahora = Date.now();
+  const semana = entries.filter(
+    (e) => ahora - new Date(e.date).getTime() <= 7 * 86_400_000,
+  );
+  if (semana.length === 0) return null;
+  const mejor = semana.reduce<Entry>((a, b) => (b.rating > a.rating ? b : a), semana[0]);
+  const { favorite } = splitAnswers(mejor.answers);
+  return { discos: semana.length, mejor, cancion: favorite.trim() || null };
+}
+
 function computeStreak(entries: Entry[]): number {
   const days = new Set(entries.map((e) => localDay(e.date)));
   let streak = 0;
@@ -43,6 +60,7 @@ export default async function DiarioPage() {
     getMusicalThread(identity),
   ]);
   const streak = computeStreak(entries);
+  const recap = recapSemanal(entries);
 
   return (
     <main className="px-6 pt-12">
@@ -61,6 +79,29 @@ export default async function DiarioPage() {
             )}
           </p>
         )}
+        {recap && (
+          <div className="mt-6 rounded-2xl border border-album/25 bg-album/5 p-5">
+            <p className="text-xs uppercase tracking-[0.25em] text-album-light/80">
+              Tu semana musical
+            </p>
+            <p className="mt-2 text-sm text-foreground/90">
+              {recap.discos} {recap.discos === 1 ? "disco" : "discos"} en los últimos 7 días
+              {streak > 1 && <span className="text-album-light"> · 🔥 {streak} seguidos</span>}.
+            </p>
+            {recap.mejor && (
+              <p className="mt-1 text-sm text-dim">
+                Lo que más te marcó:{" "}
+                <span className="text-foreground/90">«{recap.mejor.title}»</span> de{" "}
+                {recap.mejor.artist}{" "}
+                <span className="text-album-light">
+                  {recap.mejor.rating}/{RATING_MAX}
+                </span>
+                {recap.cancion && <span className="text-album-light"> · ♪ {recap.cancion}</span>}
+              </p>
+            )}
+          </div>
+        )}
+
         {thread && (
           <div className="mt-6 rounded-2xl border border-white/10 bg-gradient-to-br from-album/10 to-transparent p-5">
             <p className="text-xs uppercase tracking-[0.25em] text-album-light/80">

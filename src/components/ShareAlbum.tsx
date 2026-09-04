@@ -23,7 +23,7 @@ export function ShareAlbum({
   const [pending, startTransition] = useTransition();
 
   function buildMessage(origin: string) {
-    const url = `${origin}/album/${albumId}`;
+    const url = `${origin}/compartir/${albumId}`;
     const lead = subtitle?.trim()
       ? `Hoy en Musicart: "${title}" de ${artist}. ${subtitle.trim()}`
       : `Descubre "${title}" de ${artist} en Musicart — un disco, una historia.`;

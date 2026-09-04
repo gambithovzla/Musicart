@@ -83,7 +83,8 @@ Los MP3 quedan en `public/audio/{dossierId}/` (local/CLI) o en **Vercel Blob**
 
 Un **curador IA** decide qué álbumes faltan (clásicos imprescindibles, huecos de
 género/época/idioma, afinidades con lo que los usuarios puntúan alto) y los
-encola en `GenerationQueue`. Un **worker** (`npm run worker`) toma la cola,
+encola en `GenerationQueue`. Un **worker** (`npm run worker`) mantiene de paso el
+índice del Salón de la Fama (ver más abajo; eso no gasta IA), toma la cola,
 genera con el pipeline anti-alucinación y publica solo lo verificado; lo que no
 pasa queda en `draft`. Si el curador IA falla, un **bootstrap de clásicos**
 llena la cola automáticamente. Los **saltos** de cada dossier publicado también
@@ -101,6 +102,51 @@ alimentan la cola: la madriguera se excava sola.
   1. *New service* → *GitHub repo* → este repositorio.
   2. Variables: `DATABASE_URL` (la URL **interna** `postgres.railway.internal`)
      y `OPENAI_API_KEY`. Nada más: el resto lo dicta `railway.json`.
+
+## El Salón de la Fama (el canon)
+
+`/salon` responde a una pregunta que el resto de la app no sabía contestar:
+*¿cuáles son los discos 100 de 100? Dame uno de 95.*
+
+El truco está en **separar el ranking del dossier**. La tabla `CanonAlbum` es un
+índice ligero de miles de discos (título, artista, año, portada, puntaje y sus
+recibos) **sin narrativa**: la historia se fabrica el día que alguien toca ese
+disco, reutilizando el pipeline de siempre. Así hay miles de discos sin fabricar
+miles de dossiers.
+
+El puntaje **no lo escribe ningún LLM**. Sale de señales comprobables —en
+cuántas ediciones de Wikipedia tiene artículo propio (Wikidata), qué premios
+recibió, cuánta gente lo escucha (Last.fm, con poco peso: esto mide
+consagración, no popularidad)— y después se calibra **por percentil contra todo
+el índice**. Por eso un 91 significa siempre lo mismo, y por eso el 100 es
+rarísimo (~0,4% del índice). Cada número se abre y enseña de dónde salió.
+
+### Cómo se llena (sin terminal)
+
+- **Desde el teléfono:** en `/revision`, el botón **"Levantar el Salón"**. Cada
+  toque construye un tramo del canon (o busca carátulas que falten) y te dice
+  cuántos discos entraron y si hay que volver a darle. Es reanudable: lo que
+  entró se queda.
+- **Solo, de noche:** el worker de Railway lo mantiene en cada corrida — termina
+  el índice si está a medias, lo refresca cada 7 días y busca portadas. Se salta
+  con `npm run worker -- --sin-salon`.
+- **A mano, para corridas grandes:**
+
+```bash
+npm run canon                  # construye/refresca el índice (~1000 discos)
+npm run canon -- --limite 150  # corrida corta para probar
+npm run canon -- --portadas 200  # solo carátulas pendientes
+npm run canon -- --recalibrar    # solo recalcular puntajes (sin red)
+```
+
+La ingesta completa corre **fuera de Vercel** (en local o en Railway, como el
+worker): tarda minutos y habla con varias APIs públicas. Necesita `DATABASE_URL`;
+`LASTFM_API_KEY` es opcional (sin ella el índice se construye igual, con menos
+matices). **No necesita clave de IA.**
+
+> `CanonAlbum.score` y `Album.impact` son dos números de 1-100 **distintos**: el
+> primero es comparable entre discos, el segundo (el impacto que la IA escribe
+> dentro de un dossier) no lo es. No los mezcles.
 
 ## Correr en local
 
@@ -130,7 +176,10 @@ npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
   (endpoint `https://tu-dominio/api/stripe/webhook`). Opcional: `FREEMIUM_DOSSIER_LIMIT`
   (default 5), `DAILY_GENERATION_BUDGET` (tope de discos nuevos/día para oyentes,
   default 15; Fase 6.6), `LLM_PROVIDER`/`LLM_MODEL` (default `gpt-4o-mini`; plan
-  6.8: `GENERATION_MODEL` premium solo para escribir el dossier).
+  6.8: `GENERATION_MODEL` premium solo para escribir el dossier — vale tanto un
+  modelo clásico (`gpt-4o`) como uno de razonamiento (`o3`, `gpt-5`: el adapter
+  cambia solo al dialecto que toca, `max_completion_tokens` sin `temperature`).
+  Para comprobar cuál está atendiendo, `/revision` → «¿El curador está vivo?»).
   Blob TTS: `BLOB_READ_WRITE_TOKEN`. Web Push (Fase 5.1):
   `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
   (genera las claves con `npx web-push generate-vapid-keys`); el envío diario

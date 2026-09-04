@@ -21,7 +21,14 @@ export default async function EntrarPage({
     Boolean(process.env.AUTH_RESEND_KEY) && Boolean(process.env.EMAIL_FROM);
   const spotify = spotifyAuthConfigured();
 
+  // Ya hay sesión. Si veníamos de algún sitio (?next=), lo que NO puede pasar es
+  // que la única salida sea "Ir a mi perfil": así es como el curador tocaba
+  // "Levantarlo ahora" en el Salón y acababa en /perfil, sin haber levantado
+  // nada y sin entender por qué. Aquí el botón principal devuelve a donde ibas.
+  // No redirigimos solos a propósito: si la pantalla de origen nos mandó aquí
+  // por leer mal la sesión, un redirect automático haría ping-pong entre las dos.
   if (session?.user) {
+    const volver = next?.startsWith("/") && !next.startsWith("//") ? next : null;
     return (
       <main className="flex min-h-[80dvh] flex-col items-center justify-center gap-4 px-8 text-center">
         <h1 className="font-serif text-2xl">Ya entraste</h1>
@@ -29,12 +36,29 @@ export default async function EntrarPage({
           Hola{session.user.name ? `, ${session.user.name}` : ""}. Tu diario y
           tu perfil viajan contigo.
         </p>
-        <Link
-          href="/perfil"
-          className="rounded-2xl bg-album px-6 py-3 font-semibold text-black"
-        >
-          Ir a mi perfil
-        </Link>
+        {volver ? (
+          <>
+            <Link
+              href={volver}
+              className="rounded-2xl bg-album px-6 py-3 font-semibold text-black"
+            >
+              Seguir a donde ibas
+            </Link>
+            <Link
+              href="/perfil"
+              className="text-sm text-dim underline underline-offset-2"
+            >
+              Ir a mi perfil
+            </Link>
+          </>
+        ) : (
+          <Link
+            href="/perfil"
+            className="rounded-2xl bg-album px-6 py-3 font-semibold text-black"
+          >
+            Ir a mi perfil
+          </Link>
+        )}
       </main>
     );
   }

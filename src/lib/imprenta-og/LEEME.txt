@@ -1,0 +1,15 @@
+Las tres tipografías de Musicart, en .ttf, para las imágenes sociales del Salón.
+
+Están aquí (y no se piden a Google en cada render) porque una imagen social no
+puede depender de que un servidor de fuentes responda. Las mismas familias que
+carga la app con next/font: ver src/app/layout.tsx.
+
+  Fraunces-SemiBold.ttf    display (titulares y cifras)
+  Archivo-Regular.ttf      texto
+  IBMPlexMono-Medium.ttf   dato (rótulos, números, referencias)
+
+Las tres se distribuyen bajo la SIL Open Font License 1.1, que permite
+incluirlas y redistribuirlas con el proyecto:
+  Fraunces        https://fonts.google.com/specimen/Fraunces/license
+  Archivo         https://fonts.google.com/specimen/Archivo/license
+  IBM Plex Mono   https://fonts.google.com/specimen/IBM+Plex+Mono/license

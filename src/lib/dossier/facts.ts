@@ -7,7 +7,12 @@
 //      música latina/regional). Da título, año, tracklist, portada, label.
 //   3. Wikipedia, Last.fm, Odesli — siempre se consultan (opcional).
 
-import { searchReleaseGroup, getAlbumDetails } from "../sources/musicbrainz";
+import {
+  searchReleaseGroup,
+  getAlbumDetails,
+  getArtistConnections,
+  type MbConnection,
+} from "../sources/musicbrainz";
 import { getCoverUrl } from "../sources/coverart";
 import { getAlbumDeepContext, getArtistDeepContext, firstFactSentence } from "../sources/wikipedia";
 import { getAlbumInfo } from "../sources/lastfm";
@@ -46,6 +51,7 @@ export async function gatherAlbumFacts(
   let durationMin: number | undefined = undefined;
   let releaseDate: string | undefined = undefined;
   let usedMusicBrainz = false;
+  let connections: MbConnection[] = []; // samples/remixes (la madriguera)
 
   if (rg) {
     const details = await getAlbumDetails(rg.id).catch(() => null);
@@ -65,6 +71,7 @@ export async function gatherAlbumFacts(
         position: t.position,
         title: t.title,
       }));
+      connections = details.connections;
       mbSources = [`https://musicbrainz.org/release-group/${rg.id}`];
       log(`Encontrado en MusicBrainz: ${title} — ${artist} (${year}).`);
     } else {
@@ -104,6 +111,21 @@ export async function gatherAlbumFacts(
       // Sin tracklist pero sabemos cuántas pistas hay: alcanza para el dossier.
       log(`⚠ Sin tracklist detallado; el álbum tiene ${itunes.trackCount} canciones.`);
     }
+  }
+
+  // ── Guardia: nunca un sencillo/EP ────────────────────────────────────────
+  //    MusicBrainz ya filtra por primarytype:album; esto atrapa lo que se cuele
+  //    por iTunes (singles recientes con sufijo "- Single"). Si lo es, lanzamos:
+  //    el pipeline lo descarta y el motor cae a otra opción del catálogo.
+  const tituloAlbum = title!;
+  if (/-\s*(single|ep)\s*$/i.test(tituloAlbum)) {
+    throw new Error(`"${tituloAlbum}" es un sencillo o EP, no un álbum. Se descarta.`);
+  }
+  const totalPistas = tracklist.length || itunes.trackCount || 0;
+  if (!usedMusicBrainz && totalPistas > 0 && totalPistas <= 3) {
+    throw new Error(
+      `"${tituloAlbum}" parece un sencillo (${totalPistas} pista(s)), no un álbum. Se descarta.`,
+    );
   }
 
   // ── Construcción del payload base ────────────────────────────────────────
@@ -148,6 +170,40 @@ export async function gatherAlbumFacts(
       ...(itunes.appleMusicUrl ? [itunes.appleMusicUrl] : []),
     ],
   };
+
+  // ── 2.5 Conexiones entre canciones (samples / remixes) ───────────────────
+  //    Datos estructurados de MusicBrainz → verificables. Materia prima de los
+  //    wowFacts "¿Sabías que…?" y de la madriguera ("Río Babel samplea Porcelain").
+  for (const c of connections) {
+    const de = c.relatedArtist ? ` de ${c.relatedArtist}` : "";
+    const fact =
+      c.kind === "sample"
+        ? c.direction === "uses"
+          ? `«${c.track}» usa un sample de «${c.relatedTitle}»${de}.`
+          : `«${c.track}» fue sampleada en «${c.relatedTitle}»${de}.`
+        : c.direction === "uses"
+          ? `«${c.track}» es un remix de «${c.relatedTitle}»${de}.`
+          : `«${c.track}» fue remezclada en «${c.relatedTitle}»${de}.`;
+    payload.facts.push({ fact, source: "musicbrainz:relación" });
+  }
+  if (connections.length > 0) {
+    log(`Conexiones encontradas (samples/remixes): ${connections.length}.`);
+  }
+
+  // ── 2.6 Conexiones de artista (colaboraciones, bandas…) ───────────────────
+  //    Materia prima de los saltos entre artistas (la madriguera). De MusicBrainz.
+  if (artistMbid) {
+    const artistConns = await getArtistConnections(artistMbid).catch(() => []);
+    for (const c of artistConns) {
+      payload.facts.push({
+        fact: `Conexión de ${artist!}: ${c.relatedArtist} (${c.label}).`,
+        source: "musicbrainz:artista",
+      });
+    }
+    if (artistConns.length > 0) {
+      log(`Conexiones de artista: ${artistConns.length}.`);
+    }
+  }
 
   // ── 3. Wikipedia (intro + secciones profundas, Fase 6.9) ─────────────────
   log("Buscando contexto en Wikipedia (intro + secciones profundas)…");
@@ -211,8 +267,14 @@ export async function gatherAlbumFacts(
 
   // ── 5. Portada y links de escucha ────────────────────────────────────────
   log("Resolviendo portada y links de escucha…");
+  // Cover Art Archive va ligada al mbid exacto que MusicBrainz ya confirmó
+  // (mismo álbum que el título/año verificados arriba) — es la fuente fiable.
+  // iTunes busca por texto ("artista + álbum") y puede matchear otro disco del
+  // mismo artista cuando el buscado no aparece entre sus primeros resultados
+  // (cae a `albumes[0]`, ver src/lib/sources/itunes.ts); por eso solo se usa
+  // como respaldo cuando no hay mbid o CAA no tiene portada para ese release.
   const caaCover = mbid ? await getCoverUrl(mbid).catch(() => null) : null;
-  const coverUrl = itunes.coverUrl ?? caaCover;
+  const coverUrl = caaCover ?? itunes.coverUrl;
 
   let links: AlbumLinks = searchLinks(title!, artist!);
   if (itunes.appleMusicUrl) {

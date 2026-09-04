@@ -9,6 +9,10 @@ export const RATING_MAX = 10;
 export const COMMENT_KEY = "Lo que quiero recordar de este disco";
 export const FAVORITE_KEY = "Mi canción favorita";
 
+/** Reseña "no me gustó": cuarto inferior de la escala (≤ 4 sobre 10). El motor
+ * de recomendación excluye estos discos de futuras sugerencias. */
+export const DISLIKED_THRESHOLD = 4;
+
 /** Reseña "loved it": mitad superior de la escala (≥ 8 sobre 10). */
 export const LOVED_THRESHOLD = 8;
 

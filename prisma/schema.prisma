@@ -30,6 +30,9 @@ model Album {
   linksJson   String  @default("{}") // { spotify, appleMusic, youtubeMusic }
   paletteJson String? // swatches extraídos de la portada
   factsJson   String  @default("{}") // facts payload con fuentes (grounding IA)
+  showcase    Boolean @default(false) // en la vitrina del curador (favoritos del admin)
+  showcaseAt  DateTime? // cuándo se puso en la vitrina (orden de exhibición)
+  showcaseShelf String? // estante temático de la vitrina (p. ej. "Jazz nocturno")
 
   artistId   String
   artist     Artist      @relation(fields: [artistId], references: [id])
@@ -38,6 +41,8 @@ model Album {
   dailyPicks   DailyPick[]
   dossierViews DossierView[]
   duetPicks    DuetPick[]
+
+  @@index([showcase, showcaseAt])
 }
 
 model Dossier {
@@ -164,6 +169,7 @@ model User {
   pushSubscriptions PushSubscription[]
   duetAsInviter     DuetPair[] @relation("DuetInviter")
   duetAsPartner     DuetPair[] @relation("DuetPartner")
+  caminos           Camino[]
 
   stripeCustomerId   String?   @unique
   subscriptionStatus String? // active | trialing | canceled | past_due
@@ -194,6 +200,26 @@ model DossierChat {
 
   @@index([listenerKey, dateKey])
   @@index([listenerKey, albumId, dateKey])
+}
+
+// Memoria personal del oyente: lo que le cuenta al curador sobre lo que escucha
+// ("esta canción me fascina", "odio esto"). Alimenta el prompt del disco diario
+// para conocerlo cada vez mejor. Denormalizamos título/artista para no depender
+// de joins ni de que el álbum siga existiendo. source: "free" (solo memoria,
+// gratis) | "chat" (además pidió la respuesta del melómano, con costo de IA).
+model ListenerNote {
+  id          String   @id @default(cuid())
+  deviceId    String?
+  userId      String?
+  albumId     String? // disco donde lo escribió (referencia suelta, sin relación)
+  albumTitle  String? // denormalizado para el prompt y el export
+  albumArtist String? // denormalizado
+  text        String // el comentario del oyente
+  source      String   @default("free") // free | chat
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([deviceId, createdAt])
 }
 
 // Fase 5.2 — rebobinada mensual: carta cacheada por oyente y mes
@@ -245,6 +271,106 @@ model MusicalThread {
   fingerprint String // invalida caché si cambian reseñas
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// Fase 8 — Caminos: "por dónde entro a este género". Una secuencia ORDENADA de
+// discos donde cada paso deja el oído listo para el siguiente (la puerta → el
+// gancho → el canon → el desvío → la cima). Vive aparte del disco del día: el
+// ritual no se toca.
+//
+// Los pasos viven en `stepsJson` (CaminoStep[] en src/lib/caminos.ts) y no en su
+// propia tabla a propósito: nacen todos juntos de UNA propuesta del LLM, se leen
+// siempre juntos y solo mutan dos campos por paso (albumId al fabricarlo,
+// escuchadoAt al marcarlo). Un modelo aparte solo añadiría joins.
+model Camino {
+  id        String   @id @default(cuid())
+  deviceId  String
+  userId    String?
+  tema      String // lo que pidió el oyente ("heavy metal", "de Linkin Park a Black Sabbath")
+  titulo    String // "El camino al heavy metal"
+  intro     String? // la promesa: a dónde te lleva y qué disco te espera al final
+  stepsJson String   @default("[]") // CaminoStep[]
+  status    String   @default("activo") // activo | completado
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([deviceId, status])
+  @@index([userId, status])
+}
+
+// Fase 11 — El Atlas: el retrato musical de un país ("Conociendo a…").
+//
+// Un retrato es de TODOS, no de cada oyente: lo que cuenta de Malí es lo mismo
+// para cualquiera que entre. Por eso esto se guarda por país (`code` único) y
+// no por deviceId/userId como los Caminos — el segundo que entre a un país lo
+// ve al instante y sin gastar un céntimo de IA. Los discos van en `discosJson`
+// (DiscoDelRetrato[]); ver src/lib/atlas.ts.
+model RetratoPais {
+  code   String  @id // ISO 3166-1 alfa-2 (VE, ML, JP…)
+  titulo String
+  intro  String? // qué cuenta de este país su música
+
+  discosJson String @default("[]") // DiscoDelRetrato[]
+
+  // "listo" = tiene discos que enseñar. "vacio" = no se pudo, y `nota` dice por
+  // qué (sin clave de IA, sin presupuesto, o no encontré nada verificable).
+  // Guardar el fracaso es deliberado: sin esto, cada visita a un país sin
+  // material vuelve a pagar la llamada al curador para volver a fallar.
+  status String  @default("listo")
+  nota   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+// Fase 9 — El Salón de la Fama: el índice del canon.
+//
+// Miles de discos con un puntaje 1-100 COMPARABLE entre sí, que es justo lo que
+// `Album.impact` no puede dar: ese lo escribe la IA disco a disco, sin ver a los
+// demás, así que un 88 y un 91 de dos días distintos no significan lo mismo.
+// Aquí el número NO lo inventa un LLM: sale de señales duras (Wikidata,
+// MusicBrainz, Last.fm) y se calibra por percentil contra todo el índice, de
+// modo que el puntaje siempre significa "dónde estás parado entre el canon".
+//
+// Una fila pesa nada y no tiene dossier: el dossier se fabrica perezosamente el
+// día que alguien toca ese disco (mismo patrón que los pasos de un Camino), y
+// entonces `albumId` apunta al Album del catálogo.
+model CanonAlbum {
+  id       String  @id @default(cuid())
+  key      String  @unique // "artista|título" normalizado (anti-duplicados)
+  title    String
+  artist   String
+  year     Int?
+  coverUrl String?
+
+  // El puntaje y sus recibos.
+  score        Int     @default(0) // 1-100 final, calibrado por percentil
+  raw          Float   @default(0) // prestigio bruto antes de calibrar
+  locked       Boolean @default(false) // puntaje fijado a mano por el curador: la ingesta no lo pisa
+  signalsJson  String  @default("{}") // señales crudas (recalibrar sin volver a descargar)
+  evidenceJson String  @default("[]") // recibos legibles: por qué este número
+
+  // Filtros del Salón (canon con acento: por género, país y década).
+  genresJson String  @default("[]")
+  country    String? // código ISO-2 del origen del artista
+  decade     Int? // 1970, 1980… derivado del año, para filtrar barato
+
+  // Identidad en las fuentes y enlace al catálogo (referencias sueltas, sin
+  // relación de Prisma: si el Album se borra, el índice no se rompe).
+  mbid       String? @unique // release group de MusicBrainz
+  wikidataId String? @unique
+  albumId    String? @unique // Album con dossier, si ya se fabricó
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([score])
+  @@index([decade, score])
+  @@index([country, score])
 }
 
 model Account {

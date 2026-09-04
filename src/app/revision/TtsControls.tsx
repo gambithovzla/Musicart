@@ -23,14 +23,15 @@ export function TtsControls({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function run(task: () => Promise<{ message: string }>, id?: string) {
+  function run(task: () => Promise<{ message: string; ok: boolean }>, id?: string) {
     setMessage(null);
     setError(null);
     setActiveId(id ?? "batch");
     startTransition(async () => {
       try {
         const result = await task();
-        setMessage(result.message);
+        if (result.ok) setMessage(result.message);
+        else setError(result.message);
       } catch (e) {
         setError((e as Error).message);
       } finally {

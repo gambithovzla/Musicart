@@ -368,12 +368,824 @@ disco se sienta elegido para ti, no una rotación genérica.
 
 ---
 
-## Estado actual (junio 2026)
+## ✅ Fase 7 — "Un amigo que te conoce mejor cada día" (COMPLETADA · ago 2026)
 
-**Fases 0–6 completas** (jun 2026). Antes de abrir Fase 7, confirmar con el
-dueño del producto qué entra en el roadmap.
+**Objetivo:** la app aprende de tu comportamiento a lo largo del tiempo y se
+integra más profundamente con la escucha real.
+
+### Tareas
+
+- [x] **7.1 IA que aprende patrones** — el motor detecta correlaciones de tu
+  historial real (mood → género, géneros en racha, estación del año) y las
+  inyecta como bloque "PATRONES DE ESCUCHA" en el prompt de recomendación y
+  descubrimiento. Sin queries extra: usa los datos ya cargados (últimas 10
+  reseñas + 7 picks). Degrada sin romper si hay poca historia.
+
+- [x] **7.2 Escucha integrada** — botones de plataforma (Spotify / Apple Music /
+  YouTube Music) directamente en la home (`DailyReveal`), antes del CTA
+  "Descubrir este disco". Usa los links guardados en `Album.linksJson` con
+  fallback a búsqueda vía `searchLinks` (Odesli) si aún no están resueltos.
+  El dossier ya tenía `ListenLinks` en la sección 05.
+
+- [x] **7.3 Personalización visual** — modo claro/oscuro guardado en cookie
+  `musicart_theme` (duración 1 año). `layout.tsx` lee la cookie en SSR y
+  aplica clase `light` a `<html>` sin flash. Paleta editorial cálida en modo
+  claro (`globals.css`: `html.light { ... }`). Toggle visual en `/perfil`
+  junto al push (`ThemeToggle.tsx`), propagado al `ProfileForm` via prop
+  `currentTheme` desde el servidor.
+
+- [x] **7.4 Comunidad ligera** — "Tu disco de hoy" compartible como historia
+  animada. Feed opcional: ver el disco del día de un amigo (nuevo modelo de
+  seguimiento, requiere privacidad explícita).
+
+- [x] **7.5 Amplía mi mundo + pido lo que quiero** — dos ajustes para que el
+  disco fresco no orbite siempre los mismos 2-3 artistas y para dar voz al
+  oyente: (a) el prompt de descubrimiento (`discover.ts`) pasó de "gusto ante
+  todo" a "variedad ante todo" (ensanchar género/época/país) y ahora recibe los
+  artistas de días recientes para NO repetir el mismo artista; (b) el gate del
+  día (`LanguageGate`) suma un paso "¿qué te apetece hoy?" con chips de género/
+  ánimo + texto libre para CUALQUIER oyente; ese pedido viaja en la cookie
+  `musicart_pedido` y manda al fabricar (antes era solo-admin). El rehacer del
+  admin sigue con su propio cuadro.
+
+- [x] **7.6 Curaduría del dueño + Vitrina** — el admin busca un disco o artista
+  (buscador visual con portadas vía Deezer, `/api/albums`), lo toca y la IA
+  fabrica su dossier completo (`generarAlbumAhora`, reutilizado). Desde el panel
+  puntúa cualquier disco (1-10) y lo marca ★ para exhibirlo. **La vitrina**
+  (`/vitrina`, pública, en la nav) es una galería de las carátulas que el curador
+  atesora, cada una con la paleta de su portada como halo y el sello con su
+  puntaje. Favoritos en `Album.showcase`/`showcaseAt`; la vitrina lee la reseña
+  del admin para mostrar puntaje y canción favorita (`src/lib/vitrina.ts`,
+  `src/app/revision/BuscarYCrear.tsx` + `CuradorControls.tsx` + `CuradorAlbumes.tsx`).
+  La vitrina suma tres pulidos de coleccionista: **estantes temáticos**
+  (`Album.showcaseShelf`, agrupa por "Jazz nocturno", etc.; editor con datalist
+  en el panel), **compartir** (Web Share + `opengraph-image` con colage de
+  carátulas) y **dos vistas** con toggle: galería de carátulas y **estantería de
+  lomos de vinilo** coloreados con la paleta de cada disco (`VitrinaVistas`,
+  `Estanteria`, `ShareVitrina`). Descubribilidad: los controles de curador
+  (puntaje + ★ vitrina + estante) viven ahora en la **propia página del disco**
+  (`CuradorAlbumPanel`, solo admin) y el **buscador con lupa** está también en la
+  Vitrina para el admin —no solo en `/revision`.
+
+- [x] **7.7 Anti-muletilla + el hito del día** — dos ajustes de fondo pedidos
+  por el dueño. (a) El prompt que arma la "reason" del disco fresco (y su
+  respaldo del catálogo) no veía qué le había dicho en días recientes, así que
+  una imagen vívida del perfil se repetía como muletilla sin que el modelo lo
+  supiera; ahora `recientesATexto` incluye la razón de los últimos 3 días y
+  ambos prompts (`discover.ts`, `elegirConLlm` en `recommend.ts`) prohíben
+  reabrir con el mismo gancho. (b) La ruta `/explorar/hitos` ("Hitos que lo
+  cambiaron todo") ya filtraba por impacto cultural pero solo mostraba
+  portada/artista/año; ahora destaca **un "hito del día"** que rota solo
+  (misma rotación determinista que el disco del día global, `pickForDate` en
+  `src/lib/daily.ts`) mostrando el **por qué** ya verificado
+  (`Dossier.impactNote`) — sin IA nueva, sin costo. Cada fila de la lista suma
+  también un extracto de su nota. Si ningún disco tiene su nota todavía, la
+  sección se omite sin romper la página.
+
+- [x] **7.8 Anti-muletilla, ahora en código** — la 7.7 lo intentó solo con
+  prompt y no bastó: el curador seguía abriendo cada día con la misma imagen
+  del perfil ("tu amor por las montañas", día tras día). Nueva barrera dura en
+  `src/lib/reason-guard.ts`, hermana de `discoCumplePedido`: `ganchosQuemados()`
+  saca de las razones de los últimos 5 días las palabras con carga (fuera
+  conectores, vocabulario musical genérico y nombres de género — repetir "rock"
+  con un rockero no es pereza) y veta las que usó ayer o dos veces o más. Esa
+  lista viaja a los dos prompts (`discover.ts` y `elegirConLlm`) como prohibición
+  explícita —gratis, sin llamada extra— y, ya escrita la razón, `afinarRazon()`
+  la revisa: si reincide, pide **una** reescritura barata con las palabras
+  vetadas. Si la reescritura falla o no mejora, se queda la original (la app
+  nunca se cae por la IA). Ambos prompts dejan claro además que un detalle
+  REAL suyo repetido dos días seguidos ya es muletilla, aunque sea verdad.
+
+- [x] **7.9 El pedido se cumple ENTERO (barrera de origen)** — el dueño pidió
+  "artistas venezolanos, rock" y el curador le trajo Green Day y luego Van
+  Halen: cumplía el género y se saltaba el país. La causa: en todos los prompts
+  el pedido se enumeraba como "género, idioma, época, estilo o energía" — el
+  PAÍS no estaba en ninguna lista, y `discoCumplePedido` daba el visto bueno
+  porque juzgaba solo "¿es rock?". Tres arreglos: (a) nueva barrera dura
+  `src/lib/origin-guard.ts` (hermana de `reason-guard.ts`): detecta país o
+  gentilicio en el pedido —distinguiendo "en inglés" (idioma) de "artistas
+  ingleses" (país)— y comprueba el origen del artista propuesto con DATOS DUROS
+  de MusicBrainz (`searchArtistOrigin`) antes de gastar el pipeline; si no es de
+  ahí, se rechaza y se pide otra propuesta explicando por qué. Ante la duda
+  (artista no encontrado, sin dato) deja pasar: la app nunca deja al oyente sin
+  disco. (b) Los prompts de `discover.ts` suman país/nacionalidad como requisito
+  obligatorio, dejan claro que un pedido con varias partes se cumple ENTERO, que
+  el pedido manda sobre las reglas de descubrimiento y variedad, y que el idioma
+  del día no puede romper el país pedido; `discoCumplePedido` juzga ahora el
+  origen y ahí la duda se resuelve al revés (si no le consta, no cumple).
+  (c) El respaldo del catálogo (`elegirConLlm`) prioriza el origen sobre el
+  género cuando no puede cumplir todo y está OBLIGADO a reconocerlo en la
+  primera frase de la razón en vez de fingir que cumplió.
+- [x] **7.11 La barrera del origen pregunta en TRES sitios** (ago 2026, idea del
+  dueño: «que busques otra fuente fiable, que a los de países pequeños no los
+  tiene MusicBrainz») — tenía toda la razón, y el agujero estaba justo donde más
+  duele: MusicBrainz es magnífico con el canon anglosajón y flojo con el artista
+  de nicho de un país pequeño, que es EXACTAMENTE lo que se pide cuando alguien
+  escribe "algo de mi país". Con esos, la barrera decía "no lo sé" y no
+  comprobaba nada — y el oyente recibía el aviso de "no pude confirmar que sea
+  de Venezuela" casi siempre, que es la manera más rápida de que un aviso
+  honesto se vuelva ruido y se deje de leer. Ahora se pregunta en cadena, de más
+  fiable a menos, y la primera que sabe gana: **(1) MusicBrainz** como hasta
+  ahora; **(2) Wikidata** (`origenDeArtista`), dato igual de estructurado —un
+  código ISO— con mucha mejor cobertura fuera del mundo anglosajón, y por la API
+  de siempre, NO por SPARQL: esto se pregunta en caliente y el endpoint SPARQL
+  se satura (lección de la 9.11); **(3) la primera frase de la Wikipedia** ("es
+  una banda venezolana de…"), que para los artistas más oscuros suele ser la
+  única que sabe algo. Los tres detalles que la hacen fiable: la de Wikipedia es
+  texto libre, así que **solo cuenta si la frase nombra UN país** —"una banda
+  venezolana que canta en inglés" nombra dos y ahí preferimos callarnos—; en
+  Wikidata un homónimo que no sea músico se descarta (hay políticos que se
+  llaman como una banda, y darles su país sería peor que no saber nada); y las
+  dos fuentes de respaldo van **con reloj** (6 s), porque buscar en más sitios
+  no puede significar hacer esperar más al oyente. Las dudas se siguen
+  resolviendo igual: sin dato, "desconocido", y no se descarta a nadie.
+  Y como estas tres son APIs públicas de terceros que al caerse no rompen nada
+  —se callan, que es lo correcto y lo invisible—, el fallo ahora se ve: botón
+  **"¿Sabe de dónde es este artista?"** en `/revision` (sin terminal, sin gastar
+  IA) y `npm run probar:origen -- "Artista" "pedido"` para la terminal.
+- [x] **7.10 El pedido no se pierde por el camino** (ago 2026, tras el reporte
+  del dueño: «le di rehacer, puse *rock venezolano de calidad* y me recomendó un
+  disco en inglés que no tiene nada que ver») — la 7.9 puso las barreras, pero
+  el pedido podía **no llegar nunca a ellas**. Tres agujeros, los tres tapados:
+  **(a) el pedido viajaba SOLO en el cuerpo de la llamada.** Fabricar un disco
+  tarda minutos, y si esa llamada muere (se acaba el tiempo de la función, se
+  corta la red, cierras la pantalla) la home reintenta sola con una petición
+  **sin cuerpo**: la instrucción se evaporaba y el disco salía elegido solo por
+  gusto — exactamente el disco en inglés que no venía a cuento. Ahora el cuadro
+  de admin guarda el pedido en su cookie ANTES de llamar, igual que el gate del
+  día, así que manda en cualquier fabricación de hoy aunque la primera se caiga.
+  **(b) La fabricación no miraba el reloj.** Cada propuesta rechazada costaba
+  ~25 s (MusicBrainz + verificador, en fila) y un pedido difícil quema varias
+  seguidas antes de llegar al pipeline; sumando, la función se pasaba del techo
+  y la cortaban **sin dejar disco guardado**. Ahora tiene presupuesto de tiempo
+  (se rinde a tiempo y siempre deja algo puesto) y las dos barreras del pedido
+  corren **en paralelo**: la misma vuelta cuesta la mitad, o sea el doble de
+  intentos reales de cumplir lo que pediste.
+  **(c) El respaldo del catálogo prometía honestidad y no la garantizaba.** El
+  aviso ("hoy no tengo un disco venezolano a la mano") se le pedía al LLM en el
+  prompt… y luego otro LLM reescribía la razón (anti-muletilla) y podía
+  borrarlo. Ahora lo escribe el CÓDIGO sobre datos duros —el origen del artista
+  según MusicBrainz, o el verificador de pedido— y se pega delante de la razón
+  cuando ya nadie la va a tocar. Si no se pudo cumplir lo que pediste, lo lees.
+
+- [x] **7.11 Las barreras del pedido dejaban de existir en silencio** (ago 2026,
+  tras el segundo reporte del dueño con el mismo pedido: pidió *rock venezolano
+  de calidad* y recibió The Flaming Lips, de Oklahoma) — la 7.10 arregló que el
+  pedido no se perdiera, pero quedaba un camino más silencioso: **todo lo que
+  comprueba el pedido falla hacia el "sí"**. `elegirConLlm` esperaba solo **4
+  segundos** al modelo y, al vencer, caía a `elegirPorGusto`, que elige por
+  afinidad de géneros y NO SABE NADA del pedido: por ahí un "rock venezolano"
+  se convertía en un disco de rock cualquiera sin que nada avisara. Además, un
+  fallo de una sola llamada del proponedor (timeout, 429, JSON a medias) subía
+  hasta el `catch` de más afuera y mandaba la fabricación entera al catálogo.
+  Y las dos barreras que sí comprueban (origen y `discoCumplePedido`) dejan
+  pasar ante la duda a propósito —para no dejar a nadie sin disco—, así que con
+  MusicBrainz caído no queda nadie mirando. Cuatro arreglos: **(a)** el plazo de
+  la elección sube a 15 s (el reloj total ya lo vigila el presupuesto de tiempo
+  de la 7.10, que es su sitio); **(b)** una propuesta que falla se reintenta en
+  vez de tumbar la fabricación; **(c)** el aviso de "esto no es lo que pediste"
+  ahora también salta cuando **no se pudo comprobar** el origen, no solo cuando
+  consta lo contrario — la duda se resuelve al revés que en las barreras porque
+  aquí no se descarta nada, solo se dice la verdad; **(d)** ese aviso vuelve al
+  cuadro de admin y se lee al instante, sin bajar a buscar la razón.
+
+- [x] **7.12 Un disco que las fuentes no conocen ya no acaba con la búsqueda**
+  (ago 2026, tercer reporte del mismo pedido: *rock venezolano de calidad* →
+  Juan Luis Guerra, dominicano) — con el pedido ya llegando (7.10) y las
+  barreras despiertas (7.11), quedaba el motivo de fondo: **la fabricación se
+  rendía al primer disco que las fuentes no tuvieran fichado**.
+  `gatherAlbumFacts` lanza cuando el álbum no está ni en MusicBrainz ni en
+  iTunes, o cuando resulta ser un sencillo; su propio comentario dice que
+  entonces "el motor cae a otra opción"… pero no caía: la excepción se saltaba
+  el bucle de intentos entero y aterrizaba en el `catch` de más afuera, o sea
+  derecha al catálogo. Y eso le pasa **justo a lo que más falta hace buscar**:
+  pides una escena poco documentada, el proponedor acierta con un disco de culto
+  real, la fuente no lo tiene… y en vez de probar con el siguiente, se servía lo
+  que hubiera en casa. Ahora es un rechazo más: se anota y se sigue.
+  De propina, **la bitácora**: qué se intentó y por qué falló cada intento
+  («no lo pude investigar», «es de Estados Unidos», «no pasó verificación»)
+  vuelve al cuadro de admin. Vivía solo en los logs de Vercel, que para un dueño
+  con el teléfono en la mano es no existir — y por eso hicieron falta tres
+  rondas de conjeturas para llegar hasta aquí.
+
+- [x] **7.13 La escena, en la mano (no de memoria)** (ago 2026, cuarto reporte
+  del mismo pedido: *rock venezolano* → «Re» de Café Tacvba, mexicanos) — las
+  cuatro tareas anteriores pusieron **barreras**: detectar el país (7.9), que el
+  pedido llegue (7.10), que las barreras no fallen hacia el "sí" (7.11), que un
+  disco sin fichar no acabe la búsqueda (7.12). Todas vigilan la salida, y
+  ninguna arregla la entrada: **nadie le dijo nunca al curador quién SÍ es
+  venezolano**. Al modelo se le pedía recordar de memoria una escena poco
+  documentada; cuando no la recuerda vuelve al famoso del país de al lado
+  (Green Day, Van Halen, Juan Luis Guerra, Café Tacvba: cuatro países distintos,
+  ninguno el pedido), se le rechaza, y así hasta que se acaba el reloj y el
+  oyente recibe un disco de la casa con su aviso. El arreglo cambia el orden de
+  las cosas: **primero los datos, después el LLM**. `artistasDePais()`
+  (MusicBrainz: `country:VE AND tag:rock`) trae hasta 30 artistas reales de esa
+  escena —ordenados por cuánta gente los ha etiquetado, que es el mejor proxy de
+  "conocido" que hay sin inventarse popularidad— y esa lista entra en el prompt
+  del proponedor: elige de ahí el disco canónico que mejor conozca, y si conoce
+  otro de la misma escena puede proponerlo, pero de otro país no. Si el género
+  deja la lista casi vacía (los países pequeños se etiquetan poco), se pide el
+  país entero y se le advierte que el género lo pone él. Tres detalles que
+  importan: el origen de los artistas de la lista **ya consta**, así que no se
+  gasta la consulta de la barrera ni salta el aviso absurdo de "no pude
+  confirmar que sea de Venezuela" sobre una banda venezolana (MusicBrainz a
+  muchos les guarda la ciudad y no el país); la lista se cachea por proceso
+  (MusicBrainz va a 1 req/s); y si la fuente no contesta, se propone como hasta
+  ahora — la app nunca se cae por esto. La bitácora del cuadro de admin dice
+  cuántos artistas se le pasaron al curador, así que la próxima vez se sabe si
+  falló la fuente o el modelo.
+
+- [x] **7.14 Lo que contestaste UN día dejó de ser tu personalidad** (ago 2026,
+  reporte del dueño: *"elegí montaña en una pregunta y ahora todo se basa en
+  montaña; no todos los días estoy conduciendo por montaña"*) — la pregunta del
+  día (`curiosities.ts`) guarda cada respuesta con su fecha, pero al prompt
+  llegaba **sin ella**, en la misma lista y con el mismo peso que sus géneros
+  favoritos y bajo el rótulo "Lo que me ha contado". Para el modelo, un
+  "¿montaña o playa? → Montaña" de hace meses era tan permanente como "le gusta
+  el jazz" — y encima era una señal **real**, así que la prohibición de
+  inventarle escenas (7.4) no la tocaba: la barrera anti-muletilla (7.8) vetaba
+  la *palabra* de la razón de ayer, pero al día siguiente le volvíamos a poner
+  el dato delante. Cuatro arreglos, todos en código: **(a) las respuestas
+  caducan** — van fechadas ("[hace 2 meses]"), en dos bloques separados (lo de
+  estos días, que es color de AHORA, y lo de hace tiempo, marcado como puntual)
+  y pasados `DIAS_OLVIDO` (120) no entran; **(b) la señal gastada no se enseña**
+  — si el gancho ya se usó en las razones recientes, `textoUsaGancho()` saca esa
+  respuesta del perfil de hoy: vetar la palabra pero seguir mostrando el dato es
+  pedirle al modelo que no piense en un elefante; **(c) el prompt distingue una
+  respuesta de una escena** — "montaña" es lo que contestó un día, no un sitio
+  donde está ni algo que hace, y prohibido convertirlo en acción ("mientras
+  conduces hacia la montaña") o en rasgo ("tú, que amas la montaña"); **(d) el
+  oyente puede ver y borrar** lo que ha respondido, desde su perfil
+  (`Curiosidades`), sin tener que rehacer el perfil entero. Se comprueba sin red
+  ni base con `npm run probar:memoria`, que imprime lo que el curador ve.
+
+### Criterios de aceptación
+
+- [x] Usuarios con ≥3 reseñas y/o picks con mood reciben un bloque de patrones
+  en el prompt; la recomendación refleja esa señal de forma notoria.
+  (`patronesDeEscucha` en `recommend.ts`: cruza tags de lo que puntuó ≥8, la
+  correlación ánimo→género de los picks y la estación; devuelve `null` si solo
+  hay estación, así que sin historial real no se inyecta ruido. Entra a los dos
+  prompts: `discover.ts` y `elegirConLlm`.)
+- [x] El botón "Escuchar en Spotify/Apple/YouTube" funciona desde la home y
+  el dossier en un toque, sin fricción. (`DailyReveal` pinta los tres botones
+  desde `Album.linksJson`; el dossier usa `ListenLinks` en la sección 05.)
+- [x] El usuario puede cambiar entre modo claro y oscuro desde el perfil y la
+  preferencia persiste. (`ThemeToggle` dentro de `ProfileForm`; cookie
+  `musicart_theme` a un año, leída en SSR por `layout.tsx` para que no haya
+  parpadeo.)
 
 ---
+
+## 🔨 Fase 8 — Caminos: por dónde entrar a un género (EN CURSO · ago 2026)
+
+**Objetivo:** que el oyente pueda decir *"quiero entender el heavy metal y no sé
+por dónde empezar"* y Musicart le arme **un camino de 5 discos en orden**, donde
+cada paso le deja el oído listo para el siguiente.
+
+La analogía del dueño: a alguien que nunca ha leído no le das el Quijote de
+entrada, le das un Harry Potter. Pero —y esto es clave para el tono— **el camino
+no esconde el Quijote: te lleva hasta él y te lo dice desde el primer paso.**
+"Al final de este camino está *Reign in Blood*, y vas a poder con él." Sin eso,
+la sección se siente condescendiente, que es el peor riesgo de esta idea.
+
+**Por qué ahora:** hoy Musicart es *vertical* (un disco al día, cada uno completo
+en sí mismo, sin arco entre ellos). Esto es lo primero *horizontal*: una meta a
+medio plazo ("quiero entender el metal") en vez de solo un antojo del día. Y es
+algo que una playlist de "essential metal" no puede dar — cualquiera lista los
+discos; lo valioso es **el porqué del orden**.
+
+### Decisiones de diseño tomadas (no re-litigar)
+
+1. **Pestaña aparte. El disco del día NO se toca.** Decisión explícita del dueño.
+   El camino vive en `/caminos` y se consume a su ritmo; el ritual diario sigue
+   siendo uno y sagrado, con su propio motor intacto (`recommend.ts` no cambia).
+   Efecto secundario bueno: el feature no puede romper la home.
+2. **El siguiente paso se abre al marcar el anterior como escuchado.** No es solo
+   control de costo (evita que un solo oyente fabrique 5 dossiers en una tarde y
+   se coma el `DAILY_GENERATION_BUDGET`): es honesto con la idea. Un camino que te
+   tragas de una sentada es una playlist, y el puente pedagógico ("lo que ganaste
+   en el paso anterior") solo funciona si de verdad pasaste por ahí. Basta un "ya
+   lo escuché" — no obligamos a puntuar, eso sería fricción.
+3. **Fabricación perezosa.** Proponer el camino entero es UNA llamada de LLM
+   (barata). El dossier de cada disco se fabrica el día que el oyente llega a él,
+   reutilizando `runDossierPipeline`. Muchos canónicos ya estarán en catálogo →
+   `reused: true` → sale gratis y no consume presupuesto.
+4. **El orden NO sale de `Album.difficulty`.** Ese 1-5 lo asigna la IA disco a
+   disco y no está calibrado para comparar entre discos distintos. El orden lo
+   razona el proponedor del camino; la dificultad se *muestra*, no manda.
+5. **`/explorar` ≠ `/caminos`.** Rutas temáticas = filtros sobre el catálogo que
+   ya existe. Caminos = secuencia con orden pedagógico. Son cosas distintas y el
+   copy tiene que dejarlo claro ("explora" vs "empieza por aquí") o se canibalizan.
+
+### Tareas
+
+- [x] **8.1 Modelo del camino** — `Camino` (deviceId/userId, tema, título, intro,
+  `stepsJson`, status) + migración. Cada paso guarda `{orden, title, artist, year,
+  papel, puente, albumId?, escuchadoAt?}`; `albumId` se rellena al fabricarlo.
+- [x] **8.2 Motor** (`src/lib/caminos.ts`) — `proponerCamino()`: una llamada al
+  LLM que devuelve 5 pasos, cada uno con su **papel** (la puerta · el gancho ·
+  el canon · el desvío · la cima) y su **puente** (qué te deja para el siguiente).
+  Mismo rigor anti-alucinación que `discover.ts`: discos reales y canónicos, nada
+  de recopilatorios, y la narrativa de cada disco sigue naciendo del pipeline
+  verificado. Más `abrirPaso()` (fabricación perezosa con presupuesto) y
+  `marcarEscuchado()` (desbloquea el siguiente; al último, cierra el camino).
+- [x] **8.3 Pestaña `/caminos`** — crear camino (chips de género + texto libre),
+  vista del camino con sus pasos abiertos/bloqueados, y `/api/caminos/paso`
+  (`maxDuration=300`) con pantalla de carga al estilo `CreandoDiscoHoy`, porque
+  fabricar un disco tarda 1-3 min. Enlace en `BottomNav`.
+- [x] **8.4 Que no se olvide** — tira discreta en la home ("vas por el paso 3 de 5
+  del camino al metal") que solo enlaza a la pestaña. Recupera el enganche que
+  perdimos al no coserlo al ritual, sin invadirlo.
+- [x] **8.5 "Eso ya lo conozco"** — botón por paso que lo salta y lo reemplaza por
+  otro. Sin esto, la primera vez que le pongas *Paranoid* a alguien que lo tiene
+  tatuado, pierdes su confianza.
+- [ ] **8.6 Caminos del curador + compartir** — el dueño escribe sus propios
+  caminos desde `/revision` (como la Vitrina de 7.6) y un camino se puede
+  compartir con OG image. En su propia sección esto es natural; cosido al ritual
+  no lo era.
+- [x] **8.7 Que trazar un camino no falle** (ago 2026, tras el reporte del dueño:
+  «puse salsa y me da error en rojo») — la propuesta de 5 discos con sus puentes
+  es la generación más larga que hacemos en runtime (~1.500 tokens de español) y
+  se estaba pidiendo con **30 s de espera y 1.400 tokens de tope**: si el modelo
+  tardaba un poco más o se pasaba de largo, la respuesta llegaba cortada, el JSON
+  no parseaba y el oyente veía "no pude trazar este camino". Ahora espera 75 s
+  (y la route pasó a `maxDuration` 300 para que quepa el reintento), cabe en
+  2.200 tokens, **reintenta una vez** si vuelve
+  incompleta y solo acepta el camino con sus 5 pasos —cuatro pasos sin cima no
+  son un camino—. Además el error dice qué pasó ("tardó demasiado, dale otra
+  vez" ≠ "la IA está caída, vuelve luego") y, si quien lo ve es el curador, se
+  le enseña el error técnico: un fallo en producción ya no es invisible desde el
+  teléfono.
+
+### Criterios de aceptación
+
+- [ ] El oyente pide un género y recibe 5 discos REALES en orden, cada uno con su
+  papel y una frase que explica por qué va ahí y qué le deja para el siguiente.
+- [ ] El paso 2 no se puede abrir sin marcar el 1 como escuchado.
+- [ ] Abrir un paso fabrica su dossier completo (o reutiliza el del catálogo) y
+  cae con elegancia si el LLM falla o se agotó el presupuesto — nunca un 500.
+- [ ] El disco del día sigue funcionando exactamente igual que antes.
+
+---
+
+## 🔨 Fase 9 — El Salón de la Fama (EN CURSO · ago 2026)
+
+**Objetivo:** que el oyente pueda ver **los discos 100 de 100** y pedir *"dame
+un disco de 95"* y que la app sepa dárselo, con una lista de **miles de discos
+que sea de verdad coherente**.
+
+Idea del dueño, tras hablar con musicólogos y melómanos: hay discos que son
+cien de cien (*The Dark Side of the Moon*, *Thriller*, *Abbey Road*…) y eso
+merece su propio sitio en la app.
+
+### El problema que había que resolver primero
+
+Musicart YA tenía un número 1-100: el impacto cultural (`Album.impact`, 6.5).
+**No servía para esto**, por dos razones:
+
+1. Lo escribe la IA **disco a disco, sin ver a los demás**. Cuando narra
+   *Thriller* no tiene delante a *Abbey Road*: un 88 de enero y un 91 de marzo
+   no son comparables. Es el mismo defecto que el ROADMAP ya reconoce para
+   `Album.difficulty` (decisión 4 de la Fase 8).
+2. Solo existe para discos **que ya pasaron por el pipeline**. Para llegar a
+   miles habría que fabricar miles de dossiers: meses de generación y una
+   factura de IA imposible.
+
+### Decisiones de diseño tomadas (no re-litigar)
+
+1. **El ranking va separado del dossier.** Tabla nueva y ligera (`CanonAlbum`)
+   con miles de discos: título, artista, año, portada, puntaje y sus recibos.
+   Sin narrativa. La historia se fabrica perezosamente el día que alguien toca
+   ese disco (`abrirDiscoDelCanon`), igual que un paso de un Camino, y como
+   muchos canónicos ya están en catálogo suele salir gratis (`reused`).
+2. **El puntaje NO lo escribe ningún LLM.** Sale de señales duras: en cuántas
+   ediciones de Wikipedia tiene artículo propio (Wikidata), qué premios recibió
+   y cuánta gente lo escucha (Last.fm, con poco peso: esto mide consagración,
+   no popularidad). Aquí la regla anti-alucinación se cumple sola porque no hay
+   nada escrito por un modelo.
+3. **Coherencia por percentil, no por fórmula suelta.** El 1-100 final se asigna
+   comparando cada disco con TODO el índice (`calibrar`), con una curva que hace
+   el 100 rarísimo (~0,4% del índice: 4-7 discos entre mil). Así un 91 significa
+   siempre lo mismo: "estás por encima del 91% del canon". Entrar discos nuevos
+   recalibra a todos, y está bien — un canon es un ranking.
+4. **El suelo del índice es 55, no 1.** Estar en el índice ya es una distinción
+   (son los discos más documentados de la historia grabada). Un disco de nicho
+   no saca mala nota: sencillamente no aparece.
+5. **El club de los 100 se puede fijar a mano.** `CanonAlbum.locked` congela el
+   puntaje de un disco y la ingesta no lo pisa. Es donde el criterio del curador
+   vale más que la fórmula y donde un error se vería más.
+6. **`/salon` ≠ `/vitrina`.** La vitrina es **mi gusto** (subjetivo, del
+   curador); el Salón es **el veredicto de la historia** (objetivo, con
+   recibos). El copy de ambas lo dice explícitamente o se canibalizan, igual que
+   pasaba con `/explorar` vs `/caminos`.
+7. **El disco del día no se toca.** Otra vez: pestaña aparte, motor aparte.
+
+### Tareas
+
+- [x] **9.1 Modelo del índice** — `CanonAlbum` (puntaje, prestigio bruto,
+  señales, recibos, país, década, género, enlaces a Wikidata/MusicBrainz y al
+  `Album` con dossier) + migración.
+- [x] **9.2 Motor de puntaje** (`src/lib/canon/score.ts`) — PURO, sin red ni
+  base de datos: `prestigioBruto()` pondera las señales, `calibrar()` reparte el
+  1-100 por percentil con la curva del canon, `recibos()` traduce las señales a
+  frases legibles y `pisoDe()` da la leyenda. Verificado: con 1.000 discos salen
+  7 en el 100, 36 de 95 para arriba, 98 de 90 para arriba y **ningún hueco**
+  entre 55 y 100 (el dial necesita que cada número exista).
+- [x] **9.3 Ingesta** (`src/lib/sources/wikidata.ts`, `src/lib/canon/ingest.ts`,
+  `scripts/canon.ts` → `npm run canon`) — Wikidata SPARQL da el universo y las
+  señales fuertes; Last.fm añade oyentes y géneros; Deezer, las carátulas (paso
+  aparte y con tope, por cortesía con una API pública). Idempotente, resiliente
+  fuente a fuente, y termina recalibrando el índice entero.
+- [x] **9.4 Capa de lectura** (`src/lib/canon/consulta.ts`) — muro, pisos,
+  listado con filtros, progreso del oyente y el dial. Sin una sola llamada a un
+  LLM: el Salón carga instantáneo y no consume presupuesto.
+- [x] **9.5 Pestaña `/salon`** — muro de los inmortales, **el dial** ("dame un
+  disco de 95", personalizado por afinidad y sin repetir lo ya escuchado), pisos
+  navegables, canon con acento (país y género), `/salon/lista` con filtros y
+  `/salon/disco/[id]` con los recibos del puntaje. Enlace en `BottomNav`.
+- [ ] **9.6 Primera corrida real del índice** — ya no hace falta terminal (ver
+  9.10): o le das al botón de `/revision`, o esperas al worker de la noche.
+  Queda por marcar hasta que el índice esté de verdad levantado en producción.
+- [x] **9.7 Curaduría del club de los 100** — la fórmula ordena mil discos bien,
+  pero la cima es donde un error se ve más y donde el criterio del dueño vale
+  más que cualquier señal. Ahora puede **fijar un puntaje a mano** (`locked`: la
+  ingesta deja de tocarlo), **soltarlo** (recalibra y vuelve a mandar la
+  fórmula), **meter en el canon un disco que el índice no trajo** —hace falta de
+  verdad: Wikipedia sobre-representa al mundo anglosajón y un clásico venezolano
+  puede quedarse fuera— y **quitar** lo que se coló. Los controles finos viven
+  en la ficha del disco (`CuradorCanon`, como los de la Vitrina en 7.6) y la
+  vista de conjunto en `/revision` (`ClubDeLosCien`). Honestidad: si un puntaje
+  está fijado, la ficha lo dice en vez de fingir que salió de los datos.
+- [x] **9.8 La barra de abajo: de siete pestañas a cuatro** — con el Salón, la
+  navegación llegó a siete pestañas y en un teléfono eso es ruido. Quedan
+  **Hoy · Explorar · Diario · Perfil**, que son las cuatro cosas de verdad
+  distintas (el ritual, todo lo demás, tu historia, tus ajustes). Caminos, Salón
+  y Vitrina son hermanas —las cuatro maneras de explorar— y viven ahora juntas
+  en `/explorar`, que las presenta con **una frase que dice en qué se
+  diferencian** (`PuertasExplorar`): eso resuelve de paso la canibalización que
+  el ROADMAP viene avisando desde la Fase 8, porque en una etiqueta de 11px esa
+  diferencia no cabía. **Ninguna URL cambió**: `/caminos`, `/salon`, `/vitrina`,
+  `/explorar/[slug]` y `/explorar/hitos` siguen igual, y la pestaña Explorar se
+  queda encendida mientras estás dentro de cualquiera de ellas.
+- [x] **9.9 Compartir el Salón** (ago 2026) — imagen social de la sección y de
+  cada disco del canon, y el sello de compartir en las dos. Lo que se comparte
+  de un disco del Salón es SU CIFRA, así que la imagen la compone como la
+  pestaña (`SelloPuntaje`): el mismo peso de tinta según la altura —un 100 en
+  negativo, un 95 con marco macizo— y, debajo, **su primer recibo**. Compartir
+  un número sin decir de dónde sale es justo lo que el Salón existe para no
+  hacer. Tres detalles que costaron su rato: **(a)** `ImageResponse` no ve el
+  `next/font` de la app ni tiene fuentes del sistema, así que sin pasárselas
+  pintaba el Salón en la grotesca de fábrica de satori —la tipografía de
+  cualquier app, o sea lo contrario de la Fase 10—: ahora Fraunces, Archivo e
+  IBM Plex Mono viajan en el repo (`src/app/salon/tipos`, con su
+  `outputFileTracingIncludes`) y se leen del disco, sin depender de que un
+  servidor de fuentes responda; **(b)** una lista de fuentes VACÍA tumba la
+  imagen ("No fonts are loaded"), así que cuando no se pueden leer se omite el
+  campo y sale con la de fábrica — una imagen fea es mejor que un enlace que no
+  enseña nada; **(c)** las dos rutas son `force-dynamic` y toleran que la base
+  no responda: el índice crece cada noche, y una cifra congelada en el último
+  despliegue sería mentira. De paso, la ficha del disco se compuso con la
+  imprenta (venía de la plantilla: tarjeta con `bg-surface`, un emoji 🏛 de
+  carátula ausente —ahora la capitular del título— y todo centrado).
+- [x] **9.10 El Salón se levanta solo** (ago 2026, tras el reporte del dueño:
+  «me metí en el Salón y no aparece absolutamente nada») — el índice dependía de
+  que alguien corriera `npm run canon` **en una terminal**, y el dueño anda en el
+  teléfono: la pestaña se quedaba en "El Salón se está levantando" para siempre y
+  desde la app no había manera de arreglarlo. Ahora la ingesta se puede dar por
+  tramos (`avanzarSalon`, con presupuesto de tiempo y reanudable: lo que entró se
+  queda y la siguiente corrida sigue) y la llaman dos sitios:
+  **(a)** un botón en `/revision` — "Levantar el Salón" — que avanza lo que quepa
+  en una función de Vercel y te dice cuántos discos entraron y si hay que volver
+  a darle; **(b)** el **worker de Railway**, que cada noche termina lo que falte,
+  refresca el índice cada 7 días y busca carátulas, sin que nadie mire y sin
+  gastar IA. Detalles que importan: una corrida rápida (sin Last.fm) ya no borra
+  los oyentes ni los géneros que trajo una lenta, saltarse los premios por falta
+  de tiempo no borra los que ya estaban, y el índice **siempre** termina
+  recalibrado — a medio llenar, pero coherente. Y si el que ve el Salón vacío es
+  el curador, el mensaje le dice dónde está el botón.
+- [x] **9.11 El botón aguanta a Wikidata** (ago 2026, tras el reporte del dueño:
+  una captura del Salón con «No se pudo avanzar el Salón ahora mismo» y, debajo,
+  la página de error de nginx entera impresa en pantalla) — el «502 Bad Gateway»
+  no era un fallo nuestro **ni** de Wikidata: era una consulta demasiado grande
+  para un endpoint público que se corta a los 60 segundos. Cuatro arreglos:
+  **(a)** la búsqueda va por **tramos** de documentación (≥90 ediciones, 60-90,
+  45-60…) y el país del artista se pregunta aparte y en lotes, así ninguna
+  petición se acerca al minuto — el trabajo total es el mismo, repartido;
+  **(b)** todo **reintenta** tres veces con esperas crecientes, que es lo que
+  cura un 502 (casi siempre es un bache de segundos), respetando el `Retry-After`
+  si lo mandan; **(c)** un tramo caído se pierde solo a sí mismo: el índice se
+  levanta con los demás, y si Wikidata no responde **nada**, el botón sigue con
+  las carátulas (son de Deezer) en vez de no hacer absolutamente nada — antes,
+  con el canon a medias, una caída de Wikidata dejaba cientos de portadas sin
+  buscar; **(d)** al curador se le habla en cristiano ("Wikidata 502: no
+  respondió, su servidor está saturado") y nunca más se le imprime una página
+  HTML en la pantalla. De propina, ninguna corrida corta borra ya el país, el
+  año, el mbid ni los premios que trajo una larga.
+
+- [x] **9.12 Ningún disco se queda en «0 de 100»** (ago 2026, tras el reporte del
+  dueño: una captura del muro de los inmortales con Thriller, *21* y *Sgt.
+  Pepper's* marcados **0/100**) — el índice estaba lleno y con carátulas, pero
+  **sin calibrar**: el 0 es el valor de fábrica de la columna, o sea "a este
+  disco nunca le llegó su número". La 9.10 daba por hecho que "el índice
+  **siempre** termina recalibrado", y no era verdad: la calibración vivía SOLO
+  en la última línea de `construirIndice`, detrás de todo lo que puede fallar
+  antes — un 502 de Wikidata, un disco duplicado que choca contra el `mbid`
+  único, o el reloj de la función de Vercel. Cuando algo de eso pasaba, el
+  puntaje no se escribía, y ninguna corrida posterior lo arreglaba porque todas
+  volvían a tropezar antes de llegar al final. Cuatro arreglos: **(a)** calibrar
+  es ahora el **paso 0** de `avanzarSalon` (un toque al botón y el Salón tiene
+  números), no la última línea de la operación más frágil; **(b)** la
+  calibración escribe **agrupando por puntaje** — 46 escrituras en vez de mil, de
+  minutos a un suspiro, que era lo que la hacía morir en el minuto cinco de
+  Vercel; **(c)** un disco que no entra ya no aborta la ingesta entera, se anota
+  y se sigue; **(d)** el Salón **no enseña un puntaje que no tiene**: los discos
+  sin calibrar no salen ni en el muro, ni en los pisos, ni en el listado, y la
+  pestaña distingue "el canon no está construido" de "el canon está sin puntuar"
+  — con el botón, que en ese caso dice *Poner los puntajes*.
+
+### Pendiente del dueño (una sola vez)
+
+- [ ] Levantar el índice: entra a `/revision` y dale a **"Levantar el Salón"**
+  (tarda unos minutos y puede pedir más de un toque). Si no lo tocas, el worker
+  de Railway lo hace igual esa misma noche. La terminal ya no hace falta:
+  `npm run canon` sigue existiendo para corridas grandes de mantenimiento.
+- [ ] Opcional: `LASTFM_API_KEY` para que el índice tenga oyentes y géneros. Sin
+  ella el puntaje se calcula igual, solo con menos matices.
+
+### Criterios de aceptación
+
+- [ ] El oyente pide "un disco de 95" y recibe uno de exactamente esa altura,
+  distinto del que ya escuchó y afín a su gusto.
+- [ ] Cada puntaje se puede abrir y enseña las señales reales que lo produjeron.
+- [ ] El índice llega a ~1.000 discos sin fabricar 1.000 dossiers.
+- [ ] Tocar un disco del Salón fabrica su dossier (o reutiliza el del catálogo)
+  y cae con elegancia si se agotó el presupuesto — nunca un 500.
+- [ ] El disco del día sigue funcionando exactamente igual que antes.
+
+---
+
+## ✅ Fase 10 — La imprenta (COMPLETADA · ago 2026)
+
+Encargo directo del dueño, fuera del orden de fases: *"todas las apps que se
+hacen últimamente son exactamente iguales, se reconoce al instante que las hizo
+una IA, como los flyers de ChatGPT. No quiero eso. Haz algo distinto, sal de tus
+plantillas, reinvéntate"*.
+
+**El diagnóstico.** El parecido no era casualidad ni mala suerte: era un
+repertorio concreto y repetido de gestos. Esquinas redondeadas, tarjetas
+flotando con `border-white/10` sobre `bg-white/[0.03]`, botones en pastilla, un
+acento dorado con halo difuminado, iconitos de línea, emojis haciendo de iconos,
+todo centrado e Inter. Musicart los tenía **todos**. Nombrarlos era la mitad del
+trabajo: son lo que hay que matar.
+
+**La idea.** Musicart no es una app, es una **publicación**: una revista musical
+que sale todos los días con un disco dentro. Todo el sistema sirve a eso — y
+como el producto ya era curaduría narrativa con voz de crítico, el disfraz de
+app era lo que le quedaba mal, no al revés.
+
+**Las siete reglas** (íntegras y con su porqué en la cabecera de `globals.css`;
+en vivo, con especímenes, en la ruta `/prensa`): cero esquinas redondeadas ·
+cero tarjetas (estructuran las reglas tipográficas, no las cajas) · dos
+**ediciones** en vez de dos "modos" · la tipografía es la interfaz (Fraunces
+display · Archivo texto · IBM Plex Mono para los datos) · los botones son sellos
+que se hunden contra el papel · nada de emojis · lo que se numera, se numera.
+
+### Tareas
+
+- [x] **10.1 El sistema** (`globals.css`) — tokens de tinta y papel en las dos
+  ediciones, y las clases que sustituyen a la plantilla: `.rotulo`, `.dato`,
+  `.cifra`, `.regla`/`.filete`, `.cabecera-seccion`, `.puntos`, `.sello`,
+  `.sello-hueco`, `.recuadro`, `.capitular`, `.calderon`. Con dos barridos
+  globales que arrastran a las pantallas todavía sin rehacer: se anula el
+  redondeo en toda la app y se reinterpretan `border-white/*` y `bg-white/*`
+  como filete y papel. **Un rediseño a medias se ve peor que no hacerlo.**
+- [x] **10.2 El acento imprimible** — la paleta de la portada estaba pensada
+  para brillar sobre negro y desaparecía sobre papel claro. `--acento` deriva de
+  la portada (cada disco sigue tiñendo su página) pero se entinta según la
+  edición. `text-album` apunta ahí, así que las decenas de usos que ya había se
+  arreglaron solos.
+- [x] **10.3 El folio corrido** (`Cabecera`) — todas las pantallas abren con el
+  nombre, el número de edición (el día del año) y la fecha, sobre filete doble.
+  Ninguna app se abre así; todas las revistas, sí.
+- [x] **10.4 El pie de imprenta** (`BottomNav`) — la barra de cuatro iconitos con
+  la pastilla de color era, junto con las tarjetas, la firma más reconocible de
+  la plantilla. Ahora son cuatro secciones numeradas en romanos, en versalitas, y
+  la activa se **entinta** (papel sobre tinta). Sin un solo icono.
+- [x] **10.5 La primera plana** (`DailyReveal`) — la carátula pasa a ser una
+  **lámina** con marco y pie de figura; el titular va a la izquierda y enorme;
+  la ficha técnica es una tira de datos entre reglas; la razón del día es un
+  **destacado** al margen y no una cajita ámbar; escuchar es una línea de
+  créditos, no tres pastillas con puntitos de color.
+- [x] **10.6 Caminos** — el selector de género deja de ser doce pastillas
+  idénticas y se compone como el **índice** que en realidad es (numerado, con
+  puntos conductores). Y mientras se traza no hay ruedita girando: hay una
+  **prensa imprimiendo**.
+- [x] **10.7 El Salón** — el sello dorado con halo (que además mentía: ese
+  número es un dato calibrado, no una medalla) se vuelve **cifra grabada**, con
+  la altura legible por el peso de la tinta. El muro deja de ser rejilla de
+  carátulas y se vuelve **escalafón** en columna. El dial gana una **regla
+  graduada** en lugar del slider del sistema.
+- [x] **10.8 El sumario** (`PuertasExplorar`) — las tres puertas con emoji
+  pasan a ser el sumario de la publicación, con romanos y su frase
+  diferenciadora (que era justo lo que la Fase 8 pedía y en una etiqueta de 11px
+  no cabía).
+- [x] **10.9 `/prensa`, el libro de estilo en vivo** — las siete reglas y sus
+  especímenes, en las dos ediciones. Existe sobre todo como **defensa**: el
+  riesgo de un sistema con carácter es que la siguiente sesión, por inercia,
+  vuelva a meter una tarjeta redondeada. No toca la base de datos, así que
+  siempre renderiza.
+
+- [x] **10.11 La regla VIII: la ergonomía manda** (tras probar la primera tirada
+  en el teléfono: *"se ve tosca, no se ve interactiva; los botones no se ven
+  bien. La otra, a pesar de genérica, parecía una app nativa, y eso es mejor que
+  ser innovador y que se vea feo"*). Crítica correcta y error mío bien concreto:
+  **llevé la lógica del papel al dedo**. Una revista usa cuerpo 8 y filetes de
+  un pelo porque se sostiene a 30 cm y se imprime a 1200 dpi; un teléfono se
+  mira a medio metro y se maneja con un dedo de un centímetro. Y lo peor: al
+  quitar las tarjetas quité los `hover`, que **en una pantalla táctil no
+  existen**, sin poner nada en su lugar — de ahí que no pareciera interactiva.
+  Lo arreglado, con medidas comprobadas en un viewport de teléfono real
+  (393×852): botones de 52px entintados con el acento y relieve duro (antes eran
+  rectángulos planos de 36px que parecían rótulos) · filas de lista de 60px que
+  se entintan enteras al pulsarlas y llevan su marca de avance `›` · pestañas de
+  60px · ningún cuerpo por debajo de 11px · campos a 16px para que iOS no haga
+  zoom solo · `touch-action: manipulation` · y estados `:active` en todo.
+  **Los iconos de la barra vuelven**: su forma es una convención de plataforma,
+  no un gesto de plantilla, y pelearla costaba usabilidad sin ganar identidad
+  —que vive en la tipografía, las reglas y las cifras, no en la barra—. Los
+  iconos, eso sí, están dibujados en este idioma: marcas macizas de tinta (el
+  disco, la lupa de imprenta, el cuadernillo, el sello del suscriptor), no
+  contornos redondeados de librería. Verificado por medición automática: **cero
+  objetivos por debajo de 44px y cero textos por debajo de 11px** en la primera
+  plana y en el libro de estilo.
+
+### Lo que falta (deuda consciente, no olvido)
+
+- [ ] **10.10 Rehacer a mano el resto de pantallas** — dossier del álbum,
+  diario, perfil, onboarding, revisión, vitrina, rebobinada y dueto heredan
+  paleta, tipografías y el barrido de esquinas, pero conservan la estructura de
+  la época de la plantilla. Se van componiendo con el sistema a medida que se
+  toquen.
+
+### Criterios de aceptación
+
+- [x] Ninguna esquina redondeada, ninguna tarjeta flotante, ningún emoji-icono
+  y ninguna pastilla en las pantallas rehechas.
+- [x] Las dos ediciones son legibles: el acento se entinta y no se pierde sobre
+  papel claro.
+- [x] Un desconocido no puede señalar el gesto de plantilla que delata la app,
+  porque no queda ninguno en la ruta principal.
+- [x] **Y se usa como una app nativa**: nada tocable por debajo de 44px, nada
+  legible por debajo de 11px, y todo responde al dedo. Medido, no opinado.
+
+---
+
+## 🔨 Fase 11 — «Conociendo a…»: el atlas (EN CURSO · ago 2026)
+
+**Objetivo:** entrar a la música **por un lugar**. Eliges un país y Musicart te
+lo cuenta en cinco discos — no "los cinco mejores", sino los que dicen algo de
+él: de dónde viene su música, qué le da orgullo, con qué se cruzó, contra qué se
+levantó y qué suena hoy.
+
+Idea del dueño (ago 2026): *"una manera de conocer culturalmente a un país a
+través de la música"*. Es el tercer eje que faltaba y el que mejor encaja con la
+tesis del producto — Musicart no sirve canciones, sirve contexto:
+
+| Sección | Se entra por | La pregunta que responde |
+|---|---|---|
+| Caminos (8) | un GÉNERO | "quiero entender el metal, ¿por dónde empiezo?" |
+| El Salón (9) | el PRESTIGIO | "dame un disco de 95" |
+| **El Atlas (11)** | un LUGAR | "¿a qué suena Malí y qué me dice de Malí?" |
+
+**Por qué ahora y no antes:** hacía falta la **7.11**. Con una sola fuente
+(MusicBrainz) el origen de un artista de nicho de un país pequeño no se podía
+comprobar, y un atlas sin esa comprobación no es un atlas: es una lista de
+discos con una bandera encima.
+
+### Decisiones de diseño tomadas (no re-litigar)
+
+1. **Un ATLAS por regiones con buscador, NO un desplegable de 195 países.** En
+   un teléfono, 195 opciones son un scroll infinito, y un `<select>` es
+   justamente el gesto de plantilla que la Fase 10 prohíbe. Es un índice de
+   libro: quince regiones con su folio, cada país en su fila de 60px.
+2. **El motor NO es filtrar `CanonAlbum` por país.** El índice del Salón sale de
+   Wikidata por número de artículos de Wikipedia y escora brutalmente al mundo
+   anglosajón: Venezuela daría dos discos y Estados Unidos quinientos. Aquí
+   PROPONE el curador —que sí conoce lo de fuera del canon— y después se
+   comprueba con datos duros.
+3. **Cada artista pasa la barrera de origen (7.11).** Si consta que no es de ese
+   país, el disco no entra. Y lo que no se pudo confirmar entra **diciéndolo en
+   su ficha**: "no pude confirmar con datos que X sea de Venezuela". Esa frase
+   es la diferencia entre un atlas y una postal.
+4. **El retrato es GLOBAL, no de cada oyente.** Lo que cuenta de Malí es lo
+   mismo para cualquiera: una fila por país (`RetratoPais`), y el segundo que
+   entra lo ve al instante y sin gastar un céntimo de IA. Es lo contrario que
+   los Caminos, que sí son de cada uno.
+5. **Los cinco papeles son un ARCO, no cinco niveles.** raíz · himno · cruce ·
+   grito · ahora. Un Camino ordena por dificultad; un retrato ordena por lo que
+   cada disco cuenta del país. Y el "ahora" es obligatorio: sin él, un país
+   queda como una postal del pasado, que es exactamente el exotismo que esta
+   sección no puede permitirse.
+6. **Puerta IV de `/explorar`. El BottomNav se queda en cuatro** (decisión 9.8).
+7. **El disco del día no se toca.** Como en la 8 y la 9: pestaña aparte, motor
+   aparte.
+
+### Tareas
+
+- [x] **11.1 La geografía, en un solo sitio** (`src/lib/paises.ts`) — la tabla
+  pasó de los 54 países que un oyente sabe pedir a **192 en 15 regiones**, con
+  sus gentilicios en español y en inglés y sus nombres de área de MusicBrainz.
+  Vivía dentro de `origin-guard.ts`; tener dos listas de países en el mismo repo
+  era pedir que se desincronizaran. Dos cosas que se rompen al crecer una tabla
+  así y que quedaron cazadas: con sufijo libre, la raíz corta "mali" casaba con
+  **"malísimo"** (ahora el sufijo tiene tope de tres letras), y en inglés
+  "Dominican" es de dos países y "Congolese" de otros dos — esas frases se
+  declaran **ambiguas** en vez de elegir el país más grande, porque elegir sería
+  hacer rechazar por error a un artista de Dominica. `npm run probar:paises` lo
+  comprueba entero sin red y sin base.
+- [x] **11.2 Leer también el NOMBRE del país en inglés** — la barrera solo
+  entendía gentilicios ("Venezuelan"), así que "a group of musicians **from
+  Mali**" no le decía nada: justo la forma en que la Wikipedia inglesa habla de
+  los artistas africanos y asiáticos, que son los que más falta hacen aquí.
+  Ahora también cuenta el nombre, pero **solo detrás de preposición de lugar**
+  (from/in/of/based in): sin esa condición, "Chad Smith" sería de Chad, "Jordan"
+  de Jordania y "Atlanta, Georgia" del país de Georgia.
+- [x] **11.3 El modelo y el motor** (`RetratoPais`, `src/lib/atlas.ts` +
+  `atlas-tipos.ts`) — `retratoDePais()` propone con UNA llamada al curador,
+  verifica el origen de los cinco artistas en paralelo, descarta a los que no
+  son de ahí y, si se quedó corto, pide UNA tanda de reemplazo sin ellos.
+  `abrirDiscoDelAtlas()` fabrica el dossier perezosamente con el tope de gasto
+  ("extra"), igual que un paso de un Camino o un disco del Salón. Los tipos van
+  aparte porque la UI de cliente no puede importar el motor sin arrastrar el
+  pipeline (→ jimp → `fs`) y romper el build: misma lección que
+  `caminos-pasos.ts`.
+- [x] **11.4 Guardar también el fracaso** — si no se pudo escribir un retrato
+  (sin clave de IA, el curador no responde, o no hay cinco discos verificables),
+  se guarda `status: "vacio"` con la razón **escrita por el código** y no se
+  vuelve a intentar hasta pasadas 24 h. Sin esto, cada visita a un país sin
+  material vuelve a pagar la llamada para volver a fallar. La razón la escribe
+  el código por lo mismo que la `CausaFallback` del disco del día: cuando algo
+  falla, el LLM suele ser justo lo que está caído.
+- [x] **11.5 La pestaña** (`/atlas` y `/atlas/[code]`) — el índice con su
+  buscador, el retrato con sus cinco fichas (papel, disco, por qué, origen), la
+  espera narrada mientras se escribe (`CreandoRetrato`, hermana de
+  `CreandoDiscoHoy`) y "Cuéntame su historia" por disco. Puerta IV en
+  `/explorar`. Medido en un teléfono de 393×852: cero textos por debajo de 11px
+  y cero objetivos táctiles por debajo de 44px en el retrato.
+- [x] **11.6 Compartir un retrato** (ago 2026) — imagen social de la sección y
+  de cada país. Lo que se comparte de un país NO es una carátula suelta: es el
+  **índice del retrato**, los cinco papeles con su disco al lado. Quien lo ve en
+  un chat entiende la promesa sin abrir el enlace, y eso es justo lo que
+  distingue esto de una playlist con bandera. Dos mudanzas que venían pidiéndose
+  solas: las tipografías de las imágenes pasaron de `src/app/salon/tipos` a
+  **`src/lib/imprenta-og`** (ya no son del Salón, son de la publicación) y
+  `CompartirSalon` pasó a ser **`src/components/Compartir`** (el gesto es el
+  mismo para una sección, un disco del canon o el retrato de un país). Ojo al
+  `outputFileTracingIncludes` de `next.config.ts`: imagen social nueva = una
+  línea más ahí, o sale con la fuente de fábrica.
+- [x] **11.7 El país del oyente** (ago 2026) — casi nadie llega al Atlas
+  pensando en Mongolia: se llega pensando en el sitio de uno. Ahora el perfil
+  tiene un campo **opcional** "¿de dónde eres?" (un desplegable nativo, que en
+  un formulario es lo mejor que hay en un teléfono — lo que NO puede ser un
+  desplegable es la navegación del Atlas) y la sección te recibe con tu país
+  arriba del índice. De propina, el disco del día también se entera: saber de
+  dónde eres no filtra nada —nadie quiere solo música de su país— pero cambia el
+  tono, porque a un venezolano no le explicas quién fue Simón Díaz igual que a
+  un japonés. No se pregunta en el onboarding a propósito: la entrada ya es
+  larga y esto no es imprescindible para dar el primer disco.
+
+### Criterios de aceptación
+
+- [ ] Eliges un país y recibes cinco discos REALES con su papel y una frase que
+  dice qué cuenta cada uno de ese país.
+- [ ] Ningún disco del retrato es de un artista que conste que no es de ahí; lo
+  que no se pudo confirmar se enseña diciéndolo.
+- [ ] El segundo oyente que entra al mismo país lo ve al instante y sin gastar
+  IA.
+- [ ] Abrir un disco fabrica su dossier (o reutiliza el del catálogo) y cae con
+  elegancia si se agotó el presupuesto — nunca un 500.
+- [ ] El disco del día sigue funcionando exactamente igual que antes.
+
+---
+
+## Estado actual (agosto 2026)
+
+**Fases 0–7 completas; Fase 8 casi cerrada (falta 8.6), Fase 9 EN CURSO y Fase
+10 (el rediseño "La imprenta") completada; Fase 11 (el Atlas) EN CURSO**
+(ago 2026). La 8.6 quedó pendiente
+por decisión del dueño, que priorizó el Salón de la Fama; la 10 fue un encargo
+transversal suyo y no altera el orden de las fases de producto: **la fase de
+trabajo sigue siendo la 9**.
+
+**La fase de trabajo es ahora la 11** (el Atlas), abierta por encargo del dueño
+en cuanto la 7.11 dio las fuentes que le faltaban. De la Fase 9 no queda código
+pendiente: cerrada la 9.9, **lo único que falta es la 9.6**, y esa no se
+escribe — se toca. El dueño entra a `/revision`, le da
+a "Levantar el Salón" (o espera al worker de esa noche) y se marca cuando el
+índice esté de verdad levantado en producción. Los criterios de aceptación de la
+fase se comprueban ahí mismo, con el índice puesto.
 
 ## Decisiones técnicas tomadas (no re-litigar sin razón)
 
@@ -386,3 +1198,7 @@ dueño del producto qué entra en el roadmap.
 | Identidad anónima por deviceId antes que auth | Permite construir y validar la personalización ya, sin fricción de registro |
 | `master` es la rama de producción en Vercel | Configurado manualmente en Vercel Settings (el repo usa `master`, no `main`) |
 | Worker de generación como cron en Railway (`npm run worker`) | Generar tarda minutos: excede los timeouts de Vercel; Railway ya es infraestructura del dueño y usa la URL interna del Postgres |
+| Cuando la IA no está, el pedido del oyente se responde IGUAL — y se dice | La app nunca se cae, así que un fallo de IA se vivía como "dejó de leer lo que le pido": mismo disco de siempre, en tres segundos y sin explicación. Ahora el fallback lee el pedido sin IA (`src/lib/pedido-match.ts`) y la razón del día abre diciendo por qué no se pudo cumplir (`CausaFallback`) |
+| El adapter de OpenAI habla los DOS dialectos (clásico y de razonamiento) | Los modelos de razonamiento (o1, o3, o4, gpt-5) prohíben `max_tokens` y `temperature` y usan `max_completion_tokens`: poner uno de esos en `GENERATION_MODEL` devolvía 400 en TODAS las llamadas, con saldo de sobra. Y como cada llamada caída tiene su red, el síntoma no era "la IA falla" sino "me repite los discos". Ahora el dialecto se elige por el nombre del modelo, se reintenta con el otro si la API se queja, y una respuesta vacía es un error con su nombre (no un "no contiene JSON") |
+| Un disco repetido SIEMPRE se anuncia, con pedido o sin él | La honestidad solo hablaba cuando el oyente había pedido algo (`avisoPorCausa` necesitaba `peticion`). Un día normal, la caída al catálogo era muda — y para quien ya recorrió el catálogo entero (el dueño, cuyo catálogo publicado ES su historial) esa caída es siempre una repetición: discos repetidos, en silencio y sin manera de saber por qué. Ahora `avisoPorRepeticion` lo dice con su causa, y la bitácora del curador viaja en TODAS las salidas (y se guarda en cookie para leerla desde el teléfono, sin logs de Vercel) |
+| El tope diario reserva un 30% para el disco del día | Salón, Caminos y saltos comparten el mismo cupo y son los que más se pulsan seguidos: una tarde de curioseo dejaba al ritual del día sin cupo, o sea repitiendo disco y saltándose el pedido |

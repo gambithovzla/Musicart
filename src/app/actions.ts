@@ -5,7 +5,14 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { TZ_COOKIE } from "@/lib/device";
 import type { CuriosityAnswer, CuriosityQuestion } from "@/lib/curiosities";
-import { todayQuestion, formatCuriosities } from "@/lib/curiosities";
+import {
+  todayQuestion,
+  formatCuriosities,
+  ordenarPorFecha,
+  textoDePregunta,
+  haceCuanto,
+  DIAS_OLVIDO,
+} from "@/lib/curiosities";
 import { parseJson } from "@/lib/types";
 import { llm, extractJson } from "@/lib/dossier/llm";
 import {
@@ -17,6 +24,7 @@ import {
 } from "@/lib/identity";
 import { profileHasSignal } from "@/lib/profile-merge";
 import { applyMood } from "@/lib/recommend";
+import { todayKey } from "@/lib/daily";
 
 export async function saveReview(input: {
   deviceId: string;
@@ -196,6 +204,73 @@ export async function answerCuriosity(
       answersJson,
       userId: userId ?? null,
     },
+  });
+  return { ok: true };
+}
+
+/** Una respuesta del día tal como se le enseña al oyente en su perfil. */
+export type CuriosidadGuardada = {
+  id: string;
+  date: string;
+  pregunta: string;
+  respuesta: string;
+  extra?: string;
+  /** "hace 2 meses". */
+  cuando: string;
+  /** false = ya caducó y el curador no la usa (ver `curiosities.ts`). */
+  vigente: boolean;
+};
+
+/**
+ * Lo que el oyente ha contestado a la pregunta del día, de lo más nuevo a lo
+ * más viejo. Existe para que pueda VERLO: una respuesta suelta de hace meses
+ * ("montaña") no debería mandar en sus recomendaciones sin que él lo sepa.
+ */
+export async function listarCuriosidades(): Promise<CuriosidadGuardada[]> {
+  const identity = await getListenerIdentity();
+  const profile = await findProfileRecord(identity);
+  if (!profile) return [];
+  const data = parseJson<Record<string, unknown>>(profile.answersJson, {});
+  const answers: CuriosityAnswer[] = Array.isArray(data.curiosities)
+    ? (data.curiosities as CuriosityAnswer[])
+    : [];
+  const jar = await cookies();
+  const tzRaw = jar.get(TZ_COOKIE)?.value;
+  const hoy = todayKey(tzRaw ? decodeURIComponent(tzRaw) : null);
+  return ordenarPorFecha(answers, hoy).map((a) => ({
+    id: a.id,
+    date: a.date,
+    pregunta: textoDePregunta(a),
+    respuesta: a.answer,
+    extra: a.extra,
+    cuando: haceCuanto(a.dias),
+    vigente: a.dias !== null && a.dias <= DIAS_OLVIDO,
+  }));
+}
+
+/**
+ * Borra una respuesta del día. El botón "que se te olvide": si el oyente ve que
+ * el curador se agarró de algo que para él fue puntual, lo quita y deja de
+ * pesar — sin tener que rehacer el perfil entero.
+ */
+export async function olvidarCuriosidad(
+  id: string,
+  date: string,
+): Promise<{ ok: boolean }> {
+  const identity = await getListenerIdentity();
+  const profile = await findProfileRecord(identity);
+  if (!profile) return { ok: false };
+
+  const data = parseJson<Record<string, unknown>>(profile.answersJson, {});
+  const answers: CuriosityAnswer[] = Array.isArray(data.curiosities)
+    ? (data.curiosities as CuriosityAnswer[])
+    : [];
+  const quedan = answers.filter((a) => !(a.id === id && a.date === date));
+  if (quedan.length === answers.length) return { ok: false };
+
+  await prisma.profile.update({
+    where: { id: profile.id },
+    data: { answersJson: JSON.stringify({ ...data, curiosities: quedan }) },
   });
   return { ok: true };
 }

@@ -3,7 +3,7 @@
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { todayKey, getTodayPick } from "./daily";
+import { todayKey } from "./daily";
 import { llm, extractJson, hayClaveIA } from "./dossier/llm";
 import {
   type ListenerIdentity,
@@ -19,14 +19,53 @@ import {
 } from "./return-ritual";
 import { parseJson, type FactsPayload } from "./types";
 import { formatCuriosities, type CuriosityAnswer } from "./curiosities";
-import { proponerDiscoDescubrimiento } from "./discover";
+import {
+  proponerDiscoDescubrimiento,
+  discoCumplePedido,
+  type DiscoPropuesto,
+} from "./discover";
+import { cargarNotasTexto } from "./listener-notes";
+import { curatorVoz } from "./curators";
 import { runDossierPipeline } from "./dossier/pipeline";
-import { LOVED_THRESHOLD, RATING_MAX } from "./review";
-import { hayPresupuestoHoy, registrarGeneracion } from "./budget";
+import { LOVED_THRESHOLD, RATING_MAX, DISLIKED_THRESHOLD } from "./review";
+import {
+  hayPresupuestoHoy,
+  registrarGeneracion,
+  generacionesHoy,
+  dailyGenerationBudget,
+} from "./budget";
+import {
+  afinarRazon,
+  ganchosQuemados,
+  textoGanchosProhibidos,
+  textoUsaGancho,
+  type Gancho,
+} from "./reason-guard";
+import { nombreDePais } from "./paises";
+import {
+  detectarPaisesPedido,
+  artistaEsDeAlgunPais,
+  nombresDePaises,
+  quitarPalabrasDePais,
+  type PaisPedido,
+} from "./origin-guard";
+import {
+  palabrasDelPedido,
+  afinidadConPedido,
+  generosParaBusqueda,
+} from "./pedido-match";
+import { artistasDePais } from "./sources/musicbrainz";
 
 const MAX_REVIEWS = 10;
-const MAX_RECENT_PICKS = 7;
-const LLM_TIMEOUT_MS = 4_000;
+const MAX_RECENT_PICKS = 14;
+// Cuánto esperamos a la llamada que ELIGE el disco del catálogo. Estuvo en 4 s
+// y era demasiado poco: con un catálogo largo el prompt es grande, el modelo
+// tarda más de eso a menudo, y al vencer el plazo caíamos a `elegirPorGusto`
+// —que elige por afinidad de géneros y NO sabe nada del pedido del oyente—. Ese
+// era el camino silencioso por el que pedir "rock venezolano" terminaba en un
+// disco de rock cualquiera. Ahora esperamos lo razonable; el reloj total lo
+// vigila el presupuesto de tiempo de `generarPickDelDia`, que es su sitio.
+const LLM_TIMEOUT_MS = 15_000;
 
 type DossierConAlbum = Prisma.DossierGetPayload<{
   include: { album: { include: { artist: true } } };
@@ -39,6 +78,14 @@ export type PickPersonal = {
   regenerated: boolean;
   returnPick: boolean;
   absenceDays: number | null;
+  /** Si hoy NO se pudo cumplir lo que el oyente pidió, la frase que lo dice.
+   *  Va también dentro de `reason` (es lo que se lee bajo el disco); aparte
+   *  sirve para avisar en el acto a quien acaba de pedirlo, sin que tenga que
+   *  bajar a leer la razón para enterarse de que no era lo que pidió. */
+  avisoPedido?: string | null;
+  /** Qué se intentó antes de rendirse y por qué falló cada intento, en cristiano.
+   *  Solo se le enseña al curador (es diagnóstico, no parte del ritual). */
+  intentos?: string[];
 };
 
 type PickCtx = { deviceId: string; userId: string | null };
@@ -46,6 +93,22 @@ type PickCtx = { deviceId: string; userId: string | null };
 export type GenerarPickOpts = {
   /** AlbumIds que no pueden volver a salir (p. ej. el disco de hoy antes de rehacer). */
   excluirAlbumIds?: string[];
+  /** Pedido del oyente en lenguaje natural para el disco de hoy ("rock con
+   *  energía", "algo tipo Linkin Park"). Lo escribe en el gate del día (o el
+   *  admin al rehacer) y manda sobre el gusto al proponer. */
+  peticion?: string | null;
+  /** Salta el tope de gasto diario (solo el admin/dueño): para él la app SIEMPRE
+   *  fabrica fresco — el tope existe para no dispararse con testers, no para el
+   *  dueño, a quien repetirle un disco es justo lo que queremos evitar. */
+  omitirPresupuesto?: boolean;
+  /**
+   * Cuánto tiempo hay para fabricar, en ms. Existe porque esto corre dentro de
+   * una función de Vercel con el reloj en contra: si nos pasamos, nos cortan a
+   * media faena y NO queda disco guardado — la home reintenta sola, sin el
+   * pedido del oyente, y le sirve cualquier cosa. Con presupuesto preferimos
+   * rendirnos a tiempo y dejar guardado lo mejor que tengamos.
+   */
+  presupuestoMs?: number;
 };
 
 /** AlbumId del pick guardado hoy, si existe. */
@@ -60,29 +123,85 @@ export async function albumIdPickDeHoy(
   return pick?.albumId ?? null;
 }
 
-async function etiquetasAlbumes(ids: string[]): Promise<string[]> {
+/** Una obra musical para comparar repeticiones (independiente del id de fila). */
+type Obra = { title: string; artist: string };
+
+/** Trae título + artista de varios álbumes por id (para comparar repeticiones). */
+async function albumesObras(ids: string[]): Promise<Obra[]> {
   if (ids.length === 0) return [];
   const albums = await prisma.album.findMany({
     where: { id: { in: ids } },
     include: { artist: true },
   });
-  return albums.map((a) => `"${a.title}" de ${a.artist.name}`);
+  return albums.map((a) => ({ title: a.title, artist: a.artist.name }));
 }
 
-async function propuestaEsAlbumExcluido(
-  propuesta: { title: string; artist: string },
-  excluir: Set<string>,
-): Promise<boolean> {
-  if (excluir.size === 0) return false;
-  const match = await prisma.album.findFirst({
-    where: {
-      id: { in: [...excluir] },
-      title: { equals: propuesta.title, mode: "insensitive" },
-      artist: { name: { equals: propuesta.artist, mode: "insensitive" } },
-    },
-    select: { id: true },
-  });
-  return match !== null;
+/** ¿La propuesta es la MISMA obra que alguno de los discos a evitar? */
+function esObraConocida(propuesta: Obra, conocidas: Obra[]): boolean {
+  return conocidas.some((o) => mismaObra(propuesta, o));
+}
+
+/**
+ * Memoria COMPLETA del oyente: TODO disco que alguna vez se le recomendó (todo
+ * el historial de DailyPick, no solo las últimas semanas) y TODO disco que
+ * reseñó. Es la lista definitiva de "no me lo repitas" — ayer, hace un mes o
+ * hace un año. Devuelve ids y obras (para comparar por contenido) y los mal
+ * puntuados aparte. Las obras vienen con los picks más recientes primero.
+ */
+type MemoriaDiscos = {
+  vistosIds: Set<string>;
+  vistosObras: Obra[];
+  dislikedIds: Set<string>;
+};
+
+async function cargarMemoriaDiscos(
+  identity: ListenerIdentity,
+  date: string,
+): Promise<MemoriaDiscos> {
+  const pastFilter = pastPicksWhere(identity, date);
+  const reviewFilter = reviewsWhere(identity);
+  const [picks, reseñas] = await Promise.all([
+    pastFilter
+      ? prisma.dailyPick.findMany({
+          where: pastFilter,
+          orderBy: { date: "desc" },
+          select: {
+            album: {
+              select: { id: true, title: true, artist: { select: { name: true } } },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    reviewFilter
+      ? prisma.review.findMany({
+          where: reviewFilter,
+          orderBy: { createdAt: "desc" },
+          select: {
+            rating: true,
+            album: {
+              select: { id: true, title: true, artist: { select: { name: true } } },
+            },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const vistosIds = new Set<string>();
+  const vistosObras: Obra[] = [];
+  const dislikedIds = new Set<string>();
+  const recordar = (album: { id: string; title: string; artist: { name: string } }) => {
+    if (vistosIds.has(album.id)) return;
+    vistosIds.add(album.id);
+    vistosObras.push({ title: album.title, artist: album.artist.name });
+  };
+  // Picks primero (más recientes primero) para que el recorte del prompt
+  // priorice lo más nuevo; luego las reseñas.
+  for (const p of picks) recordar(p.album);
+  for (const r of reseñas) {
+    recordar(r.album);
+    if (r.rating <= DISLIKED_THRESHOLD) dislikedIds.add(r.album.id);
+  }
+  return { vistosIds, vistosObras, dislikedIds };
 }
 
 async function findTodaysPick(ctx: PickCtx, date: string) {
@@ -211,6 +330,90 @@ export async function borrarPickDeHoy(
 }
 
 /**
+ * POR QUÉ el oyente acabó con un disco del catálogo en vez del que pidió.
+ *
+ * No es telemetría: es lo que hay que DECIRLE. Todos estos caminos terminaban
+ * igual —un disco cualquiera, servido en tres segundos, sin una palabra— y
+ * desde fuera son indistinguibles de "la app dejó de leer lo que le pido".
+ * Con la causa a mano, la razón bajo el disco puede decir la verdad sin
+ * preguntarle a ningún LLM (que muchas veces es justo lo que está caído).
+ */
+export type CausaFallback =
+  /** No hay clave de IA, o el curador no contestó en ningún intento. */
+  | "sin-ia"
+  /** Se acabó el tope de discos nuevos del día. */
+  | "tope"
+  /** Se agotó el reloj de la función fabricando. */
+  | "sin-tiempo"
+  /** La IA respondió, pero no dimos con un disco nuevo que sirviera. */
+  | "sin-hallazgo"
+  | null;
+
+/**
+ * La frase honesta que abre la razón del día cuando NO se pudo fabricar lo que
+ * el oyente pidió. La escribe el código sobre un hecho duro (por qué falló), no
+ * un modelo: es la misma ley anti-alucinación aplicada a lo que la app promete.
+ */
+function avisoPorCausa(causa: CausaFallback, peticion: string | null): string | null {
+  if (!causa || !peticion) return null;
+  const pedido = `«${peticion.trim().slice(0, 120)}»`;
+  switch (causa) {
+    case "sin-ia":
+      return (
+        `Hoy no pude fabricarte el disco que pediste (${pedido}): el curador no ` +
+        `está respondiendo. Te dejo uno de la casa mientras se arregla.`
+      );
+    case "tope":
+      return (
+        `Hoy se acabó el cupo de discos nuevos, así que no pude salir a buscarte ` +
+        `${pedido}. Te dejo uno del catálogo; mañana vuelvo a tener cupo.`
+      );
+    case "sin-tiempo":
+      return (
+        `Me quedé sin tiempo buscándote ${pedido}. Te dejo uno del catálogo — ` +
+        `vuelve a pedírmelo y lo intento otra vez.`
+      );
+    case "sin-hallazgo":
+      return (
+        `No conseguí un disco nuevo que cumpliera ${pedido}. Esto es lo más cerca ` +
+        `que llegué con lo que ya tengo publicado.`
+      );
+  }
+}
+
+/**
+ * La frase que dice, sin rodeos, que el disco de hoy NO es nuevo.
+ *
+ * Existe porque la honestidad tenía un agujero por el que se colaba justo lo
+ * peor: `avisoPorCausa` solo habla cuando el oyente PIDIÓ algo. Un día
+ * cualquiera —sin pedido— la caída al catálogo era MUDA, y para quien ya
+ * recorrió el catálogo entero (el caso del dueño, cuyo catálogo publicado ES su
+ * propio historial) esa caída es SIEMPRE una repetición. O sea: discos
+ * repetidos, en silencio y sin manera de saber por qué. Esto lo escribe el
+ * CÓDIGO sobre un hecho duro —el disco está en su memoria— y sobre la causa que
+ * ya traíamos en la mano; ningún modelo puede taparlo.
+ */
+function avisoPorRepeticion(causa: CausaFallback, yaHayAviso = false): string {
+  // Si ya se explicó la causa arriba (había pedido), aquí solo falta el dato.
+  if (yaHayAviso) return "Además, este disco ya te lo había recomendado antes.";
+  const porque = (() => {
+    switch (causa) {
+      case "sin-ia":
+        return "hoy no pude fabricarte uno nuevo porque el curador no está respondiendo";
+      case "tope":
+        return "hoy se acabó el cupo de discos nuevos";
+      case "sin-tiempo":
+        return "me quedé sin tiempo mientras te fabricaba uno nuevo";
+      case "sin-hallazgo":
+        return "hoy no logré dar con uno nuevo que se sostuviera";
+      default:
+        return "ya te enseñé todo lo que tengo publicado";
+    }
+  })();
+  return `Este disco ya te lo había recomendado: ${porque}. Pídeme otro y lo vuelvo a intentar.`;
+}
+
+/**
  * Caída segura del disco fresco: primero intenta elegir del catálogo publicado
  * (por gusto); si ni eso da, guarda la rotación global como pick. Así, mientras
  * haya un disco en el catálogo, SIEMPRE queda un pick guardado — la home no se
@@ -223,58 +426,240 @@ async function caerAlCatalogo(
   mood: string | null,
   lang: string | null,
   excluirAlbumIds?: string[],
+  peticion?: string | null,
+  causa: CausaFallback = null,
+  /** Qué se intentó antes de rendirse, en cristiano. Viaja con el disco para que
+   *  el dueño pueda leerlo desde el teléfono: hasta ahora la bitácora solo se
+   *  adjuntaba en UNA de las salidas (la de agotar intentos), así que las
+   *  caídas más comunes —sin clave, tope agotado, un error de más afuera—
+   *  llegaban sin una palabra de explicación. */
+  bitacora?: string[],
 ): Promise<PickPersonal | null> {
+  const conBitacora = (pick: PickPersonal | null): PickPersonal | null =>
+    pick && bitacora && bitacora.length > 0 ? { ...pick, intentos: bitacora } : pick;
+
   const delCatalogo = await recomendarYGuardar(
     ctx,
-    { mood, lang, excluirAlbumIds, forzarDistinto: (excluirAlbumIds?.length ?? 0) > 0 },
+    {
+      mood,
+      lang,
+      excluirAlbumIds,
+      peticion,
+      causa,
+      forzarDistinto: (excluirAlbumIds?.length ?? 0) > 0,
+    },
     tz,
   );
-  if (delCatalogo) return delCatalogo;
+  if (delCatalogo) return conBitacora(delCatalogo);
 
-  const rotacion = await getTodayPick(tz);
-  if (!rotacion) return null;
-  const excluir = new Set(excluirAlbumIds ?? []);
-  if (excluir.has(rotacion.album.id)) {
-    const otro = await prisma.dossier.findFirst({
-      where: {
-        status: "published",
-        locale: "es",
-        albumId: { notIn: [...excluir] },
-      },
+  // Última red: rotación global PERO consciente de la memoria del oyente —
+  // nunca le re-sirve un disco que ya vio (y lo deja guardado para el futuro).
+  // Hasta aquí llega el aviso: que el disco venga de la rotación no es excusa
+  // para callar que no es lo que se pidió.
+  return conBitacora(
+    await rotacionParaOyente(
+      ctx,
+      date,
+      mood,
+      excluirAlbumIds,
+      avisoPorCausa(causa, peticion ?? null),
+      causa,
+    ),
+  );
+}
+
+/**
+ * Rotación global consciente de la memoria del oyente. Es la diferencia clave
+ * con `getTodayPick` (rotación ciega): elige un disco publicado que el oyente
+ * NO haya visto nunca, lo GUARDA como su pick de hoy y lo devuelve. Así:
+ *   1. No se le repite un disco ya mostrado (ni por rotación ni por catálogo).
+ *   2. Queda registrado en su historial, para que la dedup lo recuerde mañana
+ *      — el hueco que hacía que un disco "solo visto por rotación" volviera a
+ *      proponerse como si fuera nuevo.
+ * Si ya vio TODO el catálogo, cae a la rotación determinista (mejor mostrar
+ * algo conocido que dejar la home sin disco).
+ */
+async function rotacionParaOyente(
+  ctx: PickCtx,
+  date: string,
+  mood: string | null,
+  excluirAlbumIds?: string[],
+  /** Aviso honesto si el oyente había pedido algo y no se le pudo cumplir. */
+  aviso?: string | null,
+  /** Por qué venimos a parar aquí: se necesita para decir la verdad cuando el
+   *  disco que toca ya se le había mostrado. */
+  causa: CausaFallback = null,
+): Promise<PickPersonal | null> {
+  const identity: ListenerIdentity = { deviceId: ctx.deviceId, userId: ctx.userId };
+  const [dossiers, memoria] = await Promise.all([
+    prisma.dossier.findMany({
+      where: { status: "published", locale: "es" },
       include: { album: { include: { artist: true } } },
       orderBy: { id: "asc" },
-    });
-    if (otro) {
-      await saveTodaysPick(ctx, date, {
-        albumId: otro.album.id,
-        reason: null,
-        mood,
-        regenerated: true,
-      });
-      return {
-        dossier: otro,
-        reason: null,
-        mood,
-        regenerated: true,
-        returnPick: false,
-        absenceDays: null,
-      };
-    }
+    }),
+    cargarMemoriaDiscos(identity, date),
+  ]);
+  if (dossiers.length === 0) return null;
+
+  const excluir = new Set(excluirAlbumIds ?? []);
+  const noVisto = (d: DossierConAlbum): boolean => {
+    const obra: Obra = { title: d.album.title, artist: d.album.artist.name };
+    return (
+      !excluir.has(d.album.id) &&
+      !memoria.vistosIds.has(d.album.id) &&
+      !memoria.vistosObras.some((o) => mismaObra(obra, o))
+    );
+  };
+
+  const noVistos = dossiers.filter(noVisto);
+  // Preferimos lo no visto. Si ya vio TODO, no rotamos a ciegas sobre el catálogo
+  // (ahí volvería a tocarle un disco recién mostrado): nos quedamos con el tercio
+  // que lleva MÁS TIEMPO sin aparecer y elegimos determinista dentro de ese
+  // grupo. Así, por agotamiento, nunca le re-servimos el disco de ayer.
+  let pool: DossierConAlbum[];
+  if (noVistos.length > 0) {
+    pool = noVistos;
+  } else {
+    const disponibles = dossiers.filter((d) => !excluir.has(d.album.id));
+    const rango = rangoPorRecencia(memoria.vistosObras);
+    pool = [...disponibles]
+      .sort(
+        (a, b) =>
+          rango({ title: b.album.title, artist: b.album.artist.name }) -
+          rango({ title: a.album.title, artist: a.album.artist.name }),
+      )
+      .slice(0, Math.max(1, Math.ceil(disponibles.length * 0.3)));
   }
+  if (pool.length === 0) return null;
+
+  // Elección determinista por día (estable dentro del día, varía entre días).
+  const [y, m, dd] = date.split("-").map(Number);
+  const dias = Math.floor(Date.UTC(y, m - 1, dd) / 86_400_000);
+  const elegido = pool[dias % pool.length];
+
+  // Si aquí abajo ya no queda nada sin ver, lo que sale es un repetido: se dice.
+  const avisoRepetido =
+    noVistos.length === 0 ? avisoPorRepeticion(causa, Boolean(aviso?.trim())) : null;
+  const razon =
+    [aviso?.trim() || null, avisoRepetido].filter(Boolean).join(" ").trim() || null;
   await saveTodaysPick(ctx, date, {
-    albumId: rotacion.album.id,
-    reason: null,
+    albumId: elegido.album.id,
+    reason: razon,
     mood,
-    regenerated: false,
+    regenerated: (excluirAlbumIds?.length ?? 0) > 0,
   });
   return {
-    dossier: rotacion,
-    reason: null,
+    dossier: elegido,
+    reason: razon,
     mood,
-    regenerated: false,
+    regenerated: (excluirAlbumIds?.length ?? 0) > 0,
     returnPick: false,
     absenceDays: null,
+    avisoPedido: razon,
   };
+}
+
+/**
+ * Pick de rotación para la home cuando el oyente NO puede fabricar disco fresco
+ * (sin IA o sin señales todavía): elige un disco que no haya visto y lo GUARDA,
+ * en vez de mostrar la rotación ciega sin registrarla. Registrar lo mostrado es
+ * lo que evita que ese mismo disco vuelva a "salir como nuevo" más adelante.
+ */
+export async function getRotacionPickGuardada(
+  deviceId: string,
+  userId?: string | null,
+  tz?: string | null,
+  /** Lo que el oyente pidió hoy. Este camino se toma cuando NO se puede
+   *  fabricar (sin clave de IA o sin señales de gusto) y era el más mudo de
+   *  todos: el oyente escribía su antojo en el gate, la home ni preguntaba al
+   *  motor y le plantaba un disco de la rotación como si tal cosa. Aquí el
+   *  pedido no se cumple —no hay con qué—, pero al menos se tiene en cuenta al
+   *  elegir del catálogo y se dice que no se pudo. */
+  peticion?: string | null,
+): Promise<PickPersonal | null> {
+  const ctx: PickCtx = { deviceId, userId: userId ?? null };
+  if (!ctx.deviceId && !ctx.userId) return null;
+  try {
+    const date = todayKey(tz);
+    // Idempotencia: si ya hay pick de hoy (lo guardó otra pestaña), úsalo.
+    const guardado = await findTodaysPick(ctx, date);
+    if (guardado) {
+      const dossier = await dossierDelAlbum(guardado.albumId);
+      if (dossier) {
+        return {
+          dossier,
+          reason: guardado.reason,
+          mood: guardado.mood,
+          regenerated: guardado.regenerated,
+          returnPick: guardado.returnPick,
+          absenceDays: guardado.absenceDays,
+        };
+      }
+    }
+    // Con pedido de por medio pasamos por el catálogo (que ahora sí lo lee) en
+    // vez de ir directos a la rotación ciega. Esto corre en el render de la
+    // home, así que va SIN IA a propósito: nada de esperas de minutos aquí.
+    const pedido = peticion?.trim() || null;
+    if (pedido) {
+      const causa: CausaFallback = hayClaveIA() ? "sin-hallazgo" : "sin-ia";
+      const delCatalogo = await recomendarYGuardar(
+        ctx,
+        { mood: null, peticion: pedido, causa, sinIa: true },
+        tz,
+      );
+      if (delCatalogo) return delCatalogo;
+      return await rotacionParaOyente(
+        ctx, date, null, [], avisoPorCausa(causa, pedido),
+      );
+    }
+
+    return await rotacionParaOyente(ctx, date, null, []);
+  } catch (err) {
+    console.error("[recommend] rotación para la home falló:", err);
+    return null;
+  }
+}
+
+// La escena de un país cambia poco y MusicBrainz va a una consulta por segundo:
+// dentro del mismo proceso la pedimos una sola vez por país + género.
+const cacheEscena = new Map<string, string[]>();
+
+/**
+ * Artistas reales de los países que pidió el oyente, con su género si lo nombró
+ * ("rock venezolano" → artistas con country:VE y etiqueta rock). Es una lista de
+ * PISTAS para el curador, no una lista cerrada: puede proponer otro artista de
+ * esa misma escena, y el origen se sigue comprobando después.
+ *
+ * Nunca rompe la fabricación: si MusicBrainz no contesta, devuelve [] y el
+ * curador propone como hasta ahora.
+ */
+async function artistasDeLaEscena(
+  paises: PaisPedido[],
+  peticion: string | null,
+): Promise<string[]> {
+  const generos = generosParaBusqueda(quitarPalabrasDePais(palabrasDelPedido(peticion)));
+  const out: string[] = [];
+  // Como mucho dos países: la lista es una pista, no un censo, y cada consulta
+  // cuesta más de un segundo de reloj.
+  for (const pais of paises.slice(0, 2)) {
+    const clave = `${pais.code}|${generos.join(",")}`;
+    const enCache = cacheEscena.get(clave);
+    if (enCache) {
+      out.push(...enCache);
+      continue;
+    }
+    try {
+      const artistas = await artistasDePais(pais.code, generos, 30);
+      const nombres = artistas.map((a) =>
+        a.tags.length > 0 ? `${a.name} (${a.tags.slice(0, 2).join(", ")})` : a.name,
+      );
+      cacheEscena.set(clave, nombres);
+      out.push(...nombres);
+    } catch (err) {
+      console.warn("[recommend] no pude listar la escena del país:", err);
+    }
+  }
+  return out;
 }
 
 /**
@@ -301,6 +686,55 @@ export async function generarPickDelDia(
   const langPick = lang && lang !== "Cualquiera" ? lang : null;
   const excluir = new Set(opts?.excluirAlbumIds ?? []);
   const esRehacer = excluir.size > 0;
+  const peticion = opts?.peticion?.trim() || null;
+  // ¿El pedido nombra un país o una nacionalidad ("artistas venezolanos")? Es
+  // parte del pedido tan obligatoria como el género, y se comprueba con datos
+  // duros (MusicBrainz), no solo con el prompt. Ver `src/lib/origin-guard.ts`.
+  const paisesPedidos = detectarPaisesPedido(peticion);
+  const paisesTexto = nombresDePaises(paisesPedidos);
+
+  // Cómo fue la faena, para poder CONTARLA después. Distingue "no encontré
+  // nada" (el curador habló y no dimos con el disco) de "el curador no
+  // contesta" (clave vencida, sin saldo, un 429): para el oyente es la
+  // diferencia entre un mal día y una app rota, y hasta ahora las dos se veían
+  // exactamente igual — un disco cualquiera, sin explicación.
+  let fallosLlm = 0;
+  let propuestasVivas = 0;
+  let sinTiempo = false;
+  // El curador dejó de contestar del todo (varios fallos seguidos): no es un mal
+  // día de búsqueda, es que la IA no está. Se cuentan aparte porque al oyente le
+  // decimos cosas distintas.
+  let curadorCaido = false;
+
+  // La faena contada en cristiano. Vive AQUÍ ARRIBA, fuera del `try`, porque
+  // antes se declaraba a mitad de camino y solo viajaba en una de las salidas:
+  // las caídas más silenciosas (sin clave, tope agotado, un error inesperado)
+  // llegaban al dueño sin una sola línea de explicación. Es diagnóstico, no
+  // ritual: solo se le enseña al admin.
+  const bitacora: string[] = [];
+
+  // El reloj de la fabricación. Fabricar un disco fresco son varias llamadas al
+  // LLM y una pasada del pipeline (minutos), y todo esto vive dentro de una
+  // función con tiempo máximo. Sin este control, un pedido difícil ("rock
+  // venezolano": muchas propuestas rechazadas por la barrera de origen) agotaba
+  // el reloj, la función moría sin guardar nada y la home reintentaba por su
+  // cuenta —con una petición sin cuerpo, o sea SIN el pedido— y acababa
+  // sirviendo un disco elegido solo por gusto. Preferimos parar a tiempo.
+  const arranque = Date.now();
+  const restanteMs = () =>
+    opts?.presupuestoMs === undefined
+      ? Number.POSITIVE_INFINITY
+      : opts.presupuestoMs - (Date.now() - arranque);
+  // Lo que hay que dejar libre para caer al catálogo y GUARDAR un disco: esa
+  // caída son dos llamadas cortas al LLM, pero es la que garantiza que la home
+  // encuentre algo al refrescar.
+  const RESERVA_CATALOGO_MS = 30_000;
+  // Cuánto tarda una pasada del pipeline. Empieza como estimación y se corrige
+  // con la primera medida real: así el presupuesto se ajusta al modelo y a la
+  // red que haya hoy, en vez de a un número escrito a mano.
+  let costePipelineMs = 90_000;
+  const hayTiempoParaFabricar = () =>
+    restanteMs() > costePipelineMs + RESERVA_CATALOGO_MS;
 
   try {
     // Idempotencia: si ya hay disco de hoy (otra pestaña lo hizo), devolverlo.
@@ -323,7 +757,7 @@ export async function generarPickDelDia(
     const reviewFilter = reviewsWhere(identity);
     const pastFilter = pastPicksWhere(identity, date);
 
-    const [profile, reviews, picksRecientes] = await Promise.all([
+    const [profile, reviews, picksRecientes, memoria, notasTexto] = await Promise.all([
       findProfileRecord(identity),
       reviewFilter
         ? prisma.review.findMany({
@@ -341,120 +775,518 @@ export async function generarPickDelDia(
             take: MAX_RECENT_PICKS,
           })
         : Promise.resolve([]),
+      // Memoria COMPLETA (todo el historial), para no repetir NUNCA un disco ya visto.
+      cargarMemoriaDiscos(identity, date),
+      // Memoria personal: lo que el oyente le ha contado al curador (Fase interacción).
+      cargarNotasTexto(identity),
     ]);
 
     // Sin señales de gusto no fabricamos (sería un disco al azar): que decida la
     // rotación global. (Normalmente no llegamos aquí: la home filtra antes.)
     if (!profile && reviews.length === 0) {
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+      bitacora.push("No tengo señales tuyas todavía (ni perfil ni reseñas): no fabrico a ciegas.");
+      return await caerAlCatalogo(
+        ctx, date, tz, mood ?? null, langPick, [...excluir], peticion, "sin-hallazgo",
+        bitacora,
+      );
+    }
+
+    // Sin clave de IA no hay disco fresco posible. Antes lo descubríamos a la
+    // mala —32 llamadas que fallan al instante y una caída al catálogo en tres
+    // segundos, sin explicación—; ahora se dice de una vez y con su nombre.
+    if (!hayClaveIA()) {
+      console.warn("[recommend] no hay clave de IA configurada; voy al catálogo.");
+      bitacora.push("No hay clave de IA configurada: hoy no se puede fabricar nada nuevo.");
+      return await caerAlCatalogo(
+        ctx, date, tz, mood ?? null, langPick, [...excluir], peticion, "sin-ia",
+        bitacora,
+      );
     }
 
     const parsedProfile = profile
       ? parseJson<Record<string, unknown>>(profile.answersJson, {})
       : null;
+    // El perfil para el prompt incluye su memoria personal (lo que nos contó),
+    // así el disco del día se afina con cada cosa que comparte.
+    // Ganchos ya gastados en las razones de días recientes. Se calculan aquí
+    // arriba porque no solo vetan palabras en el prompt: también deciden qué
+    // señales del perfil NO se le vuelven a poner delante hoy.
+    const ganchos = ganchosQuemados(picksRecientes.map((p) => p.reason));
+    const ganchosTexto = textoGanchosProhibidos(ganchos);
+    const perfilTexto = [perfilATexto(parsedProfile, { hoy: date, ganchos }), notasTexto]
+      .filter(Boolean)
+      .join("\n\n");
+    const voz = curatorVoz(
+      typeof parsedProfile?.curator === "string" ? parsedProfile.curator : undefined,
+    );
     const returnRitual = await detectReturnRitual(identity, date);
 
     // Tope de gasto: si ya fabricamos el máximo de discos nuevos hoy, no gastamos
     // más IA — el oyente recibe un disco del catálogo existente (igual personal,
     // sin costo de generación nueva). Así abrir la app a testers no se dispara.
-    if (!(await hayPresupuestoHoy(date))) {
+    // El admin/dueño está EXENTO: a él nunca le caemos al catálogo por tope (sería
+    // repetirle un disco, justo lo que evitamos).
+    if (!opts?.omitirPresupuesto && !(await hayPresupuestoHoy(date, "ritual"))) {
       console.warn("[recommend] tope de generación diario alcanzado; voy al catálogo.");
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+      bitacora.push(
+        `Se acabó el cupo de discos nuevos de hoy (${await generacionesHoy(date)} de ${dailyGenerationBudget()}).`,
+      );
+      return await caerAlCatalogo(
+        ctx, date, tz, mood ?? null, langPick, [...excluir], peticion, "tope",
+        bitacora,
+      );
     }
 
-    // Lo que ya conoce (a evitar al proponer): reseñados + mostrados recientes.
-    const yaConoce = [
-      ...reviews.map((r) => `"${r.album.title}" de ${r.album.artist.name}`),
-      ...picksRecientes.map((p) => `"${p.album.title}" de ${p.album.artist.name}`),
-      ...(await etiquetasAlbumes([...excluir])),
-    ];
+    // Obras a evitar, comparables por contenido (artista + núcleo del título),
+    // no por id ni texto exacto: así reconocemos el mismo disco aunque las
+    // fuentes lo guarden con un título o un id distinto. Usamos la memoria
+    // COMPLETA (todo el historial), no solo las últimas semanas: un disco de
+    // hace un mes tampoco debe repetirse.
+    const excluidasObras = await albumesObras([...excluir]);
+    const obrasAEvitar: Obra[] = [...memoria.vistosObras, ...excluidasObras];
 
-    let propuesta = await proponerDiscoDescubrimiento({
-      perfilTexto: perfilATexto(parsedProfile),
+    // Lo que ya conoce (a evitar al proponer): TODO el historial. Las reseñas
+    // recientes mal puntuadas llevan etiqueta explícita para que el LLM las
+    // priorice en su lista de rechazos. El resto del historial va en líneas
+    // simples; recortamos a un máximo razonable para no inflar el prompt — la
+    // barrera dura (obrasAEvitar) cubre TODO, esta lista es solo una pista.
+    const MAX_YA_CONOCE = 120;
+    const yaConoce: string[] = [];
+    const vistosEnLista = new Set<string>();
+    const agregar = (title: string, artist: string, sufijo = "") => {
+      const clave = normalizar(`${title}|${artist}`);
+      if (vistosEnLista.has(clave)) return;
+      vistosEnLista.add(clave);
+      yaConoce.push(`"${title}" de ${artist}${sufijo}`);
+    };
+    for (const r of reviews) {
+      const sufijo =
+        r.rating <= DISLIKED_THRESHOLD
+          ? ` (puntuado ${r.rating}/${RATING_MAX} — NO volver a proponer nunca)`
+          : "";
+      agregar(r.album.title, r.album.artist.name, sufijo);
+    }
+    for (const o of [...memoria.vistosObras, ...excluidasObras]) {
+      if (yaConoce.length >= MAX_YA_CONOCE) break;
+      agregar(o.title, o.artist);
+    }
+
+    const patronesTexto = patronesDeEscucha(reviews, picksRecientes);
+    // Artistas de los picks recientes: para no repetir el mismo artista (variedad).
+    const artistasRecientes = [
+      ...new Set(picksRecientes.map((p) => p.album.artist.name)),
+    ];
+    // Argumentos comunes del proponedor; lo único que cambia entre intentos es la
+    // lista de rechazos acumulada (para empujar al LLM lejos de lo ya intentado).
+    const argsPropuesta = (extraYaConoce: string[]) => ({
+      perfilTexto,
       diarioTexto: diarioATexto(reviews),
       recientesTexto: recientesATexto(picksRecientes),
-      yaConoce,
+      yaConoce: [...yaConoce, ...extraYaConoce],
       mood: mood ?? null,
       lang: langPick,
       esRegreso: Boolean(returnRitual),
       diasAusente: returnRitual?.absenceDays ?? null,
-      esRehacer,
+      // Tras el primer rechazo tratamos cada intento como "rehacer": activa el
+      // texto que le pide al LLM algo DISTINTO de forma explícita.
+      esRehacer: esRehacer || extraYaConoce.length > 0,
+      voz,
+      patronesTexto,
+      peticion,
+      // País/nacionalidad detectados en el pedido: van al prompt como requisito
+      // aparte para que no se pierda dentro del texto libre del oyente.
+      paisesPedidos: paisesTexto || null,
+      // Nombres REALES de esa escena (MusicBrainz). Ver `pistasPais` abajo.
+      artistasDelPais: pistasPais,
+      artistasRecientes,
+      ganchosTexto,
     });
 
-    if (esRehacer && (await propuestaEsAlbumExcluido(propuesta, excluir))) {
-      console.warn("[recommend] rehacer repitió propuesta; pido otro disco.");
-      propuesta = await proponerDiscoDescubrimiento({
-        perfilTexto: perfilATexto(parsedProfile),
-        diarioTexto: diarioATexto(reviews),
-        recientesTexto: recientesATexto(picksRecientes),
-        yaConoce: [...yaConoce, `"${propuesta.title}" de ${propuesta.artist} (rechazado: ya fue hoy)`],
-        mood: mood ?? null,
-        lang: langPick,
-        esRegreso: false,
-        diasAusente: null,
-        esRehacer: true,
-      });
-      if (await propuestaEsAlbumExcluido(propuesta, excluir)) {
-        return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
-      }
-    }
-
-    // El pipeline investiga, narra, verifica y publica (o reutiliza si ya existe).
-    const result = await runDossierPipeline(propuesta.title, propuesta.artist, {
-      publish: true,
-    });
-
-    if (excluir.has(result.albumId)) {
-      console.warn("[recommend] pipeline devolvió el mismo disco; elijo otro del catálogo.");
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
-    }
-
-    // Solo consume presupuesto un disco fabricado de verdad; reutilizar es gratis.
-    if (!result.reused) await registrarGeneracion(date);
-
-    // Solo mostramos lo verificado. Si quedó en borrador, caemos al catálogo.
-    if (result.status !== "published") {
-      console.warn(
-        `[recommend] "${propuesta.title}" de ${propuesta.artist} no pasó verificación; voy al catálogo.`,
-      );
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
-    }
-
-    const dossier = await dossierDelAlbum(result.albumId);
-    if (!dossier) {
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
-    }
-
-    let reason = propuesta.reason?.trim().slice(0, 600) || null;
-    if (returnRitual && (!reason || reason.length < 40)) {
-      reason = fallbackReturnReason(
-        returnRitual.absenceDays,
-        dossier.album.title,
-        dossier.album.artist.name,
-      );
-    }
-
-    await saveTodaysPick(ctx, date, {
-      albumId: dossier.album.id,
-      reason,
-      mood: mood ?? null,
-      regenerated: esRehacer,
-      returnPick: Boolean(returnRitual),
-      absenceDays: returnRitual?.absenceDays ?? null,
-    });
-
-    return {
-      dossier,
-      reason,
-      mood: mood ?? null,
-      regenerated: esRehacer,
-      returnPick: Boolean(returnRitual),
-      absenceDays: returnRitual?.absenceDays ?? null,
+    // Discos que el LLM ya propuso (o que el pipeline resolvió) y rechazamos en
+    // ESTA fabricación. Se acumulan intento a intento para empujar al proponedor
+    // hacia un disco genuinamente nuevo. Para un oyente con historial rico —o el
+    // dueño, cuyo catálogo publicado ES básicamente su propio historial— un solo
+    // reintento no basta: el LLM gravita a los mismos discos canónicos y, al
+    // rendirse pronto, caíamos al catálogo… que para él es justo una repetición.
+    const rechazados: string[] = [];
+    // La misma información, escrita para un humano. Todo esto vivía solo en los
+    // logs de Vercel, o sea en ningún sitio para el dueño, que anda en el
+    // teléfono: cuando un pedido no se cumplía no había forma de saber si fue
+    // porque el proponedor no dio con nada, porque las fuentes no conocían el
+    // disco o porque el artista no era del país. Tres rondas de conjeturas.
+    // Ahora el cuadro de admin lo enseña al terminar.
+    const rechazar = (p: Obra, motivo: string) => {
+      rechazados.push(`"${p.title}" de ${p.artist} (rechazado: ${motivo} — PROHIBIDO repetir)`);
+      bitacora.push(`«${p.title}» de ${p.artist} — ${motivo}`);
     };
+
+    // Quiénes SON de ese país, de verdad. Las barreras de origen (7.9) saben
+    // RECHAZAR ("Café Tacvba es de México"), pero nadie le decía nunca al
+    // curador quién SÍ es venezolano: puesto a recordar de memoria una escena
+    // poco documentada, el modelo vuelve al famoso del país de al lado, se le
+    // rechaza, y así hasta que se acaba el reloj y el oyente recibe un disco de
+    // la casa. Esta lista sale de MusicBrainz (país + etiqueta de género): es la
+    // diferencia entre pedirle que adivine y darle la escena en la mano.
+    const pistasPais =
+      paisesPedidos.length > 0 ? await artistasDeLaEscena(paisesPedidos, peticion) : [];
+    if (paisesPedidos.length > 0) {
+      bitacora.push(
+        pistasPais.length > 0
+          ? `Artistas de ${paisesTexto} que le pasé al curador (MusicBrainz): ${pistasPais.length}`
+          : `MusicBrainz no me dio ningún artista de ${paisesTexto} para este pedido`,
+      );
+    }
+    // Los de la lista ya vienen filtrados por país en la propia consulta, así
+    // que de esos SÍ consta el origen. Importa por los dos lados: nos ahorra la
+    // consulta de la barrera, y evita el aviso absurdo de "no pude confirmar
+    // que sea de Venezuela" sobre una banda que salió del listado venezolano
+    // (a muchos artistas MusicBrainz les guarda la ciudad y no el país).
+    const nombresEscena = new Set(
+      pistasPais.map((n) => normalizar(n.replace(/\s*\([^)]*\)\s*$/, ""))),
+    );
+    const esDeLaEscena = (artist: string) => nombresEscena.has(normalizar(artist));
+
+    // Una propuesta es conflictiva si es una obra ya vista (memoria completa) o,
+    // al rehacer, uno de los discos excluidos hoy.
+    const esConflictiva = (p: Obra) =>
+      esObraConocida(p, obrasAEvitar) || (esRehacer && esObraConocida(p, excluidasObras));
+
+    // Consigue una PROPUESTA que pase los filtros baratos (no repetida + cumple el
+    // pedido) en pocas llamadas del proponedor (texto, baratas). Así el pipeline
+    // (caro) solo corre sobre un disco que YA sabemos nuevo y acorde al pedido.
+    const MAX_PROPUESTAS = 8;
+    // Cuántas veces seguidas puede no contestar el curador antes de que demos por
+    // hecho que está caído. Importa por el RELOJ: cada llamada muerta se lleva su
+    // plazo entero, así que insistir ocho veces contra un proveedor que no
+    // responde consume el tiempo de la función y nos deja sin margen para
+    // fabricar nada — con lo que el oyente acaba recibiendo un disco repetido
+    // *y* tarde. Mejor rendirse pronto y decirlo con su nombre.
+    const MAX_FALLOS_SEGUIDOS = 3;
+    let fallosSeguidos = 0;
+    const conseguirPropuesta = async (): Promise<DiscoPropuesto | null> => {
+      for (let i = 0; i < MAX_PROPUESTAS; i++) {
+        // Proponer y verificar son baratos en dinero pero no en reloj (dos
+        // llamadas al LLM por vuelta). Si ya no queda tiempo para fabricar el
+        // disco que salga de aquí, seguir buscando no sirve de nada.
+        if (!hayTiempoParaFabricar()) {
+          console.warn(
+            "[recommend] se acabó el tiempo buscando propuesta; voy con lo que haya.",
+          );
+          bitacora.push("Se me acabó el tiempo buscando qué proponerte.");
+          sinTiempo = true;
+          return null;
+        }
+        // Una llamada que falla (timeout del modelo, un 429, un JSON a medias)
+        // NO puede tumbar la fabricación entera. Antes esta excepción subía
+        // hasta el `catch` de más afuera y se iba derecha al catálogo: un solo
+        // hipo del proveedor y el pedido del oyente se quedaba sin cumplir, en
+        // silencio y con el disco elegido solo por gusto. Aquí se anota y se
+        // vuelve a intentar, que es lo que hace el resto del bucle con todo lo
+        // demás que sale mal.
+        let p: DiscoPropuesto;
+        try {
+          p = await proponerDiscoDescubrimiento(argsPropuesta(rechazados));
+          propuestasVivas++;
+          fallosSeguidos = 0;
+        } catch (err) {
+          fallosLlm++;
+          fallosSeguidos++;
+          const motivo = (err as Error).message;
+          console.warn(
+            `[recommend] falló la propuesta ${i + 1}/${MAX_PROPUESTAS}: ${motivo}; reintento.`,
+          );
+          // También a la bitácora: cuando el curador está caído, el dueño tiene
+          // que poder leerlo desde el teléfono, no solo en los logs de Vercel.
+          bitacora.push(`El curador no contestó — ${motivo.slice(0, 160)}`);
+          if (fallosSeguidos >= MAX_FALLOS_SEGUIDOS) {
+            console.warn(
+              `[recommend] el curador falló ${fallosSeguidos} veces seguidas; lo doy por caído.`,
+            );
+            bitacora.push(
+              `Falló ${fallosSeguidos} veces seguidas: doy al curador por caído y dejo de insistir.`,
+            );
+            curadorCaido = true;
+            return null;
+          }
+          continue;
+        }
+        if (esConflictiva(p)) {
+          console.warn(
+            `[recommend] propuesta "${p.title}" de ${p.artist} ya conocida; pido otra (${i + 1}/${MAX_PROPUESTAS}).`,
+          );
+          rechazar(p, "ya conocido");
+          continue;
+        }
+        // Las dos barreras del pedido, EN PARALELO. Antes iban en fila y cada
+        // vuelta costaba ~25 segundos de reloj (MusicBrainz + una llamada al
+        // LLM), así que un pedido difícil —donde se rechazan varias propuestas
+        // seguidas— se comía el tiempo de la función antes de fabricar nada.
+        // Juntas cuestan lo que la más lenta. A veces pagamos una verificación
+        // que el origen ya iba a descartar: son céntimos, y lo que ganamos es el
+        // doble de intentos para encontrar de verdad lo que pidió.
+        const [origen, cumple] = await Promise.all([
+          // Barrera de ORIGEN (7.9): dato duro de MusicBrainz. Solo corta los
+          // desajustes claros ("venezolanos" → Green Day es de Estados Unidos).
+          paisesPedidos.length > 0 && !esDeLaEscena(p.artist)
+            ? artistaEsDeAlgunPais(p.artist, paisesPedidos)
+            : Promise.resolve(null),
+          peticion
+            ? discoCumplePedido({
+                peticion,
+                title: p.title,
+                artist: p.artist,
+                lang: langPick,
+              })
+            : Promise.resolve(null),
+        ]);
+
+        // El origen manda: es el dato duro, y es la parte del pedido que no
+        // admite sustituto.
+        if (origen?.veredicto === "no") {
+          const motivo = `${p.artist} es de ${origen.origen}, y el oyente pidió artistas de ${paisesTexto}`;
+          console.warn(`[recommend] ${motivo}; pido otra.`);
+          rechazar(p, motivo);
+          continue;
+        }
+        if (cumple && !cumple.cumple) {
+          console.warn(
+            `[recommend] "${p.title}" de ${p.artist} NO cumple el pedido «${peticion}» (${cumple.motivo}); pido otra.`,
+          );
+          rechazar(p, `no cumple el pedido «${peticion}» — ${cumple.motivo}`);
+          continue;
+        }
+        return p;
+      }
+      return null;
+    };
+
+    // Varias pasadas COMPLETAS (propuesta → pipeline → verificación post-pipeline).
+    // Solo si TODAS fallan caemos al catálogo, que para el oyente principal sería
+    // una repetición. Acotamos las pasadas de pipeline (son caras) pero damos
+    // margen para encontrar de verdad un disco fresco antes de rendirnos: con
+    // millones de discos en el mundo y solo unas decenas que evitar, rendirse y
+    // repetir es el peor resultado posible.
+    const MAX_PIPELINE = 4;
+    for (let intento = 0; intento < MAX_PIPELINE; intento++) {
+      // Empezar una pasada que no va a caber es peor que no empezarla: nos
+      // cortan con el disco a medio fabricar y sin nada guardado.
+      if (!hayTiempoParaFabricar()) {
+        console.warn(
+          `[recommend] sin tiempo para otra pasada del pipeline (intento ${intento + 1}); voy al catálogo.`,
+        );
+        bitacora.push(
+          `Se me acabó el tiempo antes de poder investigar el disco (intento ${intento + 1}).`,
+        );
+        sinTiempo = true;
+        break;
+      }
+      const propuesta = await conseguirPropuesta();
+      // Sin curador no hay propuestas, y sin propuestas no hay nada que fabricar:
+      // insistir solo gasta el reloj que necesita la caída al catálogo.
+      if (curadorCaido) break;
+      // El proponedor solo nombró discos ya vistos en esta ronda. NO nos rendimos:
+      // la lista de rechazos (`rechazados`) creció, así que el siguiente intento
+      // empuja al proponedor MÁS LEJOS de sus favoritos canónicos (que son justo
+      // los que el oyente ya conoce). Rendirse aquí = caer al catálogo = repetir.
+      if (!propuesta) continue;
+
+      // El pipeline investiga, narra, verifica y publica (o reutiliza si ya existe).
+      //
+      // Y puede LANZAR, que es lo que aquí se pasaba por alto: `gatherAlbumFacts`
+      // lanza cuando el disco no aparece ni en MusicBrainz ni en iTunes, o cuando
+      // resulta ser un sencillo o un EP. Su propio comentario dice que entonces
+      // "el motor cae a otra opción"… pero no caía: la excepción se saltaba este
+      // bucle entero y aterrizaba en el `catch` de más abajo, o sea derecha al
+      // catálogo. Y eso le pasa JUSTO a lo que el oyente más necesita que
+      // busquemos: pide una escena poco documentada (rock venezolano), el
+      // proponedor acierta con un disco de culto real, la fuente no lo tiene
+      // fichado… y en vez de probar con el siguiente, nos rendíamos y le
+      // servíamos lo que hubiera en casa. Ahora es un rechazo más: se anota y se
+      // sigue, que es lo que el comentario prometía.
+      const t0 = Date.now();
+      let result: Awaited<ReturnType<typeof runDossierPipeline>>;
+      try {
+        result = await runDossierPipeline(propuesta.title, propuesta.artist, {
+          publish: true,
+        });
+      } catch (err) {
+        costePipelineMs = Math.max(costePipelineMs, Date.now() - t0);
+        const motivo = `no lo pude investigar (${(err as Error).message})`;
+        console.warn(
+          `[recommend] intento ${intento + 1}/${MAX_PIPELINE}: "${propuesta.title}" de ${propuesta.artist} — ${motivo}; reintento.`,
+        );
+        rechazar({ title: propuesta.title, artist: propuesta.artist }, motivo);
+        continue;
+      }
+      // La medida real manda sobre la estimación: si esta pasada tardó dos
+      // minutos, la siguiente no cabe en treinta segundos.
+      costePipelineMs = Math.max(costePipelineMs, Date.now() - t0);
+
+      // Post-pipeline: comparamos por id Y por obra. El pipeline resuelve título y
+      // artista contra MusicBrainz/iTunes y puede caer en (a) un disco que ya vio
+      // —aunque venga como "reused" con otro id/título—, (b) una obra DISTINTA a la
+      // propuesta (la "reason" hablaría de otro disco), o (c) un borrador que no
+      // pasó verificación. En cualquiera de esos casos NO lo servimos: anotamos el
+      // rechazo y volvemos a intentar fabricar algo nuevo.
+      const resultAlbum = await prisma.album.findUnique({
+        where: { id: result.albumId },
+        include: { artist: true },
+      });
+      const resultObra: Obra | null = resultAlbum
+        ? { title: resultAlbum.title, artist: resultAlbum.artist.name }
+        : null;
+      const obraRepetida = resultObra ? esObraConocida(resultObra, obrasAEvitar) : false;
+      const propuestaObra: Obra = { title: propuesta.title, artist: propuesta.artist };
+      const resuelveOtraObra = !resultObra || !mismaObra(resultObra, propuestaObra);
+
+      if (
+        excluir.has(result.albumId) ||
+        memoria.vistosIds.has(result.albumId) ||
+        obraRepetida ||
+        resuelveOtraObra ||
+        result.status !== "published"
+      ) {
+        const por = excluir.has(result.albumId)
+          ? "mismo disco excluido"
+          : memoria.vistosIds.has(result.albumId)
+          ? "disco ya visto en el historial"
+          : obraRepetida
+          ? "misma obra ya vista (otro id/título)"
+          : resuelveOtraObra
+          ? `disco distinto al propuesto ("${propuesta.title}" de ${propuesta.artist} → "${resultObra?.title ?? "?"}" de ${resultObra?.artist ?? "?"})`
+          : "no pasó verificación (quedó en borrador)";
+        console.warn(
+          `[recommend] intento ${intento + 1}/${MAX_PIPELINE}: pipeline devolvió ${por}; reintento.`,
+        );
+        // Que ni la propuesta ni el disco resuelto vuelvan a salir en próximos intentos.
+        rechazar(propuestaObra, por);
+        if (resultObra) rechazar(resultObra, por);
+        continue;
+      }
+
+      // Solo consume presupuesto un disco fabricado de verdad; reutilizar es gratis.
+      if (!result.reused) await registrarGeneracion(date);
+
+      const dossier = await dossierDelAlbum(result.albumId);
+      if (!dossier) break; // raro: publicado pero sin dossier → catálogo
+
+      let reason = propuesta.reason?.trim().slice(0, 600) || null;
+      if (returnRitual && (!reason || reason.length < 40)) {
+        reason = fallbackReturnReason(
+          returnRitual.absenceDays,
+          dossier.album.title,
+          dossier.album.artist.name,
+        );
+      } else if (!returnRitual) {
+        // Barrera anti-muletilla: si aun con el veto en el prompt volvió a
+        // apoyarse en el mismo gancho de días recientes, se reescribe. La
+        // razón de regreso tras una ausencia queda fuera: su calidez
+        // ("te guardé algo") es justo lo que no queremos reescribir.
+        reason = (
+          await afinarRazon({
+            razon: reason,
+            razonesPrevias: picksRecientes.map((p) => p.reason),
+            title: dossier.album.title,
+            artist: dossier.album.artist.name,
+            year: dossier.album.year,
+            perfilTexto,
+            mood: mood ?? null,
+            voz,
+          })
+        )?.slice(0, 600) ?? null;
+      }
+
+      // Honestidad también en el disco fresco. La barrera de origen deja pasar
+      // cuando MusicBrainz no contesta o no conoce al artista (a propósito: no
+      // queremos dejar a nadie sin disco por una fuente caída), así que un disco
+      // puede llegar hasta aquí SIN que nos conste que es del país que pediste.
+      // Si es el caso, se dice — la promesa incumplida se avisa, no se disimula.
+      const origenYaConsta =
+        esDeLaEscena(dossier.album.artist.name) || esDeLaEscena(propuesta.artist);
+      const aviso =
+        peticion && paisesPedidos.length > 0 && !origenYaConsta
+          ? await avisoSiNoCumplePedido({
+              peticion,
+              title: dossier.album.title,
+              artist: dossier.album.artist.name,
+              lang: langPick,
+              soloOrigen: true,
+            })
+          : null;
+      if (aviso) {
+        // Ojo con el recorte: `slice` con un número negativo corta por el final en
+        // vez de devolver vacío, así que el tope se aplana en cero a propósito.
+        const resto = reason
+          ? ` ${reason.slice(0, Math.max(0, 600 - aviso.length))}`.trimEnd()
+          : "";
+        reason = `${aviso}${resto}`;
+      }
+
+      await saveTodaysPick(ctx, date, {
+        albumId: dossier.album.id,
+        reason,
+        mood: mood ?? null,
+        regenerated: esRehacer,
+        returnPick: Boolean(returnRitual),
+        absenceDays: returnRitual?.absenceDays ?? null,
+      });
+
+      bitacora.push(
+        `Fabricado: «${dossier.album.title}» de ${dossier.album.artist.name}` +
+          `${result.reused ? " (ya lo tenía escrito, lo reutilicé)" : " (nuevo, escrito hoy)"}.`,
+      );
+      return {
+        dossier,
+        reason,
+        mood: mood ?? null,
+        regenerated: esRehacer,
+        returnPick: Boolean(returnRitual),
+        absenceDays: returnRitual?.absenceDays ?? null,
+        avisoPedido: aviso,
+        intentos: bitacora,
+      };
+    }
+
+    // Agotamos los intentos de fabricar algo nuevo: última red, el catálogo.
+    // Con la causa en la mano, porque no es lo mismo rendirse buscando que no
+    // haber podido ni preguntar.
+    const causa: CausaFallback =
+      curadorCaido || (propuestasVivas === 0 && fallosLlm > 0)
+        ? "sin-ia"
+        : sinTiempo
+        ? "sin-tiempo"
+        : "sin-hallazgo";
+    console.warn(
+      `[recommend] no logré fabricar un disco nuevo tras varios intentos (causa: ${causa}); voy al catálogo.`,
+    );
+    // La última línea de la bitácora es el veredicto, para no tener que
+    // deducirlo leyendo las anteriores.
+    bitacora.push(
+      causa === "sin-ia"
+        ? "Me rendí: el curador (la IA) no está respondiendo. Te dejo un disco del catálogo."
+        : causa === "sin-tiempo"
+        ? "Me rendí: se acabó el tiempo de fabricación. Te dejo un disco del catálogo."
+        : "Me rendí: no di con ningún disco nuevo que se sostuviera. Te dejo uno del catálogo.",
+    );
+    return await caerAlCatalogo(
+      ctx, date, tz, mood ?? null, langPick, [...excluir], peticion, causa,
+      bitacora,
+    );
   } catch (err) {
     console.error("[recommend] disco fresco falló, voy al catálogo:", err);
+    bitacora.push(`Se rompió la fabricación — ${(err as Error).message.slice(0, 160)}`);
     try {
-      return await caerAlCatalogo(ctx, date, tz, mood ?? null, langPick, [...excluir]);
+      return await caerAlCatalogo(
+        ctx,
+        date,
+        tz,
+        mood ?? null,
+        langPick,
+        [...excluir],
+        peticion,
+        curadorCaido || (propuestasVivas === 0 && fallosLlm > 0) ? "sin-ia" : "sin-hallazgo",
+        bitacora,
+      );
     } catch {
       return null;
     }
@@ -499,6 +1331,88 @@ async function dossierDelAlbum(albumId: string): Promise<DossierConAlbum | null>
   });
 }
 
+/**
+ * ¿El disco que sacamos del catálogo cumple lo que el oyente pidió hoy? Si NO,
+ * devuelve el aviso que se le antepone a la razón.
+ *
+ * El catálogo es cerrado: cuando el pedido no se puede cumplir con lo publicado
+ * (pediste rock venezolano y hoy no hay ninguno), la app tiene dos salidas y
+ * solo una es aceptable. La mala es servir el disco callando —que es lo que se
+ * vivía como «me recomendó algo que no tiene nada que ver con lo que dije»—
+ * porque además la razón la escribe un LLM al que se le pide justificar su
+ * elección, y siempre encuentra una excusa bonita («su energía resuena…»).
+ *
+ * Este aviso lo escribe el CÓDIGO sobre datos duros (el origen del artista según
+ * MusicBrainz) o sobre el verificador de pedido. Va delante de la razón y ya no
+ * lo puede borrar ningún modelo: es la misma ley anti-alucinación de siempre,
+ * aplicada a lo que la app promete y no solo a lo que cuenta del disco.
+ */
+async function avisoSiNoCumplePedido(input: {
+  peticion: string;
+  title: string;
+  artist: string;
+  lang: string | null;
+  /** Comprobar SOLO el origen. Lo usa el disco fresco, donde el verificador de
+   *  pedido ya dijo que sí antes de fabricarlo: repetirle la pregunta cuesta
+   *  tiempo y se arriesga a que conteste distinto que hace un minuto. */
+  soloOrigen?: boolean;
+}): Promise<string | null> {
+  const peticion = input.peticion.trim();
+  if (!peticion) return null;
+
+  try {
+    // 1. El origen, con datos duros. Es la parte del pedido más imposible de
+    //    sustituir: un rock de otro país no es "casi" lo que pidió.
+    //
+    //    OJO con la dirección de la duda. Las barreras que ELIGEN el disco
+    //    dudan a favor del oyente (si MusicBrainz no responde, dejan pasar: más
+    //    vale un disco de más que quedarse sin disco). Este aviso es lo
+    //    contrario, y tiene que serlo: aquí no se descarta nada ni se deja a
+    //    nadie sin música, solo se dice la verdad. Así que mientras no conste
+    //    que el artista ES de donde pediste, se avisa — callar porque la fuente
+    //    estaba caída es exactamente cómo un disco de Oklahoma acaba
+    //    presentándose como si fuera lo que pediste.
+    const paises = detectarPaisesPedido(peticion);
+    if (paises.length > 0) {
+      const o = await artistaEsDeAlgunPais(input.artist, paises);
+      if (o.veredicto === "no") {
+        return (
+          `Hoy no tengo publicado nada de ${nombresDePaises(paises)}, así que esto ` +
+          `no es lo que pediste: ${input.artist} es de ${o.origen}. Te lo dejo ` +
+          `mientras te consigo uno de verdad.`
+        );
+      }
+      if (o.veredicto === "desconocido") {
+        return (
+          `No pude confirmar que ${input.artist} sea de ${nombresDePaises(paises)}, ` +
+          `así que no te prometo que esto sea lo que pediste. Te lo dejo mientras ` +
+          `te consigo uno que sí lo sea.`
+        );
+      }
+    }
+
+    // 2. El resto del pedido (género, época, estilo), con el verificador.
+    if (input.soloOrigen) return null;
+    const v = await discoCumplePedido({
+      peticion,
+      title: input.title,
+      artist: input.artist,
+      lang: input.lang,
+    });
+    if (!v.cumple) {
+      return (
+        `Hoy no tengo publicado nada que cumpla lo que pediste («${peticion}»), ` +
+        `así que este disco no lo es. Es lo más cerca que llegué con lo que hay.`
+      );
+    }
+  } catch (err) {
+    // Si no podemos comprobarlo, no inventamos un aviso: callar de más es peor
+    // que callar de menos, pero acusar en falso también confunde.
+    console.warn("[recommend] no pude comprobar si el disco cumple el pedido:", err);
+  }
+  return null;
+}
+
 async function recomendarYGuardar(
   ctx: PickCtx,
   opts: {
@@ -508,6 +1422,16 @@ async function recomendarYGuardar(
     regenerated?: boolean;
     excluirAlbumIds?: string[];
     forzarDistinto?: boolean;
+    /** Lo que el oyente pidió hoy en lenguaje natural. Aunque el catálogo sea
+     *  cerrado, elegimos el disco que más se acerque al pedido. */
+    peticion?: string | null;
+    /** Por qué venimos al catálogo en vez de fabricar. Manda sobre el aviso: si
+     *  ya sabemos que no se pudo cumplir el pedido, se dice eso y no se gasta
+     *  otra llamada al verificador (que además suele ser lo que está caído). */
+    causa?: CausaFallback;
+    /** Elegir sin llamar a ningún modelo. Lo usa el render de la home, donde una
+     *  espera de quince segundos es una pantalla en blanco. */
+    sinIa?: boolean;
   },
   tz?: string | null,
 ): Promise<PickPersonal | null> {
@@ -520,7 +1444,7 @@ async function recomendarYGuardar(
     const reviewFilter = reviewsWhere(identity);
     const pastFilter = pastPicksWhere(identity, date);
 
-    const [profile, reviews, catalogo, picksRecientes] = await Promise.all([
+    const [profile, reviews, catalogo, picksRecientes, memoria, notasTexto] = await Promise.all([
       findProfileRecord(identity),
       reviewFilter
         ? prisma.review.findMany({
@@ -543,13 +1467,113 @@ async function recomendarYGuardar(
             take: MAX_RECENT_PICKS,
           })
         : Promise.resolve([]),
+      // Memoria COMPLETA (todo el historial), para no repetir NUNCA un disco visto.
+      cargarMemoriaDiscos(identity, date),
+      // Memoria personal del oyente (lo que nos contó), para afinar la elección.
+      cargarNotasTexto(identity),
     ]);
 
     if (!profile && reviews.length === 0 && !opts.mood) return null;
 
     const excluir = new Set(opts.excluirAlbumIds ?? []);
-    const catalogoFiltrado = catalogo.filter((d) => !excluir.has(d.album.id));
+    const excluidasObras = await albumesObras([...excluir]);
+    // Vetado = descartado explícito, o YA visto alguna vez (todo el historial),
+    // comparando por id Y por obra (mismo disco con otro id/título).
+    const obraVetada = (d: DossierConAlbum): boolean => {
+      const obra: Obra = { title: d.album.title, artist: d.album.artist.name };
+      return (
+        memoria.vistosObras.some((o) => mismaObra(obra, o)) ||
+        excluidasObras.some((o) => mismaObra(obra, o))
+      );
+    };
+    const noVisto = (d: DossierConAlbum): boolean =>
+      !excluir.has(d.album.id) && !memoria.vistosIds.has(d.album.id) && !obraVetada(d);
+
+    // Preferimos discos NUNCA vistos. Si ya recorrió todo el catálogo publicado
+    // (edge case), relajamos: permitimos repetir lo ya visto pero seguimos
+    // excluyendo lo descartado y lo que puntuó bajo, para no quedar sin disco.
+    // Incluso al relajar, NUNCA re-servimos la MISMA obra que acabamos de excluir
+    // (el disco de hoy/ayer que dispara el rehacer) ni aunque venga con otro id:
+    // ese es justo el "me lo repite cada vez" que queremos cortar.
+    const esObraExcluida = (d: DossierConAlbum): boolean => {
+      const obra: Obra = { title: d.album.title, artist: d.album.artist.name };
+      return excluidasObras.some((o) => mismaObra(obra, o));
+    };
+    const sinVistos = catalogo.filter(noVisto);
+
+    // Catálogo agotado: el oyente ya vio todo. En vez de dar rienda suelta al LLM
+    // (que siempre elige su "mejor match" = el mismo disco en bucle), aplicamos dos
+    // capas de protección:
+    //   1. Hard: preferimos álbumes que NO aparezcan entre los más recientes de
+    //      memoria.vistosObras (que viene ordenado del más reciente al más antiguo).
+    //      Así forzamos que salga algo que lleve tiempo sin aparecer.
+    //   2. Soft: pasamos el historial al LLM como lista "PROHIBIDO repetir" para que
+    //      elija el que lleve MÁS tiempo sin aparecer si el hard tier está vacío.
+    const catalogoBase = catalogo.filter(
+      (d) =>
+        !excluir.has(d.album.id) &&
+        !memoria.dislikedIds.has(d.album.id) &&
+        !esObraExcluida(d),
+    );
+
+    // "Recientes" = los primeros MAX_RECIENTES de vistosObras (más nuevos primero).
+    // Excluimos hasta el 70% del historial (tope: 90), asegurándonos de dejar al
+    // menos 1 álbum disponible en el tier de recencia para no vaciar el pool.
+    const MAX_RECIENTES = Math.min(
+      90,
+      Math.max(0, Math.floor(memoria.vistosObras.length * 0.7) - 1),
+    );
+    const recientesKeys = new Set(
+      memoria.vistosObras
+        .slice(0, MAX_RECIENTES)
+        .map((o) => `${normalizar(o.artist)}||${nucleoTitulo(o.title)}`),
+    );
+    const noMuyReciente = (d: DossierConAlbum): boolean => {
+      const k = `${normalizar(d.album.artist.name)}||${nucleoTitulo(d.album.title)}`;
+      return !recientesKeys.has(k);
+    };
+    const catalogoConRecencia = catalogoBase.filter(noMuyReciente);
+
+    // Última red cuando ya vio TODO el catálogo y hasta el filtro de recencia se
+    // quedó vacío (catálogo pequeño, como el del dueño): en vez de reabrir TODO
+    // el catálogo —donde volvería a colarse un disco recién mostrado, el clásico
+    // "me repite el mismo cada vez"— nos quedamos con el tercio que lleva MÁS
+    // TIEMPO sin aparecer. Así, por agotamiento, sale lo más viejo, nunca lo de
+    // ayer.
+    const rango = rangoPorRecencia(memoria.vistosObras);
+    const colaPorRecencia = [...catalogoBase]
+      .sort(
+        (a, b) =>
+          rango({ title: b.album.title, artist: b.album.artist.name }) -
+          rango({ title: a.album.title, artist: a.album.artist.name }),
+      )
+      .slice(0, Math.max(1, Math.ceil(catalogoBase.length * 0.3)));
+
+    const catalogoFiltrado =
+      sinVistos.length > 0
+        ? sinVistos
+        : catalogoConRecencia.length > 0
+        ? catalogoConRecencia
+        : colaPorRecencia;
+
+    if (sinVistos.length === 0) {
+      console.warn(
+        `[recommend] catálogo agotado (${catalogo.length} álbumes, todos vistos); ` +
+          `usando ${catalogoConRecencia.length > 0 ? `recencia (${catalogoConRecencia.length} no recientes)` : "catálogo relajado completo"}.`,
+      );
+    }
+
     if (catalogoFiltrado.length === 0) return null;
+
+    // Cuando el catálogo está agotado, pasamos el historial al LLM para que
+    // evite el bucle "mismo disco siempre" incluso si todos ya se mostraron.
+    const MAX_YA_VISTOS_LLM = 80;
+    const yaVistosHistorial: string[] | undefined =
+      sinVistos.length === 0
+        ? memoria.vistosObras
+            .slice(0, MAX_YA_VISTOS_LLM)
+            .map((o) => `"${o.title}" de ${o.artist}`)
+        : undefined;
 
     const parsedProfile = profile
       ? parseJson<Record<string, unknown>>(profile.answersJson, {})
@@ -560,8 +1584,19 @@ async function recomendarYGuardar(
         ? await detectReturnRitual(identity, date)
         : null;
 
+    const patronesTexto = patronesDeEscucha(reviews, picksRecientes);
+    // Anti-muletilla: lo que ya le dijimos estos días queda vetado hoy.
+    const ganchos = ganchosQuemados(picksRecientes.map((p) => p.reason));
+    const voz = curatorVoz(
+      typeof parsedProfile?.curator === "string" ? parsedProfile.curator : undefined,
+    );
+
+    // Si la IA se cae elegimos por gusto (sin IA): esa razón es de plantilla y
+    // no tiene sentido mandarla a reescribir.
+    let razonDeIa = true;
     let eleccion: { albumId: string; reason: string };
     try {
+      if (opts.sinIa) throw new Error("elección sin IA (a propósito)");
       eleccion = await elegirConLlm({
         profile: parsedProfile,
         reviews,
@@ -574,8 +1609,16 @@ async function recomendarYGuardar(
           : null,
         returnRitual,
         forzarDistinto: opts.forzarDistinto ?? false,
+        patronesTexto,
+        peticion: opts.peticion ?? null,
+        yaVistosHistorial,
+        notasTexto,
+        ganchos,
+        ganchosTexto: textoGanchosProhibidos(ganchos),
+        hoy: date,
       });
     } catch (err) {
+      razonDeIa = false;
       // La IA falló: el oyente nunca cae en la rotación global si tenemos sus
       // gustos. Elegimos por afinidad (géneros, artistas, diario) sin IA.
       if (returnRitual) {
@@ -599,6 +1642,10 @@ async function recomendarYGuardar(
           reviews,
           catalogo: catalogoFiltrado,
           picksRecientes,
+          // El pedido también manda aquí abajo. Antes este camino —el que se
+          // toma justo cuando la IA no responde— elegía solo por afinidad de
+          // géneros y el pedido del oyente se evaporaba sin dejar rastro.
+          peticion: opts.peticion ?? null,
         });
         if (!porGusto) throw err;
         eleccion = porGusto;
@@ -610,6 +1657,38 @@ async function recomendarYGuardar(
       throw new Error(`El LLM eligió un albumId fuera del catálogo: ${eleccion.albumId}`);
     }
 
+    // ¿Cumple lo que pidió? Se comprueba ANTES de retocar la razón, porque el
+    // aviso se pega al final y ya nadie lo reescribe.
+    //
+    // Si YA sabemos por qué no se pudo fabricar (no hay clave, se acabó el tope,
+    // se acabó el reloj), esa es la verdad que hay que contar y no cuesta nada.
+    // Si además la IA se cayó al elegir, el pedido no lo ha leído nadie: eso
+    // también se dice. Solo cuando no hay causa conocida vamos al verificador.
+    const causa: CausaFallback = opts.causa ?? (razonDeIa ? null : "sin-ia");
+    const avisoPedido =
+      avisoPorCausa(causa, opts.peticion ?? null) ??
+      (opts.peticion
+        ? await avisoSiNoCumplePedido({
+            peticion: opts.peticion,
+            title: dossier.album.title,
+            artist: dossier.album.artist.name,
+            lang: opts.lang && opts.lang !== "Cualquiera" ? opts.lang : null,
+          })
+        : null);
+
+    // Y lo que faltaba por decir: que este disco YA se lo habíamos puesto.
+    // El catálogo es cerrado, así que cuando el oyente ya lo recorrió entero
+    // —el dueño lo tiene recorrido por definición— cualquier caída aquí es una
+    // repetición. Callarla es lo que se vive como "la app se rompió y nadie me
+    // avisó": mismo disco de siempre, sin una palabra. Lo comprobamos contra su
+    // memoria completa (por id y por obra), no contra una corazonada.
+    const yaLoVio = memoria.vistosIds.has(dossier.album.id) || obraVetada(dossier);
+    const aviso =
+      [avisoPedido, yaLoVio ? avisoPorRepeticion(causa, Boolean(avisoPedido)) : null]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || null;
+
     let reason = eleccion.reason?.trim().slice(0, 600) || null;
     if (returnRitual && !reason) {
       reason = fallbackReturnReason(
@@ -617,6 +1696,33 @@ async function recomendarYGuardar(
         dossier.album.title,
         dossier.album.artist.name,
       );
+    } else if (razonDeIa && !returnRitual) {
+      // Barrera anti-muletilla, igual que en el disco fresco.
+      reason = (
+        await afinarRazon({
+          razon: reason,
+          razonesPrevias: picksRecientes.map((p) => p.reason),
+          title: dossier.album.title,
+          artist: dossier.album.artist.name,
+          year: dossier.album.year,
+          perfilTexto: [perfilATexto(parsedProfile, { hoy: date, ganchos }), notasTexto]
+            .filter(Boolean)
+            .join("\n\n"),
+          mood: opts.mood,
+          voz,
+        })
+      )?.slice(0, 600) ?? null;
+    }
+
+    // El aviso va PRIMERO y entero: es lo que el oyente necesita leer antes que
+    // ninguna otra cosa. Lo que se recorta, si algo sobra, es la razón.
+    if (aviso) {
+      // Ojo con el recorte: `slice` con un número negativo corta por el final en
+      // vez de devolver vacío, así que el tope se aplana en cero a propósito.
+      const resto = reason
+        ? ` ${reason.slice(0, Math.max(0, 600 - aviso.length))}`.trimEnd()
+        : "";
+      reason = `${aviso}${resto}`;
     }
 
     await saveTodaysPick(ctx, date, {
@@ -635,6 +1741,7 @@ async function recomendarYGuardar(
       regenerated: opts.regenerated ?? false,
       returnPick: Boolean(returnRitual),
       absenceDays: returnRitual?.absenceDays ?? null,
+      avisoPedido: aviso,
     };
   } catch (err) {
     console.error("[recommend] el motor falló, va rotación global:", err);
@@ -656,6 +1763,21 @@ async function elegirConLlm(input: {
   albumPrevio: DossierConAlbum | null;
   returnRitual: ReturnRitual | null;
   forzarDistinto?: boolean;
+  patronesTexto?: string | null;
+  peticion?: string | null;
+  /** Historial completo de discos ya vistos/reseñados: se usa cuando el catálogo
+   *  está agotado (todo visto) para que el LLM elija el que lleva MÁS TIEMPO sin
+   *  aparecer, no el que mejor encaja por gusto (evita el bucle del mismo disco). */
+  yaVistosHistorial?: string[];
+  /** Memoria personal del oyente (lo que le contó al curador). */
+  notasTexto?: string | null;
+  /** Palabras e imágenes ya gastadas en razones recientes (anti-muletilla). */
+  ganchosTexto?: string | null;
+  /** Los mismos ganchos, sin formatear: podan las señales del perfil que hoy
+   *  no vuelven a enseñarse (ver `perfilATexto`). */
+  ganchos?: Gancho[];
+  /** Hoy (YYYY-MM-DD): para fechar las respuestas de la pregunta del día. */
+  hoy?: string;
 }): Promise<{ albumId: string; reason: string }> {
   const catalogoTexto = input.catalogo
     .map((d) => {
@@ -672,7 +1794,12 @@ async function elegirConLlm(input: {
     })
     .join("\n");
 
-  const perfilTexto = perfilATexto(input.profile);
+  const perfilTexto = [
+    perfilATexto(input.profile, { hoy: input.hoy, ganchos: input.ganchos }),
+    input.notasTexto,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const diarioTexto = diarioATexto(input.reviews);
   const recientesTexto = recientesATexto(input.picksRecientes);
 
@@ -686,32 +1813,51 @@ async function elegirConLlm(input: {
     ? `\nREGRESO TRAS AUSENCIA: el usuario vuelve después de ${input.returnRitual.absenceDays} días sin el ritual (último pick: ${input.returnRitual.lastPickDate}). Elige un disco acogedor para reenganchar — prioriza dificultad baja/media si la ausencia fue larga. En "reason" reconoce el regreso con calidez ("te guardé algo", "bienvenido de vuelta"), SIN culpa, SIN mencionar rachas rotas ni gamificación.\n`
     : "";
 
+  // Lo que el oyente pidió hoy (texto libre). El catálogo es cerrado, así que no
+  // siempre se puede cumplir al pie de la letra: elegimos el disco que MÁS se
+  // acerque. Si menciona discos como referencia de un sentimiento, NO elegimos
+  // ese mismo disco — buscamos uno que comparta ese espíritu.
+  const peticionTexto = input.peticion?.trim()
+    ? `\nLO QUE EL OYENTE PIDIÓ HOY (máxima prioridad): «${input.peticion.trim()}». Elige del catálogo el disco que MÁS se acerque a ese pedido (género, PAÍS o nacionalidad del artista, idioma, estilo, energía o escena). Si el pedido tiene varias partes ("artistas venezolanos, rock" = origen + género), busca el que cumpla TODAS; si ninguno las cumple, prioriza la parte más difícil de sustituir (el ORIGEN antes que el género: un rock de otro país NO es "casi" lo que pidió). Si menciona discos o artistas como referencia de cómo quiere SENTIRSE, NO elijas ese mismo disco: busca otro que comparta ese espíritu.
+HONESTIDAD OBLIGATORIA: el catálogo es cerrado y hoy puede no tener lo que pidió. Si el disco que eliges NO cumple el pedido, la "reason" debe RECONOCERLO en la primera frase, con naturalidad y sin excusas raras ("hoy no tengo un disco venezolano a la mano, así que te traigo…"). PROHIBIDO fingir que sí lo cumple o justificarlo con que "su energía resuena".\n`
+    : "";
+
+  // Cuando el catálogo está agotado (el oyente ya vio todo) y el LLM recibe una
+  // lista de discos ya vistos, se le pide que evite los más recientes y prefiera
+  // el que lleva más tiempo sin aparecer. Así evitamos el bucle del mismo disco.
+  const yaVistosTexto =
+    input.yaVistosHistorial && input.yaVistosHistorial.length > 0
+      ? `\nDISCOS QUE YA SE LE RECOMENDARON ANTES (PROHIBIDO repetir; elige el que lleve MÁS TIEMPO sin aparecer):\n${input.yaVistosHistorial.map((t) => `- ${t}`).join("\n")}\n`
+      : "";
+
   const system = `Eres el curador musical de Musicart: cercano, melómano, hablas en español y de "tú".
 Tu trabajo: elegir UN disco del catálogo para este usuario hoy, y explicar por qué ese disco, para él/ella, hoy.
 
 Reglas estrictas:
 1. Responde SOLO un objeto JSON: {"albumId": "...", "reason": "..."} — sin texto extra.
 2. "albumId" debe ser EXACTAMENTE uno de los albumId del catálogo.
-3. "reason": 1 a 3 frases en español, cálidas y concretas, citando SOLO señales reales del usuario que aparecen abajo (sus estrellas, sus respuestas, su perfil, su ánimo de hoy). Ej.: "Le diste 5★ a X…", "dijiste que buscas la historia…".
+3. "reason": 1 a 3 frases en español, cálidas y concretas, citando SOLO señales reales del usuario que aparecen abajo (sus estrellas, sus respuestas, su perfil, su ánimo de hoy). Ej.: "Le diste 5★ a X…", "dijiste que buscas la historia…". PROHIBIDO inventarle hábitos, actividades o lugares (conducir, manejar por una carretera o montaña, hacer ejercicio, viajar, vivir en tal sitio, etc.) que no aparezcan literalmente en las señales de abajo.
+   UNA RESPUESTA DE ENCUESTA NO ES UNA ESCENA DE SU VIDA: si eligió una opción suelta ("montaña", "la noche", "salir a caminar"), eso es lo que contestó UN DÍA a una pregunta, no algo que esté haciendo ni un sitio donde esté. PROHIBIDO convertirla en acción ("mientras conduces hacia la montaña"), en rasgo permanente ("tú, que amas la montaña") ni en el decorado del disco. Verás la ANTIGÜEDAD de cada respuesta entre corchetes: lo de hace semanas o meses pesa MUCHO menos que lo de estos días, y si lo único que se te ocurre es un dato viejo, mejor habla del disco de hoy por su propio encanto.
 4. Sobre el disco solo puedes mencionar lo que aparece en el catálogo (título, artista, año, duración, etiquetas). PROHIBIDO inventar datos del álbum o del usuario.
-5. Evita repetir discos recomendados en días recientes, salvo que no haya alternativa razonable.
+5. PROHIBIDO elegir un disco que aparezca en la lista "DISCOS RECOMENDADOS EN DÍAS RECIENTES" ni en "DISCOS QUE YA SE LE RECOMENDARON ANTES". Si aun así ves que todas las opciones del catálogo están en esas listas, elige el disco que lleve MÁS TIEMPO sin aparecer (el que esté más abajo en "YA SE LE RECOMENDARON ANTES").
 6. Si el usuario indicó su ánimo de hoy, dale prioridad como señal.
-7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.${input.lang ? `\n8. IDIOMA DE HOY: el usuario quiere escuchar en "${input.lang}" hoy. Prioriza artistas que cantan en ese idioma. Si no hay ninguno en el catálogo, elige el más cercano y mencionalo en la "reason".` : ""}`;
+7. GUSTO ANTE TODO: prioriza sus géneros y artistas favoritos. Un rockero NO debe recibir un disco que choque con su gusto (p. ej. balada romántica) salvo como puente claro y bien justificado en la "reason". Mejor un disco que reconozca como suyo que uno "objetivamente importante" pero ajeno.
+8. NO REPITAS EL MISMO GANCHO: en "DISCOS RECOMENDADOS EN DÍAS RECIENTES" abajo, junto a cada disco reciente, verás la razón que le diste ese día. PROHIBIDO abrir la razón de HOY con la misma anécdota, dato o escena que ya usaste ahí. Elige un ángulo distinto del perfil, el diario o el ánimo de hoy. Un detalle REAL suyo (un interés, una frase de su perfil, un disco que amó) usado dos días seguidos YA es una muletilla, aunque sea verdad: al final del mensaje verás la lista de palabras vetadas hoy y debes respetarla, incluidos sinónimos y la misma idea dicha de otra forma.${input.lang ? `\n9. IDIOMA DE HOY: el usuario eligió escuchar en "${input.lang}" hoy. OBLIGATORIO elegir un álbum donde el artista cante principalmente en ese idioma — el idioma del día va por encima del gusto. Si no hay ninguno en el catálogo que encaje, elige el más cercano y menciónalo en la "reason".\n   ATENCIÓN — los idiomas son distintos: "Español" (castellano) ≠ "Português" (Brasil, Portugal) ≠ "Français" ≠ "English" ≠ "Italiano". No confundas lenguas romances; un disco en portugués NO es válido cuando pidieron español.` : ""}`;
 
   const user = `CATÁLOGO DISPONIBLE (elige uno por su albumId):
 ${catalogoTexto}
 
 PERFIL DEL USUARIO:
 ${perfilTexto}
-
+${input.patronesTexto ? `\n${input.patronesTexto}\n` : ""}
 SU DIARIO (reseñas recientes, de la más nueva a la más vieja):
 ${diarioTexto}
 
 ÁNIMO DE HOY: ${input.mood ?? "(no indicado)"}
-${regeneracionTexto}${regresoTexto}
+${peticionTexto}${regeneracionTexto}${regresoTexto}${yaVistosTexto}
 DISCOS RECOMENDADOS EN DÍAS RECIENTES (evítalos si puedes):
 ${recientesTexto}
-
+${input.ganchosTexto ?? ""}
 Responde el JSON ahora.`;
 
   const raw = await llm({
@@ -753,7 +1899,19 @@ function comoLista(valor: unknown): string[] {
     : [];
 }
 
-function formatPerfil(profile: Record<string, unknown>): string {
+/** Lo que el perfil necesita saber del DÍA para no fosilizar lo puntual. */
+export type PerfilOpts = {
+  /** Hoy (YYYY-MM-DD): para fechar las respuestas de la pregunta del día. */
+  hoy?: string;
+  /** Ganchos ya gastados en razones recientes: sus señales no se repiten hoy. */
+  ganchos?: Gancho[];
+};
+
+function formatPerfil(
+  profile: Record<string, unknown>,
+  opts: PerfilOpts = {},
+): string {
+  const texto = (k: string) => (typeof profile[k] === "string" ? (profile[k] as string).trim() : "");
   const spotifyArtistas = comoLista(profile.spotifyArtists);
   const spotifyGeneros = comoLista(profile.spotifyGenres);
   const spotifyCanciones = comoLista(profile.spotifyTracks);
@@ -766,15 +1924,27 @@ function formatPerfil(profile: Record<string, unknown>): string {
   const bio = typeof profile.bio === "string" ? profile.bio.trim() : "";
   const tiempo = typeof profile.listenTime === "string" ? profile.listenTime : "";
   const anchors = typeof profile.anchors === "string" ? profile.anchors : "";
-  const texto = (k: string) => (typeof profile[k] === "string" ? (profile[k] as string).trim() : "");
   const discoMarca = texto("markedAlbum");
   const discoMarcaArtista = texto("markedArtist");
   const cancionFav = texto("favoriteSong");
   const cancionFavArtista = texto("favoriteSongArtist");
+  // Las respuestas de la pregunta del día van FECHADAS y caducan (ver
+  // `curiosities.ts`): son la foto de un día, no un rasgo suyo. Y si la señal ya
+  // se gastó en la razón de estos días, hoy ni se la enseñamos — vetar la
+  // palabra pero seguir mostrando el dato es pedirle que no piense en él.
   const curiosities = Array.isArray(profile.curiosities)
-    ? formatCuriosities(profile.curiosities as CuriosityAnswer[])
+    ? formatCuriosities(profile.curiosities as CuriosityAnswer[], {
+        hoy: opts.hoy,
+        excluir: (r) =>
+          textoUsaGancho(`${r.answer} ${r.extra ?? ""}`, opts.ganchos ?? []),
+      })
     : "";
+  const pais = nombreDePais(texto("country") || null);
   const lineas = [
+    // De dónde es (11.7). No es un filtro —nadie quiere solo música de su
+    // país— pero saberlo cambia el tono: a un venezolano no le explicas quién
+    // fue Simón Díaz igual que a un japonés.
+    pais ? `Es de: ${pais}` : null,
     generos.length ? `Géneros favoritos: ${generos.join(", ")}` : null,
     artistas.length ? `Artistas que ama: ${artistas.join(", ")}` : null,
     spotifyArtistas.length
@@ -799,7 +1969,8 @@ function formatPerfil(profile: Record<string, unknown>): string {
     intereses.length ? `Intereses fuera de la música: ${intereses.join(", ")}` : null,
     bio ? `Contexto personal: "${bio}"` : null,
     anchors ? `Otros que lo marcaron: ${anchors}` : null,
-    curiosities ? `Lo que me ha contado (preguntas del día):\n${curiosities}` : null,
+    // Ya viene con sus propios encabezados fechados.
+    curiosities || null,
   ].filter(Boolean);
   return lineas.length ? lineas.join("\n") : "(perfil vacío)";
 }
@@ -807,11 +1978,14 @@ function formatPerfil(profile: Record<string, unknown>): string {
 // Bloques de texto reutilizables (los usan el selector de catálogo y el
 // proponedor de disco fresco) para que el prompt cite solo señales reales.
 
-function perfilATexto(profile: Record<string, unknown> | null): string {
-  return profile ? formatPerfil(profile) : "(sin perfil todavía)";
+export function perfilATexto(
+  profile: Record<string, unknown> | null,
+  opts: PerfilOpts = {},
+): string {
+  return profile ? formatPerfil(profile, opts) : "(sin perfil todavía)";
 }
 
-function diarioATexto(reviews: ReviewConAlbum[]): string {
+export function diarioATexto(reviews: ReviewConAlbum[]): string {
   if (reviews.length === 0) return "(aún no ha reseñado ningún disco)";
   return reviews
     .map((r) => {
@@ -832,8 +2006,68 @@ function diarioATexto(reviews: ReviewConAlbum[]): string {
 function recientesATexto(picks: PickConAlbum[]): string {
   if (picks.length === 0) return "(ninguno)";
   return picks
-    .map((p) => `- ${p.date}: "${p.album.title}" de ${p.album.artist.name}`)
+    .map((p, i) => {
+      // Solo los últimos 3 llevan su razón: para que el LLM vea qué anécdota o
+      // dato ya usó y no la repita (evita la "muletilla" del mismo gancho).
+      const razon =
+        i < 3 && p.reason ? ` — razón que le dimos: "${p.reason.slice(0, 160)}"` : "";
+      return `- ${p.date}: "${p.album.title}" de ${p.album.artist.name}${razon}`;
+    })
     .join("\n");
+}
+
+// ─── Patrones de escucha ─────────────────────────────────────────────────────
+// Detecta correlaciones mood→género, géneros en racha y estación del año,
+// usando datos ya cargados (reviews + picks). Sin queries extra.
+
+function patronesDeEscucha(
+  reviews: ReviewConAlbum[],
+  picks: PickConAlbum[],
+): string | null {
+  const lineas: string[] = [];
+
+  // Géneros/tags que el usuario puntúa alto de forma consistente
+  const tagsAmados = new Map<string, number>();
+  for (const r of reviews.filter((r) => r.rating >= LOVED_THRESHOLD)) {
+    const tags = parseJson<Partial<FactsPayload>>(r.album.factsJson, {}).tags ?? [];
+    for (const tag of tags.slice(0, 6)) {
+      const t = normalizar(tag);
+      tagsAmados.set(t, (tagsAmados.get(t) ?? 0) + 1);
+    }
+  }
+  const topAmados = [...tagsAmados.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([t]) => t);
+  if (topAmados.length > 0) {
+    lineas.push(`- Lo que más le ha gustado (rating ≥${LOVED_THRESHOLD}): ${topAmados.join(", ")}`);
+  }
+
+  // Correlación mood → géneros (de los picks recientes que registraron ánimo)
+  const moodGenres = new Map<string, Set<string>>();
+  for (const pick of picks) {
+    if (!pick.mood) continue;
+    const tags = parseJson<Partial<FactsPayload>>(pick.album.factsJson, {}).tags ?? [];
+    if (!moodGenres.has(pick.mood)) moodGenres.set(pick.mood, new Set());
+    for (const t of tags.slice(0, 3)) moodGenres.get(pick.mood)!.add(normalizar(t));
+  }
+  for (const [mood, tagSet] of moodGenres.entries()) {
+    const top = [...tagSet].slice(0, 3);
+    if (top.length > 0) {
+      lineas.push(`- Con ánimo "${mood}" ha escuchado: ${top.join(", ")}`);
+    }
+  }
+
+  // Estación del año actual
+  const mes = new Date().getMonth();
+  const estaciones = ["invierno","invierno","primavera","primavera","primavera","verano","verano","verano","otoño","otoño","otoño","invierno"];
+  const meses = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  lineas.push(`- Ahora es ${meses[mes]} (${estaciones[mes]})`);
+
+  // Solo tiene sentido si hay patrones reales, no solo la estación
+  if (lineas.length <= 1) return null;
+
+  return `PATRONES DE ESCUCHA (de su historial real):\n${lineas.join("\n")}`;
 }
 
 // ─── Fallback por gusto, sin IA ──────────────────────────────────────────────
@@ -841,7 +2075,7 @@ function recientesATexto(picks: PickConAlbum[]): string {
 // artistas favoritos) y el diario (lo que puntuó 4★+). Así el oyente NUNCA cae
 // en la rotación global ciega: un rockero recibe rock, no una balada.
 
-type ReviewConAlbum = Prisma.ReviewGetPayload<{
+export type ReviewConAlbum = Prisma.ReviewGetPayload<{
   include: { album: { include: { artist: true } } };
 }>;
 type PickConAlbum = Prisma.DailyPickGetPayload<{
@@ -856,11 +2090,69 @@ function normalizar(s: string): string {
     .trim();
 }
 
+// N\u00facleo del t\u00edtulo: sin diacr\u00edticos, sin par\u00e9ntesis/corchetes, sin lo que va
+// tras " - ", y sin sufijos de edici\u00f3n/directo (deluxe, remaster, en directo\u2026).
+// As\u00ed "Cometas por el cielo (En directo desde Am\u00e9rica)" y "Cometas por el cielo"
+// se reconocen como la MISMA obra aunque las fuentes guarden t\u00edtulos distintos.
+function nucleoTitulo(s: string): string {
+  let t = normalizar(s);
+  t = t.replace(/\([^)]*\)/g, " ").replace(/\[[^\]]*\]/g, " ");
+  t = t.split(/\s-\s/)[0];
+  const m = t.match(
+    /^(.*?\S.*?)\s+\b(en vivo|en directo|live|deluxe|remaster\w*|edicion|edition|expanded|bonus|reedicion|unplugged|acustico|acoustic)\b/u,
+  );
+  if (m && m[1].trim().length >= 3) t = m[1];
+  return t
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Dos discos son la MISMA obra si comparten artista (con tolerancia) y el n\u00facleo
+// del t\u00edtulo coincide. Compara por contenido, no por id de fila ni texto exacto:
+// es la barrera definitiva contra el "mismo disco con t\u00edtulo o id distinto".
+function mismaObra(a: { title: string; artist: string }, b: { title: string; artist: string }): boolean {
+  const artistaA = normalizar(a.artist).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const artistaB = normalizar(b.artist).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const mismoArtista =
+    artistaA.length > 0 &&
+    (artistaA === artistaB || artistaA.includes(artistaB) || artistaB.includes(artistaA));
+  if (!mismoArtista) return false;
+  const nucA = nucleoTitulo(a.title);
+  const nucB = nucleoTitulo(b.title);
+  return nucA.length > 0 && nucA === nucB;
+}
+
+// Antigüedad de cada obra: su posición en la lista de vistos (0 = el más
+// reciente, números mayores = hace más tiempo; nunca visto = el más viejo de
+// todos). Cuando el oyente ya recorrió TODO el catálogo (caso típico del dueño,
+// cuyo catálogo publicado ES su propio historial), esto nos deja preferir
+// SIEMPRE el disco que lleva más tiempo sin aparecer y nunca re-servir el de
+// ayer por agotamiento. Espera `vistosObras` ordenado del más reciente al más
+// antiguo (como lo entrega cargarMemoriaDiscos).
+function rangoPorRecencia(
+  vistosObras: Obra[],
+): (a: { title: string; artist: string }) => number {
+  const rank = new Map<string, number>();
+  vistosObras.forEach((o, i) => {
+    const k = `${normalizar(o.artist)}||${nucleoTitulo(o.title)}`;
+    if (!rank.has(k)) rank.set(k, i);
+  });
+  return (a) =>
+    rank.get(`${normalizar(a.artist)}||${nucleoTitulo(a.title)}`) ??
+    Number.MAX_SAFE_INTEGER;
+}
+
 function elegirPorGusto(input: {
   profile: Record<string, unknown> | null;
   reviews: ReviewConAlbum[];
   catalogo: DossierConAlbum[];
   picksRecientes: PickConAlbum[];
+  /** Lo que el oyente pidió hoy. Sin IA no podemos entenderlo como lo entiende
+   *  el curador, pero sí cruzar sus palabras con el artista, el título, las
+   *  etiquetas y la década del disco (`src/lib/pedido-match.ts`). Es tosco y es
+   *  infinitamente mejor que ignorarlo. */
+  peticion?: string | null;
 }): { albumId: string; reason: string } | null {
   const generos = [
     ...(input.profile ? comoLista(input.profile.genres) : []),
@@ -878,25 +2170,50 @@ function elegirPorGusto(input: {
     }
   }
 
-  if (generos.length === 0 && artistas.length === 0 && tagsGustados.size === 0) {
+  const palabras = palabrasDelPedido(input.peticion);
+
+  if (
+    palabras.length === 0 &&
+    generos.length === 0 &&
+    artistas.length === 0 &&
+    tagsGustados.size === 0
+  ) {
     return null; // sin señales de gusto → que decida la rotación global
   }
 
   const recientes = new Set(input.picksRecientes.map((p) => p.albumId));
-  const candidatos: { dossier: DossierConAlbum; score: number; motivo: string }[] = [];
+  const candidatos: {
+    dossier: DossierConAlbum;
+    score: number;
+    motivo: string;
+    tocaPedido: boolean;
+  }[] = [];
 
   for (const d of input.catalogo) {
     if (recientes.has(d.album.id)) continue;
-    const tags = (parseJson<Partial<FactsPayload>>(d.album.factsJson, {}).tags ?? []).map(
-      normalizar,
-    );
+    const tagsCrudas = parseJson<Partial<FactsPayload>>(d.album.factsJson, {}).tags ?? [];
+    const tags = tagsCrudas.map(normalizar);
     const artista = normalizar(d.album.artist.name);
     let score = 0;
     let motivo = "";
 
+    // El pedido de hoy pesa más que el gusto histórico: es lo que la persona
+    // acaba de escribir, no lo que dijo hace tres meses. Por eso va primero y
+    // con multiplicador — si algo del catálogo roza el pedido, gana.
+    const afinPedido = afinidadConPedido(palabras, {
+      title: d.album.title,
+      artist: d.album.artist.name,
+      year: d.album.year,
+      tags: tagsCrudas,
+    });
+    if (afinPedido > 0) {
+      score += afinPedido * 4;
+      motivo = "es lo más cerca que tengo de lo que pediste";
+    }
+
     if (artistas.some((a) => a && (artista.includes(a) || a.includes(artista)))) {
       score += 6;
-      motivo = `${d.album.artist.name} es de los tuyos`;
+      if (!motivo) motivo = `${d.album.artist.name} es de los tuyos`;
     }
     if (generos.some((g) => tags.some((t) => t.includes(g) || g.includes(t)))) {
       score += 3;
@@ -906,14 +2223,20 @@ function elegirPorGusto(input: {
     score += tagMatch;
     if (!motivo && tagMatch > 0) motivo = "conecta con lo que ya te gustó";
 
-    if (score > 0) candidatos.push({ dossier: d, score, motivo });
+    if (score > 0) candidatos.push({ dossier: d, score, motivo, tocaPedido: afinPedido > 0 });
   }
 
   if (candidatos.length === 0) return null;
   candidatos.sort((a, b) => b.score - a.score);
 
+  // Si algo del catálogo roza el pedido, el resto ni compite: la rotación por
+  // día se hace SOLO entre los que lo tocan. Rotar sobre todo el catálogo era
+  // justo lo que hacía que un pedido de rock acabara en un disco cualquiera.
+  const tocanElPedido = candidatos.filter((c) => c.tocaPedido);
+  const pool = tocanElPedido.length > 0 ? tocanElPedido : candidatos;
+
   // Entre los mejores, una elección estable por día (varía cada día).
-  const top = candidatos.slice(0, Math.max(3, Math.ceil(candidatos.length * 0.3)));
+  const top = pool.slice(0, Math.max(3, Math.ceil(pool.length * 0.3)));
   const dia = Math.floor(Date.now() / 86_400_000);
   const elegido = top[dia % top.length];
 

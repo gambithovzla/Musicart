@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 
 const DEFAULT_ADMIN = "cdrr1992@gmail.com";
 
-function adminEmails(): string[] {
+export function adminEmails(): string[] {
   const raw = process.env.ADMIN_EMAILS ?? DEFAULT_ADMIN;
   return raw
     .split(",")

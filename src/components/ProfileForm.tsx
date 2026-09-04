@@ -4,15 +4,19 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { saveProfile } from "@/app/actions";
+import { REGIONES, paisesDeRegion } from "@/lib/paises";
 import { signOutAction } from "@/app/entrar/actions";
 import { PrivacyPanel } from "@/components/PrivacyPanel";
+import { Curiosidades } from "@/components/Curiosidades";
 import { DuetPanel } from "@/components/DuetPanel";
 import { PushToggle } from "@/components/PushToggle";
 import { SpotifyConnectPanel } from "@/components/SpotifyConnectPanel";
 import type { SpotifyPanelState } from "@/app/perfil/spotify-actions";
 import type { DuetSummary } from "@/lib/duet";
 import { SubscriptionPanel } from "@/components/SubscriptionPanel";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { getDeviceId } from "@/lib/device";
+import { CURATORS, DEFAULT_CURATOR } from "@/lib/curators";
 
 const MOMENTS = ["Manejando", "Trabajando", "En casa", "Entrenando", "Antes de dormir"];
 const SEEKS = ["La historia", "La emoción", "La técnica", "Descubrir lo nuevo"];
@@ -42,6 +46,10 @@ export type ProfileAnswers = {
   markedArtist?: string;  // …de qué artista
   favoriteSong?: string;  // tu canción favorita
   favoriteSongArtist?: string; // …de qué artista
+  curator?: string;       // voz del curador elegida (id de CURATORS)
+  country?: string;       // Fase 11.7: de dónde eres (ISO-2). Lo usa el Atlas
+                          // para recibirte con tu país, y el disco del día para
+                          // conocerte un poco mejor.
   listenTime: string;
 };
 
@@ -75,6 +83,7 @@ export function ProfileForm({
   duet,
   spotify,
   subscription,
+  currentTheme = "dark",
 }: {
   user: UserInfo | null;
   isAdmin?: boolean;
@@ -82,6 +91,7 @@ export function ProfileForm({
   duet?: DuetSummary | null;
   spotify?: SpotifyPanelState;
   subscription?: SubscriptionInfo;
+  currentTheme?: "light" | "dark";
 }) {
   const [answers, setAnswers] = useState<ProfileAnswers>(EMPTY);
   const perfilVacioEnCuenta =
@@ -278,9 +288,10 @@ export function ProfileForm({
           className="mt-4 flex items-center justify-between rounded-2xl border border-white/10 bg-surface px-4 py-3 text-sm transition-colors hover:border-album/40"
         >
           <span>
-            <span className="font-medium">Panel de revisión</span>
+            <span className="font-medium">Buscar un disco y crearlo</span>
             <span className="mt-0.5 block text-xs text-dim">
-              Drafts, cola y audio TTS
+              Panel del curador: busca cualquier disco o artista y la IA lo
+              fabrica. También drafts, cola y audio.
             </span>
           </span>
           <span className="text-dim">→</span>
@@ -308,6 +319,8 @@ export function ProfileForm({
       )}
 
       <PushToggle />
+
+      <ThemeToggle current={currentTheme} />
 
       {user && duet && <DuetPanel duet={duet} />}
 
@@ -554,6 +567,72 @@ export function ProfileForm({
       </section>
 
       <section className="mt-8">
+        <h2 className="font-serif text-lg">¿Qué voz quieres para tu curador?</h2>
+        <p className="mt-1 text-xs text-dim">
+          Le da el tono a tu “por qué este disco, hoy”. La historia del disco
+          sigue igual de rigurosa.
+        </p>
+        <div className="mt-3 flex flex-col gap-2">
+          {CURATORS.map((c) => {
+            const activo = (answers.curator ?? DEFAULT_CURATOR) === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => update({ curator: c.id })}
+                className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
+                  activo
+                    ? "border-album bg-album/10"
+                    : "border-white/12 bg-surface hover:border-white/30"
+                }`}
+              >
+                <span className="text-2xl" aria-hidden>
+                  {c.emoji}
+                </span>
+                <span className="min-w-0">
+                  <span className={`block text-sm font-medium ${activo ? "text-album-light" : ""}`}>
+                    {c.name}
+                  </span>
+                  <span className="block text-xs text-dim">{c.blurb}</span>
+                </span>
+                {activo && <span className="ml-auto text-album-light">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* De dónde eres (11.7). Es opcional a propósito: la app funciona igual
+          sin saberlo, y no se pide en el onboarding para no alargar la entrada.
+          Aquí sí va un desplegable nativo — en un formulario el teléfono pone su
+          propio selector, que es mejor que cualquier lista que dibujemos; lo que
+          NO puede ser un desplegable es la navegación del Atlas. */}
+      <section className="mt-8">
+        <h2 className="font-serif text-lg">¿De dónde eres?</h2>
+        <p className="mt-1 text-sm text-dim">
+          Opcional. Si me lo dices, el atlas te recibe con tu país y te conozco
+          un poco mejor.
+        </p>
+        <select
+          value={answers.country ?? ""}
+          onChange={(e) => update({ country: e.target.value })}
+          aria-label="Tu país"
+          className="mt-3 min-h-[52px] w-full border border-regla bg-transparent px-3 text-[16px]"
+        >
+          <option value="">Prefiero no decirlo</option>
+          {REGIONES.map((r) => (
+            <optgroup key={r.id} label={r.nombre}>
+              {paisesDeRegion(r.id).map((p) => (
+                <option key={p.code} value={p.code}>
+                  {p.nombre}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </section>
+
+      <section className="mt-8">
         <h2 className="font-serif text-lg">¿Cuánto tiempo seguido puedes escuchar?</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           {TIMES.map((t) => (
@@ -577,6 +656,8 @@ export function ProfileForm({
           Entrar para llevar tu diario a otro dispositivo →
         </motion.a>
       )}
+
+      <Curiosidades />
 
       <PrivacyPanel hasAccount={Boolean(user)} />
     </main>

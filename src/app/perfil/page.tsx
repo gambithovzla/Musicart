@@ -1,5 +1,6 @@
 // Perfil: onboarding + estado de cuenta. Los datos alimentan el motor de recomendación.
 
+import { cookies } from "next/headers";
 import { auth } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
 import {
@@ -14,6 +15,7 @@ import { stripeConfigured } from "@/lib/stripe";
 import { getSpotifyPanelState } from "@/app/perfil/spotify-actions";
 import { ProfileForm, type ProfileAnswers } from "@/components/ProfileForm";
 import { parseJson } from "@/lib/types";
+import { THEME_COOKIE } from "@/lib/device";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +27,13 @@ export default async function PerfilPage({
   searchParams: Promise<{ subscription?: string }>;
 }) {
   const { subscription: subscriptionStatus } = await searchParams;
-  const [session, identity, spotify] = await Promise.all([
+  const [session, identity, spotify, jar] = await Promise.all([
     auth(),
     getListenerIdentity(),
     getSpotifyPanelState(),
+    cookies(),
   ]);
+  const currentTheme = jar.get(THEME_COOKIE)?.value === "light" ? "light" : "dark";
 
   let initialAnswers: Partial<ProfileAnswers> | null = null;
   const profile = await findProfileRecord(identity);
@@ -57,6 +61,7 @@ export default async function PerfilPage({
       user={user}
       isAdmin={isAdmin}
       initialAnswers={initialAnswers}
+      currentTheme={currentTheme}
       duet={duet}
       spotify={spotify}
       subscription={{

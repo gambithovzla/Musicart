@@ -22,14 +22,14 @@ FORMATO DE SALIDA — SOLO un objeto JSON válido, sin texto extra:
   "trackNotes": [{ "position": 1, "title": "título EXACTO del tracklist", "note": "1 frase concreta" }],
   "wowFacts": ["¿Sabías que…? (2-4 frases cortas, cada una un dato verificable del payload)"],
   "jumps": [{ "title": "álbum destino", "artist": "artista destino", "connection": "1 frase: la relación real que une este disco con aquel" }],
-  "difficulty": 2,
-  "impact": 72,
+  "difficulty": "ENTERO 1-5 según la rúbrica de abajo (un número real, no copies este texto)",
+  "impact": "ENTERO 1-100 según la rúbrica de abajo, honesto y DISTINTO en cada disco (un número real, NO 72, no copies este texto)",
   "impactNote": "Por qué este nivel de impacto, en 2-3 frases, SOLO con hechos del payload (premios, certificaciones/ventas, posiciones en listas, reconocimiento de Rolling Stone u otras publicaciones, influencia documentada). Menciona la evidencia concreta. Si el payload trae poca evidencia, dilo con honestidad y baja el tono. PROHIBIDO inventar premios, cifras o rankings."
 }
 
 trackNotes: OBLIGATORIO — una entrada por CADA canción del tracklist del payload (position y title EXACTOS). Cada "note": 1 frase (máx. 2 si el track lo pide): qué aporta al disco, un detalle verificable del payload o por qué destaca. Si el payload no trae anécdota sobre esa pista, describe su rol en el álbum sin inventar hechos.
-wowFacts: 2 a 4 curiosidades en formato "¿Sabías que…?" — SOLO hechos concretos del FACTS PAYLOAD (passages, facts). Anécdotas de grabación, premios, controversias, datos raros. Si el payload es pobre, devuelve menos (mín. 1); nunca rellenes con generalidades vacías.
-jumps: 0 a 3 saltos de descubrimiento ("de aquí puedes saltar a…"): rivalidades, colaboraciones, influencias, mismo productor. La "connection" debe ser una mini-historia de 1-2 frases con detalle concreto del payload (nombres, relación documentada). Prioriza conexiones que aparezcan en passages del artista o del álbum. SOLO afirma relaciones respaldadas por el FACTS PAYLOAD. El álbum destino es tu recomendación curatorial. Si el payload no respalda ninguna conexión, devuelve [].
+wowFacts: 2 a 4 curiosidades en formato "¿Sabías que…?" — SOLO hechos concretos del FACTS PAYLOAD (passages, facts). PRIORIZA las CONEXIONES jugosas que enlazan este disco con otra música: samples e interpolaciones (vienen como facts de MusicBrainz, ej. "«Río Babel» usa un sample de «Porcelain» de Moby"), remixes, versiones, rivalidades o colaboraciones que aparezcan en passages. Luego: anécdotas de grabación, premios, controversias, datos raros. Si el payload es pobre, devuelve menos (mín. 1); nunca rellenes con generalidades vacías.
+jumps: 0 a 3 saltos de descubrimiento ("de aquí puedes saltar a…"): rivalidades, colaboraciones, influencias, mismo productor. La "connection" debe ser una mini-historia de 1-2 frases con detalle concreto del payload (nombres, relación documentada). APROVECHA las "Conexión de [artista]: X (colaboración/banda/…)" y los samples que vienen como facts de MusicBrainz para saltar a artistas REALMENTE vinculados; prioriza también las conexiones que aparezcan en passages del artista o del álbum. SOLO afirma relaciones respaldadas por el FACTS PAYLOAD. El álbum destino es tu recomendación curatorial. Si el payload no respalda ninguna conexión, devuelve [].
 
 difficulty (1-5): qué tan exigente es para un oído casual (1 = se entra fácil, 5 = pide oído atento).
 
@@ -41,6 +41,7 @@ impact (1-100): IMPACTO CULTURAL HONESTO — cuánto movió este disco la histor
   · 20-39: sólido, con repercusión local o de nicho.
   · 1-19: impacto cultural mínimo o sin evidencia.
 Dos discos de distinto calibre NO deben quedar con la misma nota: úsala para diferenciar.
+CÓMO ELEGIR EL NÚMERO: 1) decide el TRAMO según la evidencia del payload; 2) elige un número concreto DENTRO de ese tramo (no siempre el centro). El resultado casi nunca es 72 — ese era solo un ejemplo. Si dudas entre dos tramos, baja al menor.
 
 impactNote: la justificación del impacto que el usuario puede abrir con un clic. Es FACTUAL: se verifica contra el payload igual que la narrativa. Cita la evidencia real (un premio con su nombre, una certificación, una posición en lista, una mención de Rolling Stone/prensa si aparece en passages). No la adornes ni inventes; si no hay evidencia fuerte, sé honesto ("no destacó en premios ni listas; su huella es más de nicho").`;
 
@@ -48,6 +49,15 @@ export type GeneratedDossier = DossierContent & {
   difficulty: number;
   impact: number;
 };
+
+// Convierte a entero acotado. Tolera que el LLM devuelva número o string ("64").
+// Si viene corrupto (p. ej. copió el texto del placeholder) cae a un neutro —
+// pero el prompt está hecho para que entregue un número real y distinto por disco.
+function aEntero(v: unknown, fallback: number, min: number, max: number): number {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
 
 function normTitle(s: string): string {
   return s
@@ -114,8 +124,8 @@ export async function generateDossier(
   parsed.jumps = (parsed.jumps ?? [])
     .filter((j) => j?.title && j?.artist && j?.connection)
     .slice(0, 3);
-  parsed.difficulty = Math.min(5, Math.max(1, Math.round(parsed.difficulty ?? 2)));
-  parsed.impact = Math.min(100, Math.max(1, Math.round(parsed.impact ?? 45)));
+  parsed.difficulty = aEntero(parsed.difficulty, 3, 1, 5);
+  parsed.impact = aEntero(parsed.impact, 50, 1, 100);
   parsed.impactNote = parsed.impactNote?.toString().trim().slice(0, 600) || undefined;
   return parsed;
 }

@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { auth } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
 import { prisma } from "@/lib/db";
@@ -14,11 +13,13 @@ import { getListenerIdentity } from "@/lib/identity";
 import { stripeConfigured } from "@/lib/stripe";
 import { albumThemeStyle } from "@/lib/theme";
 import { queueKey } from "@/lib/curator";
+import { deriveGenres } from "@/lib/genres";
 import {
   parseJson,
   type AlbumLinks,
   type DiscoveryJump,
   type DossierAudio,
+  type FactsPayload,
   type Palette,
 } from "@/lib/types";
 import { ImpactoCultural } from "@/components/ImpactoCultural";
@@ -30,7 +31,12 @@ import { ReflectionForm } from "@/components/ReflectionForm";
 import { ShareAlbum } from "@/components/ShareAlbum";
 import { Paywall } from "@/components/Paywall";
 import { AlbumChat } from "@/components/AlbumChat";
+import { FeedbackCurador } from "@/components/FeedbackCurador";
 import { Narrator, type NarratorSection } from "@/components/Narrator";
+import { FuentesVerificadas } from "@/components/FuentesVerificadas";
+import { SaltoInteractivo } from "@/components/SaltoInteractivo";
+import { CuradorAlbumPanel } from "@/components/CuradorAlbumPanel";
+import { GenreTags } from "@/components/GenreTags";
 import { getChatQuota } from "@/lib/album-chat";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +103,8 @@ export default async function AlbumPage({
   const palette = parseJson<Palette | null>(album.paletteJson, null);
   const stripeReady = stripeConfigured();
   const links = parseJson<AlbumLinks>(album.linksJson, {});
+  const facts = parseJson<FactsPayload | null>(album.factsJson, null);
+  const genres = deriveGenres(facts?.tags);
   const questions = parseJson<string[]>(dossier.questionsJson, []);
   const wowFacts = parseJson<string[]>(dossier.wowFactsJson, []);
   const audio = parseJson<DossierAudio | null>(dossier.audioJson, null);
@@ -125,6 +133,33 @@ export default async function AlbumPage({
     );
     return { jump, albumId: destino?.id ?? null, coverUrl: destino?.coverUrl ?? null };
   });
+
+  // Datos del panel de curador (solo si el que mira es admin): su puntaje, si el
+  // disco está en la vitrina, su estante y los estantes ya existentes.
+  const isAdmin = isAdminEmail(session?.user?.email);
+  let adminRating: number | null = null;
+  let estantesExistentes: string[] = [];
+  if (isAdmin) {
+    const uid = session?.user?.id;
+    const [rev, shelves] = await Promise.all([
+      uid
+        ? prisma.review.findFirst({
+            where: { userId: uid, albumId: album.id },
+            select: { rating: true },
+          })
+        : Promise.resolve(null),
+      prisma.album.findMany({
+        where: { showcase: true, showcaseShelf: { not: null } },
+        select: { showcaseShelf: true },
+        distinct: ["showcaseShelf"],
+        orderBy: { showcaseShelf: "asc" },
+      }),
+    ]);
+    adminRating = rev?.rating ?? null;
+    estantesExistentes = shelves
+      .map((s) => s.showcaseShelf?.trim())
+      .filter((x): x is string => !!x);
+  }
 
   const notedTracks = dossier.trackNotes.filter((t) => t.note);
   const narratorSections: NarratorSection[] = [
@@ -208,6 +243,11 @@ export default async function AlbumPage({
           <p className="mt-1 text-lg text-dim">
             {album.artist.name} · {album.year}
           </p>
+          {genres.length > 0 && (
+            <div className="mt-3">
+              <GenreTags genres={genres} />
+            </div>
+          )}
           <div className="mt-4 flex flex-wrap items-start gap-x-5 gap-y-2 text-sm text-dim">
             {album.durationMin && <span className="pt-px">{album.durationMin} min</span>}
             <DificultadEscucha value={album.difficulty} />
@@ -273,6 +313,13 @@ export default async function AlbumPage({
                 initialQuota={chatQuota}
               />
             </div>
+
+            <FeedbackCurador
+              albumId={album.id}
+              albumTitle={album.title}
+              albumArtist={album.artist.name}
+              initialQuota={chatQuota}
+            />
 
             <div className="mb-4 mt-3 flex flex-col gap-3">
               <DossierSection n="02" title={`Quién era ${album.artist.name}`}>
@@ -346,56 +393,36 @@ export default async function AlbumPage({
               {saltos.length > 0 && (
                 <DossierSection n="08" title="Sigue la madriguera">
                   <p className="text-sm text-dim">De este disco puedes saltar a…</p>
+                  <p className="mt-1 text-xs text-dim">
+                    Si un disco aún no existe, tócalo y la IA lo crea al momento.
+                  </p>
                   <div className="mt-4 flex flex-col gap-3">
-                    {saltos.map(({ jump, albumId, coverUrl }) => {
-                      const tarjeta = (
-                        <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-                          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg">
-                            {coverUrl ? (
-                              <Image
-                                src={coverUrl}
-                                alt={`Portada de ${jump.title}`}
-                                fill
-                                sizes="56px"
-                                className="object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center bg-album-dark">
-                                <span className="font-serif text-xl text-album-light">♪</span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">
-                              {jump.title}{" "}
-                              <span className="font-normal text-dim">· {jump.artist}</span>
-                            </p>
-                            <p className="font-serif mt-1 text-sm italic leading-snug text-foreground/80">
-                              {jump.connection}
-                            </p>
-                            <p className="mt-1.5 text-xs text-dim">
-                              {albumId ? "Léelo en Musicart →" : "La IA lo está preparando…"}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                      return albumId ? (
-                        <Link
-                          key={`${jump.artist}-${jump.title}`}
-                          href={`/album/${albumId}`}
-                          className="transition-transform active:scale-[0.99]"
-                        >
-                          {tarjeta}
-                        </Link>
-                      ) : (
-                        <div key={`${jump.artist}-${jump.title}`}>{tarjeta}</div>
-                      );
-                    })}
+                    {saltos.map(({ jump, albumId, coverUrl }) => (
+                      <SaltoInteractivo
+                        key={`${jump.artist}-${jump.title}`}
+                        jump={jump}
+                        albumId={albumId}
+                        coverUrl={coverUrl}
+                      />
+                    ))}
                   </div>
                 </DossierSection>
               )}
             </div>
           </>
+        )}
+
+        <FuentesVerificadas facts={facts} />
+
+        {isAdmin && (
+          <CuradorAlbumPanel
+            albumId={album.id}
+            title={album.title}
+            rating={adminRating}
+            showcase={album.showcase}
+            shelf={album.showcaseShelf?.trim() || null}
+            estantes={estantesExistentes}
+          />
         )}
       </div>
     </main>

@@ -13,7 +13,22 @@ import {
   queueKey,
 } from "@/lib/curator";
 import { runDossierPipeline } from "@/lib/dossier/pipeline";
-import { parseJson } from "@/lib/types";
+import {
+  llm,
+  llmGeneration,
+  hayClaveIA,
+  generationModel,
+  runtimeModelName,
+  usaDialectoDeRazonamiento,
+} from "@/lib/dossier/llm";
+import { recomputeImpact } from "@/lib/dossier/impact";
+import {
+  detectarPaisesPedido,
+  diagnosticoDeOrigen,
+  type SondaOrigen,
+  type VeredictoOrigen,
+} from "@/lib/origin-guard";
+import { parseJson, type FactsPayload } from "@/lib/types";
 import {
   dossierAudioInputFromRow,
   findDossiersMissingAudio,
@@ -241,36 +256,384 @@ export async function generarDiscoSugerido(): Promise<GenerarAlbumResult> {
   }
 }
 
-export async function generateDossierTts(
-  dossierId: string,
-): Promise<{ message: string }> {
+/**
+ * Pone o quita un disco de la vitrina del curador (Album.showcase). Solo admin.
+ * Al ponerlo, guarda la fecha para ordenar la exhibición por lo más reciente.
+ */
+export async function toggleVitrina(
+  albumId: string,
+): Promise<{ ok: boolean; showcase: boolean; message: string }> {
   await requireAdmin();
-  const loaded = await loadDossierForTts(dossierId);
-  if (!loaded) throw new Error("Dossier no encontrado");
+  if (!albumId) return { ok: false, showcase: false, message: "Falta el id del disco." };
+  const album = await prisma.album.findUnique({
+    where: { id: albumId },
+    select: { showcase: true, title: true },
+  });
+  if (!album) return { ok: false, showcase: false, message: "Ese disco ya no existe." };
 
-  await renderDossierAudio(loaded.dossierId, loaded.input);
+  const nuevo = !album.showcase;
+  await prisma.album.update({
+    where: { id: albumId },
+    data: { showcase: nuevo, showcaseAt: nuevo ? new Date() : null },
+  });
+  revalidatePath("/vitrina");
   revalidatePath("/revision");
-  revalidatePath(`/album/${loaded.albumId}`);
+  revalidatePath(`/album/${albumId}`);
   return {
-    message: `Audio listo: «${loaded.albumTitle}» — ${loaded.artistName}`,
+    ok: true,
+    showcase: nuevo,
+    message: nuevo
+      ? `«${album.title}» entró a la vitrina.`
+      : `«${album.title}» salió de la vitrina.`,
   };
 }
 
-export async function generateMissingTts(limit = 5): Promise<{ message: string }> {
+/**
+ * Asigna (o quita) el estante temático de un disco en la vitrina. Solo admin.
+ * Un texto vacío lo deja sin estante. Poner estante también lo mete a la vitrina
+ * (si no lo estaba), porque agrupar algo implica exhibirlo.
+ */
+export async function setEstante(
+  albumId: string,
+  shelf: string,
+): Promise<{ ok: boolean; shelf: string | null; message: string }> {
   await requireAdmin();
-  const pending = await findDossiersMissingAudio(limit);
-  if (pending.length === 0) {
-    return { message: "Todos los dossiers publicados ya tienen audio." };
-  }
+  if (!albumId) return { ok: false, shelf: null, message: "Falta el id del disco." };
+  const limpio = shelf.trim().slice(0, 60) || null;
 
-  for (const d of pending) {
-    await renderDossierAudio(d.id, dossierAudioInputFromRow(d));
-    revalidatePath(`/album/${d.albumId}`);
-  }
+  const album = await prisma.album.findUnique({
+    where: { id: albumId },
+    select: { showcase: true },
+  });
+  if (!album) return { ok: false, shelf: null, message: "Ese disco ya no existe." };
+
+  await prisma.album.update({
+    where: { id: albumId },
+    data: {
+      showcaseShelf: limpio,
+      // Si le pones estante y no estaba en la vitrina, entra.
+      ...(limpio && !album.showcase ? { showcase: true, showcaseAt: new Date() } : {}),
+    },
+  });
+  revalidatePath("/vitrina");
   revalidatePath("/revision");
-
-  const names = pending.map((d) => `«${d.album.title}»`).join(", ");
   return {
-    message: `Audio generado para ${pending.length} disco(s): ${names}`,
+    ok: true,
+    shelf: limpio,
+    message: limpio ? `Estante: «${limpio}».` : "Sin estante.",
+  };
+}
+
+/**
+ * Puntúa un disco como curador (1-10) desde el panel. Reutiliza el modelo
+ * Review con el userId del admin, conservando el comentario/canción favorita si
+ * ya existía una reseña. Es el mismo puntaje que se muestra en el dossier y la
+ * vitrina.
+ */
+export async function puntuarAlbumAdmin(
+  albumId: string,
+  rating: number,
+): Promise<{ ok: boolean; rating: number; message: string }> {
+  const session = await requireAdmin();
+  const userId = session.user?.id;
+  if (!userId) return { ok: false, rating: 0, message: "Sesión sin id de usuario." };
+  if (!albumId) return { ok: false, rating: 0, message: "Falta el id del disco." };
+
+  const r = Math.min(10, Math.max(1, Math.round(rating)));
+  const existing = await prisma.review.findFirst({ where: { userId, albumId } });
+  if (existing) {
+    await prisma.review.update({ where: { id: existing.id }, data: { rating: r } });
+  } else {
+    await prisma.review.create({
+      data: { deviceId: `admin-${userId}`, userId, albumId, rating: r, answersJson: "{}" },
+    });
+  }
+  revalidatePath("/vitrina");
+  revalidatePath("/revision");
+  revalidatePath(`/album/${albumId}`);
+  return { ok: true, rating: r, message: `Puntuaste «${r}/10».` };
+}
+
+export async function generateDossierTts(
+  dossierId: string,
+): Promise<{ message: string; ok: boolean }> {
+  await requireAdmin();
+  try {
+    const loaded = await loadDossierForTts(dossierId);
+    if (!loaded) return { ok: false, message: "Dossier no encontrado." };
+
+    await renderDossierAudio(loaded.dossierId, loaded.input);
+    revalidatePath("/revision");
+    revalidatePath(`/album/${loaded.albumId}`);
+    return {
+      ok: true,
+      message: `Audio listo: «${loaded.albumTitle}» — ${loaded.artistName}`,
+    };
+  } catch (e) {
+    // En prod, Next oculta los errores lanzados; los devolvemos como dato para
+    // que el admin vea la causa real (p. ej. "falta BLOB_READ_WRITE_TOKEN").
+    return { ok: false, message: `No se pudo generar el audio. ${(e as Error).message}` };
+  }
+}
+
+export async function generateMissingTts(
+  limit = 5,
+): Promise<{ message: string; ok: boolean }> {
+  await requireAdmin();
+  try {
+    const pending = await findDossiersMissingAudio(limit);
+    if (pending.length === 0) {
+      return { ok: true, message: "Todos los dossiers publicados ya tienen audio." };
+    }
+
+    for (const d of pending) {
+      await renderDossierAudio(d.id, dossierAudioInputFromRow(d));
+      revalidatePath(`/album/${d.albumId}`);
+    }
+    revalidatePath("/revision");
+
+    const names = pending.map((d) => `«${d.album.title}»`).join(", ");
+    return {
+      ok: true,
+      message: `Audio generado para ${pending.length} disco(s): ${names}`,
+    };
+  } catch (e) {
+    return { ok: false, message: `No se pudo generar el audio. ${(e as Error).message}` };
+  }
+}
+
+/**
+ * Recalcula en lote el impacto de los discos viejos que quedaron pegados en 72
+ * (la IA copiaba el ejemplo). Procesa hasta `limit` por corrida; el admin puede
+ * tocar el botón otra vez para seguir. Aprovecha maxDuration=300.
+ */
+export async function recalcularImpactos(
+  limit = 20,
+): Promise<{ message: string; ok: boolean }> {
+  await requireAdmin();
+  try {
+    const pegados = await prisma.album.findMany({
+      where: { impact: 72, dossiers: { some: { locale: "es" } } },
+      include: { dossiers: { where: { locale: "es" }, select: { id: true } } },
+      take: limit,
+    });
+    if (pegados.length === 0) {
+      return { ok: true, message: "No quedan discos en 72 — todos tienen impacto real. ✓" };
+    }
+
+    let hechos = 0;
+    for (const album of pegados) {
+      const payload = parseJson<FactsPayload | null>(album.factsJson, null);
+      if (!payload) continue;
+      try {
+        const { impact, impactNote } = await recomputeImpact(payload);
+        await prisma.album.update({ where: { id: album.id }, data: { impact } });
+        if (impactNote) {
+          await prisma.dossier.updateMany({
+            where: { albumId: album.id, locale: "es" },
+            data: { impactNote },
+          });
+        }
+        hechos++;
+        revalidatePath(`/album/${album.id}`);
+      } catch {
+        // un disco que falle no detiene el lote
+      }
+    }
+
+    const restantes = await prisma.album.count({ where: { impact: 72 } });
+    revalidatePath("/revision");
+    revalidatePath("/explorar");
+    return {
+      ok: true,
+      message: `Recalculados ${hechos} disco(s).${restantes > 0 ? ` Quedan ${restantes} en 72 — toca de nuevo para seguir.` : " ¡Listo, no quedan en 72!"}`,
+    };
+  } catch (e) {
+    return { ok: false, message: `No se pudo recalcular. ${(e as Error).message}` };
+  }
+}
+
+/**
+ * Borra un disco del catálogo por completo (dossier, notas, reseñas, picks…).
+ * Solo admin. Útil para limpiar un sencillo que se coló o un disco no deseado.
+ */
+export async function borrarAlbum(
+  albumId: string,
+): Promise<{ message: string; ok: boolean }> {
+  await requireAdmin();
+  if (!albumId) return { ok: false, message: "Falta el id del disco." };
+  try {
+    const album = await prisma.album.findUnique({
+      where: { id: albumId },
+      select: { title: true },
+    });
+    if (!album) return { ok: false, message: "Ese disco ya no existe." };
+
+    // Borramos los hijos sin cascade automática, luego el álbum (DossierView sí
+    // cascadea). Todo en una transacción para no dejar restos.
+    await prisma.$transaction([
+      prisma.trackNote.deleteMany({ where: { dossier: { albumId } } }),
+      prisma.dossier.deleteMany({ where: { albumId } }),
+      prisma.review.deleteMany({ where: { albumId } }),
+      prisma.dailyPick.deleteMany({ where: { albumId } }),
+      prisma.duetPick.deleteMany({ where: { albumId } }),
+      prisma.dossierChat.deleteMany({ where: { albumId } }),
+      prisma.album.delete({ where: { id: albumId } }),
+    ]);
+
+    revalidatePath("/explorar");
+    revalidatePath("/revision");
+    return { ok: true, message: `Borrado: «${album.title}».` };
+  } catch (e) {
+    return { ok: false, message: `No se pudo borrar. ${(e as Error).message}` };
+  }
+}
+
+/**
+ * ¿EL CURADOR ESTÁ VIVO? (diagnóstico del dueño, sin terminal.)
+ *
+ * Existe porque la app está diseñada para no caerse nunca: si la IA no responde
+ * —clave vencida, sin saldo, un modelo mal escrito en las variables, un 429—
+ * el disco del día cae al catálogo y se sirve igual, en tres segundos y sin una
+ * palabra. Desde fuera eso no se ve como "la IA está caída": se vive como "la
+ * app dejó de leer lo que le pido y me repite discos". Este botón hace UNA
+ * llamada de verdad a cada modelo y dice qué contestaron.
+ *
+ * Cuesta céntimos (dos llamadas de 5 tokens) y solo corre cuando lo pulsas.
+ */
+export async function probarCurador(): Promise<{
+  hayClave: boolean;
+  proveedor: string;
+  pruebas: {
+    nombre: string;
+    modelo: string;
+    ok: boolean;
+    ms: number;
+    detalle: string;
+  }[];
+}> {
+  await requireAdmin();
+
+  const hayClave = hayClaveIA();
+  const proveedor =
+    process.env.LLM_PROVIDER?.toLowerCase() ||
+    (process.env.OPENAI_API_KEY ? "openai" : process.env.ANTHROPIC_API_KEY ? "anthropic" : "—");
+
+  if (!hayClave) {
+    return {
+      hayClave,
+      proveedor,
+      pruebas: [
+        {
+          nombre: "Clave de IA",
+          modelo: "—",
+          ok: false,
+          ms: 0,
+          detalle:
+            "No hay OPENAI_API_KEY ni ANTHROPIC_API_KEY. Sin clave no se fabrica " +
+            "ningún disco nuevo: todo sale del catálogo ya publicado.",
+        },
+      ],
+    };
+  }
+
+  // Dos modelos, dos trabajos: el barato atiende el runtime (elegir del
+  // catálogo, verificar el pedido) y el de generación propone y escribe. Pueden
+  // fallar por separado — un GENERATION_MODEL mal escrito rompe justo la parte
+  // que fabrica el disco a tu medida, y el resto sigue funcionando.
+  const pruebas: {
+    nombre: string;
+    modelo: string;
+    ok: boolean;
+    ms: number;
+    detalle: string;
+  }[] = [];
+
+  const sondas: { nombre: string; modelo: string; llamar: () => Promise<string> }[] = [
+    {
+      nombre: "Runtime (elige y verifica)",
+      modelo: runtimeModelName(),
+      llamar: () =>
+        llm({ system: "Responde solo: ok", user: "ok", maxTokens: 5, timeoutMs: 15_000 }),
+    },
+    {
+      nombre: "Generación (propone y escribe)",
+      modelo: generationModel(),
+      llamar: () =>
+        llmGeneration({
+          system: "Responde solo: ok",
+          user: "ok",
+          maxTokens: 5,
+          timeoutMs: 20_000,
+        }),
+    },
+  ];
+
+  for (const sonda of sondas) {
+    const t0 = Date.now();
+    // Con qué dialecto se le está hablando: los modelos de razonamiento (o1, o3,
+    // gpt-5) usan otros parámetros, y poner uno de esos sin saberlo era romper
+    // TODAS las llamadas con la cuenta llena de saldo.
+    const dialecto = usaDialectoDeRazonamiento(sonda.modelo)
+      ? " · modelo de razonamiento"
+      : "";
+    try {
+      const raw = await sonda.llamar();
+      pruebas.push({
+        nombre: sonda.nombre,
+        modelo: `${sonda.modelo}${dialecto}`,
+        ok: true,
+        ms: Date.now() - t0,
+        detalle: `Contestó: "${raw.trim().slice(0, 40)}"`,
+      });
+    } catch (e) {
+      pruebas.push({
+        nombre: sonda.nombre,
+        modelo: `${sonda.modelo}${dialecto}`,
+        ok: false,
+        ms: Date.now() - t0,
+        detalle: (e as Error).message.slice(0, 240),
+      });
+    }
+  }
+
+  return { hayClave, proveedor, pruebas };
+}
+
+/**
+ * «¿Sabe la app de dónde es este artista?» — el diagnóstico de las tres fuentes
+ * del origen (7.9, ampliada en ago 2026).
+ *
+ * Por qué hace falta: MusicBrainz, Wikidata y la Wikipedia son APIs públicas de
+ * terceros. Si una se cae o cambia, la barrera NO se rompe — se calla y deja
+ * pasar, que es lo correcto pero también lo invisible: desde fuera solo se ve
+ * que vuelven los avisos de "no pude confirmar que sea de Venezuela", o peor,
+ * que se cuela un artista de otro país. Esto pregunta a las tres delante de ti
+ * y enseña qué contestó cada una. No gasta IA: son datos abiertos.
+ */
+export async function probarOrigen(
+  artista: string,
+  pedido: string,
+): Promise<{
+  paises: string[];
+  sondas: SondaOrigen[];
+  veredicto: VeredictoOrigen["veredicto"];
+  origen: string | null;
+  fuente: string | null;
+}> {
+  await requireAdmin();
+
+  const paises = detectarPaisesPedido(pedido);
+  if (paises.length === 0) {
+    return { paises: [], sondas: [], veredicto: "desconocido", origen: null, fuente: null };
+  }
+
+  const { sondas, veredicto } = await diagnosticoDeOrigen(artista.trim(), paises);
+  return {
+    paises: paises.map((p) => p.nombre),
+    sondas,
+    veredicto: veredicto.veredicto,
+    origen: veredicto.origen,
+    fuente: veredicto.fuente ?? null,
   };
 }

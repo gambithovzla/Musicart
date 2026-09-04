@@ -5,16 +5,33 @@
 import { cookies } from "next/headers";
 import { auth } from "@/auth";
 import { getTodayPick, formatDateEs, todayKey } from "@/lib/daily";
-import { getPersonalizedPick, puedeGenerarPickFresco } from "@/lib/recommend";
+import {
+  getPersonalizedPick,
+  puedeGenerarPickFresco,
+  getRotacionPickGuardada,
+} from "@/lib/recommend";
 import { getMadriguera } from "@/lib/madriguera";
+import { getCaminoEnCurso } from "@/lib/caminos";
 import { hasProfile } from "@/app/actions";
-import { DEVICE_COOKIE, TZ_COOKIE, LANG_COOKIE, parseTodayLang } from "@/lib/device";
+import {
+  DEVICE_COOKIE,
+  TZ_COOKIE,
+  LANG_COOKIE,
+  PEDIDO_COOKIE,
+  BITACORA_COOKIE,
+  parseTodayLang,
+  parseTodayPedido,
+  parseBitacora,
+} from "@/lib/device";
+import { searchLinks } from "@/lib/sources/odesli";
 import { albumThemeStyle } from "@/lib/theme";
-import { parseJson, type Palette } from "@/lib/types";
+import { deriveGenres } from "@/lib/genres";
+import { parseJson, type AlbumLinks, type FactsPayload, type Palette } from "@/lib/types";
 import { isAdminEmail } from "@/lib/admin";
 import { DailyReveal } from "@/components/DailyReveal";
 import { Onboarding } from "@/components/Onboarding";
 import { CreandoDiscoHoy } from "@/components/CreandoDiscoHoy";
+import { CaminoEnCurso } from "@/components/CaminoEnCurso";
 import { RehacerDiscoAdmin } from "@/components/RehacerDiscoAdmin";
 import { MoodCheckin } from "@/components/MoodCheckin";
 import { CuriosityCard } from "@/components/CuriosityCard";
@@ -23,8 +40,47 @@ import { todayQuestion } from "@/lib/curiosities";
 import type { CuriosityAnswer } from "@/lib/curiosities";
 import { getListenerIdentity, findProfileRecord, reviewsWhere } from "@/lib/identity";
 import { prisma } from "@/lib/db";
+import { AmigoPick } from "@/components/AmigoPick";
 
 export const dynamic = "force-dynamic";
+
+async function getPartnerPick(
+  userId: string,
+  dateKey: string,
+): Promise<{ partnerName: string | null; album: { id: string; title: string; artist: string; year: number; coverUrl: string | null } } | null> {
+  const pair = await prisma.duetPair.findFirst({
+    where: {
+      status: "active",
+      OR: [{ userAId: userId }, { userBId: userId }],
+    },
+    include: {
+      userA: { select: { id: true, name: true } },
+      userB: { select: { id: true, name: true } },
+    },
+  });
+  if (!pair || !pair.userBId) return null;
+
+  const isA = pair.userAId === userId;
+  const partnerId = isA ? pair.userBId : pair.userAId;
+  const partnerUser = isA ? pair.userB : pair.userA;
+
+  const pick = await prisma.dailyPick.findFirst({
+    where: { userId: partnerId, date: dateKey },
+    include: { album: { include: { artist: { select: { name: true } } } } },
+  });
+  if (!pick) return null;
+
+  return {
+    partnerName: partnerUser?.name ?? null,
+    album: {
+      id: pick.album.id,
+      title: pick.album.title,
+      artist: pick.album.artist.name,
+      year: pick.album.year,
+      coverUrl: pick.album.coverUrl,
+    },
+  };
+}
 
 function firstSentence(text: string, maxLen = 160): string {
   const match = text.match(/^.+?[.!?…](\s|$)/);
@@ -72,7 +128,19 @@ export default async function Home() {
     }
   }
 
-  const pick = personal?.dossier ?? (await getTodayPick(tz));
+  // Sin pick personalizado caemos a la rotación global, pero a una versión que
+  // GUARDA y REGISTRA el disco mostrado (y evita los que el oyente ya vio): así
+  // ningún disco "solo visto por rotación" vuelve a salir como si fuera nuevo.
+  // Si no hay identidad (ni device ni cuenta) usamos la rotación ciega clásica.
+  // El antojo que escribió hoy en el gate. Aquí no se puede fabricar nada (por
+  // eso estamos en la rotación), pero sí tenerlo en cuenta al elegir del
+  // catálogo y, sobre todo, decirle que hoy no se le pudo cumplir.
+  const pedidoDeHoy = parseTodayPedido(jar.get(PEDIDO_COOKIE)?.value, dateKey);
+  const rotacion =
+    !personal && (deviceId || userId)
+      ? await getRotacionPickGuardada(deviceId, userId, tz, pedidoDeHoy)
+      : null;
+  const pick = personal?.dossier ?? rotacion?.dossier ?? (await getTodayPick(tz));
 
   if (!pick) {
     return (
@@ -87,10 +155,15 @@ export default async function Home() {
     );
   }
 
-  const [madriguera, identity] = await Promise.all([
+  const [madriguera, identity, partnerPick] = await Promise.all([
     getMadriguera(pick.album.id),
     getListenerIdentity(),
+    userId ? getPartnerPick(userId, dateKey) : Promise.resolve(null),
   ]);
+
+  // Fase 8: si tiene un camino a medias, se lo recordamos con una tira discreta.
+  // Nunca rompe la home (getCaminoEnCurso devuelve null ante cualquier fallo).
+  const caminoEnCurso = await getCaminoEnCurso(identity);
 
   // Pregunta del día: fallback estático; el CuriosityCard carga la IA en background.
   let initialCuriosityQuestion: ReturnType<typeof todayQuestion> = null;
@@ -118,6 +191,13 @@ export default async function Home() {
   }
 
   const palette = parseJson<Palette | null>(pick.album.paletteJson, null);
+  const storedLinks = parseJson<AlbumLinks>(pick.album.linksJson, {});
+  const fallbackLinks = searchLinks(pick.album.title, pick.album.artist.name);
+  const albumLinks: AlbumLinks = {
+    spotify: storedLinks.spotify ?? fallbackLinks.spotify,
+    appleMusic: storedLinks.appleMusic,
+    youtubeMusic: storedLinks.youtubeMusic ?? fallbackLinks.youtubeMusic,
+  };
 
   const reviewFilter = reviewsWhere(identity);
   const yaResenoHoy =
@@ -128,6 +208,8 @@ export default async function Home() {
     }));
   const wowFacts = parseJson<string[]>(pick.wowFactsJson ?? "[]", []);
   const wowHook = yaResenoHoy && wowFacts.length > 0 ? wowFacts[0] : null;
+  const pickFacts = parseJson<Partial<FactsPayload>>(pick.album.factsJson, {});
+  const genres = deriveGenres(pickFacts.tags);
 
   return (
     <main style={albumThemeStyle(palette)}>
@@ -140,7 +222,12 @@ export default async function Home() {
         }}
       />
       <div className="relative">
-        {isAdminEmail(session?.user?.email) && <RehacerDiscoAdmin />}
+        {isAdminEmail(session?.user?.email) && (
+          <RehacerDiscoAdmin
+            dateKey={dateKey}
+            bitacoraPrevia={parseBitacora(jar.get(BITACORA_COOKIE)?.value, dateKey)}
+          />
+        )}
         <MoodCheckin
           mood={personal?.mood ?? null}
           canChange={!personal?.regenerated}
@@ -158,12 +245,17 @@ export default async function Home() {
             impactNote: pick.impactNote,
             hook: firstSentence(pick.intro),
             dateLabel: formatDateEs(tz),
-            reason: personal?.reason ?? null,
+            reason: personal?.reason ?? rotacion?.reason ?? null,
             personalized: Boolean(personal),
             showProfileInvite: !tienePerfil,
             returnWelcome: personal?.returnPick ?? false,
             madriguera,
             wowHook,
+            links: albumLinks,
+            genres,
+            // El admin usa "Rehacer"; al resto le ofrecemos "dame otro" si tiene
+            // un disco fabricado a su medida (no en la rotación global genérica).
+            canReroll: Boolean(personal) && !isAdminEmail(session?.user?.email),
           }}
         />
         {initialCuriosityQuestion && (
@@ -172,6 +264,13 @@ export default async function Home() {
             dateKey={dateKey}
           />
         )}
+        {partnerPick && (
+          <AmigoPick
+            partnerName={partnerPick.partnerName}
+            album={partnerPick.album}
+          />
+        )}
+        {caminoEnCurso && <CaminoEnCurso camino={caminoEnCurso} />}
       </div>
     </main>
   );

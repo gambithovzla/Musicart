@@ -37,6 +37,16 @@ export function formatDateEs(tz?: string | null): string {
   }).format(now);
 }
 
+/** Elige un elemento determinista de una lista según la fecha: mismo día =
+ *  mismo elemento para todo el mundo; cambia solo cuando cambia el día. La
+ *  lista debe llegar en un orden estable (mismo criterio siempre) para que la
+ *  rotación no salte al azar entre cargas. */
+export function pickForDate<T>(items: T[], dateKey: string): T {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const daysSinceEpoch = Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
+  return items[daysSinceEpoch % items.length];
+}
+
 export async function getTodayPick(tz?: string | null) {
   const dossiers = await prisma.dossier.findMany({
     where: { status: "published", locale: "es" },
@@ -45,8 +55,5 @@ export async function getTodayPick(tz?: string | null) {
   });
   if (dossiers.length === 0) return null;
 
-  const key = todayKey(tz);
-  const [y, m, d] = key.split("-").map(Number);
-  const daysSinceEpoch = Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
-  return dossiers[daysSinceEpoch % dossiers.length];
+  return pickForDate(dossiers, todayKey(tz));
 }

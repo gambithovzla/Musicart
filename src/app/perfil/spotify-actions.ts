@@ -5,7 +5,6 @@ import { cookies } from "next/headers";
 import { DEVICE_COOKIE } from "@/lib/device";
 import { parseJson } from "@/lib/types";
 import { getListenerIdentity, findProfileRecord } from "@/lib/identity";
-import { prisma } from "@/lib/db";
 import {
   disconnectSpotify,
   syncSpotifyTasteForUser,

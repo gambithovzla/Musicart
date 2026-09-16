@@ -92,9 +92,8 @@ export function dedupeReviewsByAlbum<
 /** Perfil canónico: con sesión, el ligado a la cuenta (viaja entre dispositivos). */
 export async function findProfileRecord(identity: ListenerIdentity) {
   if (identity.userId) {
-    const byUser = await prisma.profile.findUnique({
-      where: { userId: identity.userId },
-    });
+    const { resolveProfileForUser } = await import("./merge-device");
+    const byUser = await resolveProfileForUser(identity.userId, identity.deviceId);
     if (byUser) return byUser;
   }
   if (identity.deviceId) {

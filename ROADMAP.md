@@ -1170,7 +1170,36 @@ discos con una bandera encima.
 
 ---
 
-## Estado actual (agosto 2026)
+## Fase 12 — El trabajador social (EN CURSO, septiembre 2026)
+
+Musicart deja de depender de edición manual para convertir sus dossiers en piezas
+verticales. La primera edición es deliberadamente supervisada: el sistema propone,
+verifica y renderiza; el dueño aprueba. Publicar sin aprobación y usar grabaciones
+comerciales quedan fuera del MVP.
+
+- [x] **12.1 Mesa editorial y recibos** — `SocialContent`, snapshot del facts
+  payload, reporte de verificación, estados y panel dentro de `/revision`.
+- [x] **12.2 Editor de guion** — pieza de 25–40 s basada exclusivamente en el
+  dossier publicado y su facts payload; fallback determinista si la IA cae.
+- [x] **12.3 Imprenta vertical** — composición Remotion 1080×1920 con la identidad
+  tipográfica de Musicart, TTS y worker de render a MP4.
+- [ ] **12.4 Prueba real en producción** — generar, aprobar y renderizar al menos
+  cinco piezas; ajustar ritmo, voz, legibilidad y retención antes de publicar solo.
+- [ ] **12.5 Distribución oficial** — Instagram y YouTube primero; TikTok a draft
+  con finalización humana mientras su API no admita este caso de uso autónomo.
+- [ ] **12.6 Aprendizaje** — snapshots de métricas y briefing editorial semanal.
+
+### Criterios de aceptación
+
+- [ ] Un dossier publicado produce un MP4 vertical sin edición manual.
+- [x] Ninguna pieza se aprueba si el verificador detecta hechos sin respaldo.
+- [x] El MVP no incrusta música comercial ni material de terceros sin derechos.
+- [x] Un fallo de IA conserva un guion seguro construido desde narrativa verificada.
+- [ ] El dueño puede reproducir y descargar el MP4 desde `/revision` en producción.
+
+---
+
+## Estado actual (septiembre 2026)
 
 **Fases 0–7 completas; Fase 8 casi cerrada (falta 8.6), Fase 9 EN CURSO y Fase
 10 (el rediseño "La imprenta") completada; Fase 11 (el Atlas) EN CURSO**
@@ -1179,7 +1208,12 @@ por decisión del dueño, que priorizó el Salón de la Fama; la 10 fue un encar
 transversal suyo y no altera el orden de las fases de producto: **la fase de
 trabajo sigue siendo la 9**.
 
-**La fase de trabajo es ahora la 11** (el Atlas), abierta por encargo del dueño
+**La fase de trabajo es ahora la 12** (el trabajador social), abierta por encargo
+explícito del dueño el 19 de septiembre de 2026. La Fase 11 conserva sus criterios
+de aceptación pendientes, pero no se modifica desde este trabajo. Antes de ampliar
+a publicación autónoma, la 12.4 debe probar la calidad de cinco piezas reales.
+
+La fase previa de trabajo era la 11 (el Atlas), abierta por encargo del dueño
 en cuanto la 7.11 dio las fuentes que le faltaban. De la Fase 9 no queda código
 pendiente: cerrada la 9.9, **lo único que falta es la 9.6**, y esa no se
 escribe — se toca. El dueño entra a `/revision`, le da

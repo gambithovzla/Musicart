@@ -35,6 +35,8 @@ import {
   loadDossierForTts,
   renderDossierAudio,
 } from "@/lib/dossier/render-audio";
+import { generateSocialContent } from "@/lib/social/generate";
+import type { SocialVerification } from "@/lib/social/types";
 
 export async function publishDossier(dossierId: string) {
   await requireAdmin();
@@ -50,6 +52,44 @@ export async function discardDossier(dossierId: string) {
   await prisma.trackNote.deleteMany({ where: { dossierId } });
   await prisma.dossier.delete({ where: { id: dossierId } });
   revalidatePath("/revision");
+}
+
+export async function createSocialDraft(dossierId: string): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  try {
+    const content = await generateSocialContent(dossierId);
+    revalidatePath("/revision");
+    return content.status === "draft"
+      ? { ok: true, message: "El editor creó el guion y superó la verificación factual." }
+      : { ok: false, message: "El guion quedó bloqueado porque no superó la verificación. Revisa sus recibos." };
+  } catch (error) {
+    return { ok: false, message: (error as Error).message };
+  }
+}
+
+export async function approveSocialDraft(contentId: string): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  const content = await prisma.socialContent.findUnique({ where: { id: contentId } });
+  if (!content) return { ok: false, message: "La pieza ya no existe." };
+  const verification = parseJson<SocialVerification | null>(content.verificationJson, null);
+  if (!verification?.ok) return { ok: false, message: "No se puede aprobar: la verificación factual no está limpia." };
+  if (content.rightsStatus !== "clear") return { ok: false, message: "No se puede aprobar: falta resolver los derechos de los recursos." };
+  if (!["draft", "failed"].includes(content.status)) {
+    return { ok: false, message: `La pieza ya está en estado ${content.status}.` };
+  }
+  await prisma.socialContent.update({
+    where: { id: contentId },
+    data: { status: "approved", error: null },
+  });
+  revalidatePath("/revision");
+  return { ok: true, message: "Pieza aprobada. El worker ya puede generar la voz y el MP4." };
+}
+
+export async function archiveSocialDraft(contentId: string): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  await prisma.socialContent.update({ where: { id: contentId }, data: { status: "archived" } });
+  revalidatePath("/revision");
+  return { ok: true, message: "Pieza retirada de la mesa editorial." };
 }
 
 export type GenerarAlbumResult = {

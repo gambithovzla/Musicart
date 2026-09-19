@@ -19,23 +19,23 @@ model Artist {
 }
 
 model Album {
-  id          String  @id @default(cuid())
-  mbid        String? @unique
-  title       String
-  year        Int
-  coverUrl    String?
-  durationMin Int?
-  difficulty  Int     @default(2) // 1-5 estrellas
-  impact      Int     @default(50) // 1-100 impacto cultural (honesto: 100 = hito histórico)
-  linksJson   String  @default("{}") // { spotify, appleMusic, youtubeMusic }
-  paletteJson String? // swatches extraídos de la portada
-  factsJson   String  @default("{}") // facts payload con fuentes (grounding IA)
-  showcase    Boolean @default(false) // en la vitrina del curador (favoritos del admin)
-  showcaseAt  DateTime? // cuándo se puso en la vitrina (orden de exhibición)
+  id            String    @id @default(cuid())
+  mbid          String?   @unique
+  title         String
+  year          Int
+  coverUrl      String?
+  durationMin   Int?
+  difficulty    Int       @default(2) // 1-5 estrellas
+  impact        Int       @default(50) // 1-100 impacto cultural (honesto: 100 = hito histórico)
+  linksJson     String    @default("{}") // { spotify, appleMusic, youtubeMusic }
+  paletteJson   String? // swatches extraídos de la portada
+  factsJson     String    @default("{}") // facts payload con fuentes (grounding IA)
+  showcase      Boolean   @default(false) // en la vitrina del curador (favoritos del admin)
+  showcaseAt    DateTime? // cuándo se puso en la vitrina (orden de exhibición)
   showcaseShelf String? // estante temático de la vitrina (p. ej. "Jazz nocturno")
 
-  artistId   String
-  artist     Artist      @relation(fields: [artistId], references: [id])
+  artistId     String
+  artist       Artist        @relation(fields: [artistId], references: [id])
   dossiers     Dossier[]
   reviews      Review[]
   dailyPicks   DailyPick[]
@@ -59,10 +59,37 @@ model Dossier {
   wowFactsJson  String  @default("[]") // 2-4 "¿Sabías que…?" verificados contra factsJson
   audioJson     String? // { intro: url, artistStory: url, ... } MP3s TTS pre-renderizados
 
-  album      Album       @relation(fields: [albumId], references: [id])
-  trackNotes TrackNote[]
+  album          Album           @relation(fields: [albumId], references: [id])
+  trackNotes     TrackNote[]
+  socialContents SocialContent[]
 
   @@unique([albumId, locale])
+}
+
+// Fábrica social de Musicart: un plan editorial verificable antes de renderizar
+// o publicar. El JSON conserva escenas y recibos sin duplicar el catálogo.
+model SocialContent {
+  id                String   @id @default(cuid())
+  dossierId         String
+  format            String   @default("vertical_video")
+  status            String   @default("draft") // draft | blocked | approved | rendering | ready | failed | archived
+  hook              String
+  script            String
+  caption           String
+  scenesJson        String   @default("[]")
+  factsSnapshotJson String   @default("{}")
+  verificationJson  String   @default("{}")
+  rightsStatus      String   @default("clear") // clear | review | blocked
+  audioUrl          String?
+  videoUrl          String?
+  error             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  dossier Dossier @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([dossierId, createdAt])
 }
 
 // Cola de generación del catálogo (Fase 2): el curador IA propone álbumes,
@@ -167,8 +194,8 @@ model User {
   dailyPicks        DailyPick[]
   dossierViews      DossierView[]
   pushSubscriptions PushSubscription[]
-  duetAsInviter     DuetPair[] @relation("DuetInviter")
-  duetAsPartner     DuetPair[] @relation("DuetPartner")
+  duetAsInviter     DuetPair[]         @relation("DuetInviter")
+  duetAsPartner     DuetPair[]         @relation("DuetPartner")
   caminos           Camino[]
 
   stripeCustomerId   String?   @unique
@@ -409,8 +436,8 @@ model DossierView {
   monthKey    String // YYYY-MM
   createdAt   DateTime @default(now())
 
-  album Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
-  user  User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  album  Album   @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String?
 
   @@unique([albumId, listenerKey, monthKey])

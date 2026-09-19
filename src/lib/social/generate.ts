@@ -36,6 +36,12 @@ Cada elemento de "unsupported" debe ser una cita textual exacta y completa copia
 
 Responde SOLO JSON: {"unsupported":["cita textual exacta del TARGET"]}.`;
 
+const REPAIR_SYSTEM = `Eres el editor de cierre de Musicart. Recibirás una pieza social en JSON y las observaciones exactas del verificador.
+
+Corrige la pieza eliminando o reescribiendo únicamente las afirmaciones señaladas. Usa solo el FACTS PAYLOAD y el DOSSIER VERIFICADO. Si una afirmación es ambigua, elimínala: nunca intentes defenderla ni sustituirla por otro dato no respaldado.
+
+Conserva el tono, la duración, la estructura JSON y entre 4 y 6 escenas contiguas. Devuelve SOLO el JSON completo corregido, con la misma forma de la pieza original.`;
+
 type LoadedDossier = NonNullable<Awaited<ReturnType<typeof loadDossier>>>;
 
 async function loadDossier(dossierId: string) {
@@ -152,6 +158,22 @@ async function verify(
   }
 }
 
+async function repairPlan(
+  plan: SocialPlan,
+  facts: FactsPayload,
+  dossierText: string,
+  verification: SocialVerification,
+): Promise<SocialPlan> {
+  const observations = [...verification.hardErrors, ...verification.unsupportedClaims];
+  const raw = await llmGeneration({
+    system: REPAIR_SYSTEM,
+    user: `<SOURCES>\nFACTS PAYLOAD:\n${JSON.stringify(facts, null, 2)}\n\nDOSSIER VERIFICADO:\n${dossierText}\n</SOURCES>\n\n<PIEZA>\n${JSON.stringify(plan, null, 2)}\n</PIEZA>\n\n<OBSERVACIONES>\n${observations.map((item) => `- ${item}`).join("\n")}\n</OBSERVACIONES>`,
+    temperature: 0.2,
+    maxTokens: 1800,
+  });
+  return socialPlanSchema.parse(extractJson(raw));
+}
+
 export async function generateSocialContent(dossierId: string) {
   const d = await loadDossier(dossierId);
   if (!d || d.status !== "published") throw new Error("El dossier debe estar publicado antes de convertirlo en video.");
@@ -186,7 +208,27 @@ export async function generateSocialContent(dossierId: string) {
     usedFallback = true;
   }
 
-  const verification = await verify(plan, facts, dossierText, usedFallback);
+  let verification = await verify(plan, facts, dossierText, usedFallback);
+
+  // Una frase dudosa no debe obligar al dueño a descartar y volver a crear la
+  // pieza a mano. El editor recibe el recibo exacto, corrige una vez y vuelve a
+  // pasar por la misma barrera. Si todavía hay dudas, usamos la composición
+  // conservadora construida solo con el dossier que ya fue verificado.
+  if (!verification.ok && !usedFallback) {
+    try {
+      plan = await repairPlan(plan, facts, dossierText, verification);
+      verification = await verify(plan, facts, dossierText, false);
+    } catch (error) {
+      console.warn(`[social] La corrección automática falló: ${(error as Error).message}`);
+    }
+
+    if (!verification.ok) {
+      plan = fallbackPlan(d);
+      usedFallback = true;
+      verification = await verify(plan, facts, dossierText, usedFallback);
+    }
+  }
+
   return prisma.socialContent.create({
     data: {
       dossierId: d.id,

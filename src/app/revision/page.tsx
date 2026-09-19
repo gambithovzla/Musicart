@@ -21,6 +21,9 @@ import { LevantarSalon } from "@/components/LevantarSalon";
 import { EstadoCurador } from "./EstadoCurador";
 import { EstadoOrigen } from "./EstadoOrigen";
 import { getCanonCurado, estadoDelSalon } from "@/lib/canon/consulta";
+import { parseJson } from "@/lib/types";
+import type { SocialVerification } from "@/lib/social/types";
+import { SocialStudio, type SocialContentRow, type SocialDossierOption } from "./SocialStudio";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -49,7 +52,7 @@ export default async function RevisionPage() {
     );
   }
 
-  const [canonCurado, estadoSalon, metrics, drafts, cola, publicados] = await Promise.all([
+  const [canonCurado, estadoSalon, metrics, drafts, cola, publicados, socialContents] = await Promise.all([
     getCanonCurado(),
     estadoDelSalon(),
     getProductMetrics(),
@@ -66,6 +69,12 @@ export default async function RevisionPage() {
       where: { status: "published", locale: "es" },
       include: { album: { include: { artist: true } } },
       orderBy: { album: { title: "asc" } },
+    }),
+    prisma.socialContent.findMany({
+      where: { status: { not: "archived" } },
+      include: { dossier: { include: { album: { include: { artist: true } } } } },
+      orderBy: { createdAt: "desc" },
+      take: 20,
     }),
   ]);
 
@@ -116,6 +125,30 @@ export default async function RevisionPage() {
     hasAudio: dossierHasAudio(d.audioJson),
   }));
   const missingTts = ttsRows.filter((d) => !d.hasAudio).length;
+  const socialDossiers: SocialDossierOption[] = publicados.map((d) => ({
+    id: d.id,
+    title: d.album.title,
+    artist: d.album.artist.name,
+    year: d.album.year,
+  }));
+  const socialRows: SocialContentRow[] = socialContents.map((content) => {
+    const verification = parseJson<SocialVerification | null>(content.verificationJson, null);
+    return {
+      id: content.id,
+      title: content.dossier.album.title,
+      artist: content.dossier.album.artist.name,
+      hook: content.hook,
+      script: content.script,
+      caption: content.caption,
+      status: content.status,
+      rightsStatus: content.rightsStatus,
+      videoUrl: content.videoUrl,
+      error: content.error,
+      verificationOk: Boolean(verification?.ok),
+      verificationNotes: [...(verification?.hardErrors ?? []), ...(verification?.unsupportedClaims ?? [])],
+      createdAt: content.createdAt.toLocaleDateString("es-PE"),
+    };
+  });
 
   return (
     <main className="px-6 pb-16 pt-12">
@@ -126,6 +159,15 @@ export default async function RevisionPage() {
       </header>
 
       <AnalyticsPanel metrics={metrics} />
+
+      <section className="mt-12">
+        <p className="rotulo text-album">Trabajador social · edición I</p>
+        <h2 className="font-serif mt-2 text-2xl">La mesa de video</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-dim">
+          Convierte un dossier verificado en un guion vertical, revisa sus recibos y apruébalo antes de que el worker genere la voz y el MP4.
+        </p>
+        <SocialStudio dossiers={socialDossiers} contents={socialRows} />
+      </section>
 
       <section className="mt-10">
         <h2 className="font-serif text-xl">Buscar y crear</h2>

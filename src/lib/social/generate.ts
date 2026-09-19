@@ -26,7 +26,15 @@ Devuelve SOLO JSON con esta forma:
 
 Usa de 4 a 6 escenas contiguas que empiecen en 0 y terminen en durationSec. kind solo puede ser hook, album, context, payoff o cta. sourceRefs señala album, facts[n], passages[n], intro, artistStory, whyItMatters o trackNotes[n].`;
 
-const VERIFY_SYSTEM = `Eres el verificador final de un guion de Musicart. Compara el guion con el FACTS PAYLOAD y el DOSSIER VERIFICADO. Devuelve únicamente afirmaciones factuales concretas que no estén respaldadas. No marques opiniones, descripciones estéticas, interpretaciones emocionales ni invitaciones a escuchar. Responde SOLO JSON: {"unsupported":["..."]}.`;
+const VERIFY_SYSTEM = `Eres el verificador final de un guion de Musicart.
+
+Tu único objeto de revisión es el texto encerrado en <TARGET>. El FACTS PAYLOAD y el DOSSIER VERIFICADO, encerrados en <SOURCES>, son fuentes de respaldo: nunca los revises ni devuelvas afirmaciones tomadas de ellos.
+
+Busca en <TARGET> afirmaciones factuales concretas que no estén respaldadas por <SOURCES>. No marques opiniones, descripciones estéticas, interpretaciones emocionales ni invitaciones a escuchar.
+
+Cada elemento de "unsupported" debe ser una cita textual exacta y completa copiada de <TARGET>. No parafrasees, no expliques y no menciones hechos que solo aparezcan en <SOURCES>. Si no puedes copiar la afirmación literalmente de <TARGET>, no la incluyas.
+
+Responde SOLO JSON: {"unsupported":["cita textual exacta del TARGET"]}.`;
 
 type LoadedDossier = NonNullable<Awaited<ReturnType<typeof loadDossier>>>;
 
@@ -83,6 +91,32 @@ function hardErrors(plan: SocialPlan, facts: FactsPayload): string[] {
   return errors;
 }
 
+function comparable(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * El modelo verificador a veces devolvía hechos que había leído en las fuentes,
+ * aunque no aparecieran en la pieza social. Una observación solo puede bloquear
+ * la publicación si es, como exige el prompt, una cita del texto revisado.
+ */
+function targetClaimsOnly(claims: unknown[], target: string): string[] {
+  const normalizedTarget = comparable(target);
+  return claims
+    .filter((claim): claim is string => typeof claim === "string")
+    .map((claim) => claim.trim())
+    .filter(Boolean)
+    .filter((claim) => {
+      const normalizedClaim = comparable(claim);
+      return normalizedClaim.length >= 8 && normalizedTarget.includes(normalizedClaim);
+    });
+}
+
 async function verify(
   plan: SocialPlan,
   facts: FactsPayload,
@@ -94,13 +128,19 @@ async function verify(
     return { ok: hard.length === 0, hardErrors: hard, unsupportedClaims: [], method: "verified_dossier_fallback" };
   }
   try {
+    const target = [
+      `HOOK: ${plan.hook}`,
+      `GUION: ${plan.script}`,
+      `CAPTION: ${plan.caption}`,
+    ].join("\n");
     const raw = await llmGeneration({
       system: VERIFY_SYSTEM,
-      user: `FACTS PAYLOAD:\n${JSON.stringify(facts)}\n\nDOSSIER VERIFICADO:\n${dossierText}\n\nGUION:\n${plan.script}\n\nCAPTION:\n${plan.caption}`,
+      user: `<SOURCES>\nFACTS PAYLOAD:\n${JSON.stringify(facts)}\n\nDOSSIER VERIFICADO:\n${dossierText}\n</SOURCES>\n\n<TARGET>\n${target}\n</TARGET>`,
       temperature: 0,
       maxTokens: 700,
     });
-    const unsupported = extractJson<{ unsupported?: string[] }>(raw).unsupported ?? [];
+    const reported = extractJson<{ unsupported?: unknown[] }>(raw).unsupported ?? [];
+    const unsupported = targetClaimsOnly(reported, target);
     return { ok: hard.length === 0 && unsupported.length === 0, hardErrors: hard, unsupportedClaims: unsupported, method: "llm_and_code" };
   } catch (error) {
     return {
@@ -161,4 +201,3 @@ export async function generateSocialContent(dossierId: string) {
     },
   });
 }
-

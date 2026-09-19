@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { approveSocialDraft, archiveSocialDraft, createSocialDraft } from "./actions";
 
 export type SocialDossierOption = {
@@ -38,19 +39,26 @@ function label(status: string) {
 }
 
 export function SocialStudio({ dossiers, contents }: { dossiers: SocialDossierOption[]; contents: SocialContentRow[] }) {
+  const router = useRouter();
   const [dossierId, setDossierId] = useState(dossiers[0]?.id ?? "");
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function run(action: () => Promise<{ ok: boolean; message: string }>) {
+  async function run(action: () => Promise<{ ok: boolean; message: string }>) {
     setMessage(null);
     setError(null);
-    startTransition(async () => {
+    setPending(true);
+    try {
       const result = await action();
       if (result.ok) setMessage(result.message);
       else setError(result.message);
-    });
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "La acción no pudo completarse.");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -149,4 +157,3 @@ export function SocialStudio({ dossiers, contents }: { dossiers: SocialDossierOp
     </div>
   );
 }
-

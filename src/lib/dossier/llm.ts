@@ -54,15 +54,37 @@ function modeloPorDefecto(provider: Proveedor): string {
   return "deepseek-chat";
 }
 
+/**
+ * Un nombre de modelo que no es del proveedor que se va a usar es un 400
+ * garantizado: si en Vercel quedó `LLM_MODEL=gpt-4o-mini` y se pone
+ * `LLM_PROVIDER=deepseek`, le pediríamos a DeepSeek un modelo que no existe en
+ * TODAS las llamadas. Como el síntoma no dice "modelo equivocado" sino "la IA
+ * falla", aquí se ignora esa variable, se usa el modelo propio del proveedor y
+ * se deja el aviso en el log.
+ */
+function modeloCompat(nombre: string | undefined, provider: Proveedor): string | undefined {
+  const n = nombre?.trim();
+  if (!n) return undefined;
+  const suyo = proveedorDeModelo(n);
+  if (suyo && suyo !== provider) {
+    console.warn(
+      `[llm] el modelo "${n}" no es de ${provider}; uso ${modeloPorDefecto(provider)}. ` +
+        `Borra esa variable o cámbiala para dejar de ver este aviso.`,
+    );
+    return undefined;
+  }
+  return n;
+}
+
 function runtimeModel(): string {
   const provider = getProvider();
-  if (process.env.LLM_MODEL) return process.env.LLM_MODEL;
-  return modeloPorDefecto(provider);
+  return modeloCompat(process.env.LLM_MODEL, provider) ?? modeloPorDefecto(provider);
 }
 
 /** Modelo para escribir/verificar dossiers (premium si está configurado). */
 export function generationModel(): string {
-  return process.env.GENERATION_MODEL || runtimeModel();
+  const provider = getProvider();
+  return modeloCompat(process.env.GENERATION_MODEL, provider) || runtimeModel();
 }
 
 /** Modelo del runtime (elegir del catálogo, verificar el pedido, chat). Para el

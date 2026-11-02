@@ -2,9 +2,9 @@
 // 1. Validadores duros en código (años, títulos de tracks) — deterministas.
 // 2. Verificador LLM: contrasta cada afirmación factual contra el payload.
 
-import { llmGeneration, extractJson } from "./llm";
+import { llmRedaccion, extractJson } from "./llm";
 import type { FactsPayload } from "../types";
-import type { GeneratedDossier } from "./generate";
+import { contextoDeHechos, type GeneratedDossier } from "./generate";
 
 export type VerificationReport = {
   ok: boolean;
@@ -63,10 +63,12 @@ export function hardValidate(
 ): string[] {
   const errors: string[] = [];
   const payloadText = JSON.stringify(payload);
-  // whyItMatters es 100% editorial — no se validan años ni hechos ahí.
+  // whyItMatters ya no es "100% editorial": desde la v2 del redactor puede
+  // apoyarse en datos, así que sus años también se comprueban.
   const narrative = [
     dossier.intro,
     dossier.artistStory,
+    dossier.whyItMatters,
     dossier.impactNote ?? "",
     ...(dossier.wowFacts ?? []),
     ...dossier.trackNotes.map((t) => t.note ?? ""),
@@ -145,10 +147,12 @@ export async function llmVerify(
   dossier: GeneratedDossier,
   payload: FactsPayload,
 ): Promise<string[]> {
-  // whyItMatters es 100% editorial — fuera del alcance del verificador.
+  // whyItMatters entra desde la v2: es opinión, pero puede citar datos, y los
+  // datos se verifican (las opiniones no, ver VERIFIER_SYSTEM).
   const text = [
     `INTRO: ${dossier.intro}`,
     `ARTISTA: ${dossier.artistStory}`,
+    `POR QUÉ IMPORTA: ${dossier.whyItMatters}`,
     ...(dossier.impactNote ? [`IMPACTO: ${dossier.impactNote}`] : []),
     ...(dossier.wowFacts ?? []).map((f) => `CURIOSIDAD: ${f}`),
     ...dossier.trackNotes.map((t) => `NOTA (${t.title}): ${t.note}`),
@@ -157,9 +161,12 @@ export async function llmVerify(
     ...(dossier.jumps ?? []).map((j) => `SALTO HACIA ${j.artist}: ${j.connection}`),
   ].join("\n\n");
 
-  const raw = await llmGeneration({
+  // El payload va como contexto compartido (el mismo bloque que leyeron el
+  // editor y el redactor): así la relectura sale de la caché.
+  const raw = await llmRedaccion({
+    contextoCompartido: contextoDeHechos(payload),
     system: VERIFIER_SYSTEM,
-    user: `FACTS PAYLOAD:\n${JSON.stringify(payload, null, 2)}\n\nTEXTO A VERIFICAR:\n${text}`,
+    user: `TEXTO A VERIFICAR:\n${text}`,
     temperature: 0,
   });
   return extractJson<{ unsupported: string[] }>(raw).unsupported ?? [];

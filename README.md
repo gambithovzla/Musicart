@@ -180,6 +180,18 @@ npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
   modelo clásico (`gpt-4o`) como uno de razonamiento (`o3`, `gpt-5`: el adapter
   cambia solo al dialecto que toca, `max_completion_tokens` sin `temperature`).
   Para comprobar cuál está atendiendo, `/revision` → «¿El curador está vivo?»).
+  **La pluma (nov 2026):** las historias las escribe aparte un modelo mejor, con
+  `DOSSIER_MODEL` (por defecto `deepseek-chat` si hay `DEEPSEEK_API_KEY`; si no,
+  `claude-sonnet-4-6` con `ANTHROPIC_API_KEY`) y `DOSSIER_PROVIDER`
+  (`openai`|`anthropic`|`deepseek`, por si el nombre no lo deja claro).
+  El resto de la app sigue con `LLM_MODEL`/`GENERATION_MODEL`. Si la pluma falla,
+  se escribe con el modelo de generación (nunca deja al oyente sin disco); para
+  verlo sin ese respaldo: `/revision` → «¿El curador está vivo?» → prueba «Pluma».
+  Reescribir historias viejas con la pluma nueva: botón en cada dossier (admin),
+  tanda desde `/revision`, o `npm run reescribir -- --limite 10`.
+  **DeepSeek** (`DEEPSEEK_API_KEY`, opcional `DEEPSEEK_BASE_URL`): habla el mismo
+  dialecto que OpenAI, así que sirve para todo — `LLM_PROVIDER=deepseek` lo pone
+  también en el runtime, y `deepseek-chat`/`deepseek-reasoner` como modelo.
   Blob TTS: `BLOB_READ_WRITE_TOKEN`. Web Push (Fase 5.1):
   `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
   (genera las claves con `npx web-push generate-vapid-keys`); el envío diario

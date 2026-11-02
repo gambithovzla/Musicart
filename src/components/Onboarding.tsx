@@ -3,10 +3,21 @@
 // La entrada a Musicart (Fase 6): antes de ver ningún disco, conocemos a la
 // persona en pocos pasos bonitos. Al terminar, guardamos su perfil y la home
 // fabrica su PRIMER disco a medida. Sin perfil no se muestra ningún disco.
+//
+// Compuesta en la imprenta (nov 2026), con dos arreglos que pidió el dueño:
+//   · "Empezar" quedaba DEBAJO de la barra de pestañas en un teléfono normal
+//     (390×844): la pantalla medía 100dvh y no descontaba la cabecera ni el pie.
+//     Ahora la barra de acciones va pegada justo encima de las pestañas, siempre
+//     visible, mida lo que mida la pantalla.
+//   · "Le falta vida": la bienvenida era una frase sobre negro. Ahora la abre un
+//     MURO de portadas reales del catálogo que sube despacio, como una rotativa.
+// Y fuera los gestos de plantilla que quedaban aquí: pastillas, halos dorados y
+// campos de 14px (iOS hace zoom solo por debajo de 16px, regla VIII.c).
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { saveProfile } from "@/app/actions";
 import { getDeviceId, LANG_COOKIE } from "@/lib/device";
 
@@ -39,12 +50,16 @@ const EMPTY: Answers = {
 
 const STORAGE_KEY = "musicart:profile";
 
+export type PortadaMuro = { url: string; title: string };
+
 export function Onboarding({
   dateKey,
   nombre,
+  portadas = [],
 }: {
   dateKey: string; // para fijar el idioma de hoy y no doble-preguntar
   nombre?: string | null;
+  portadas?: PortadaMuro[];
 }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -70,29 +85,27 @@ export function Onboarding({
     {
       key: "welcome",
       render: () => (
-        <Centro>
-          <p className="text-xs uppercase tracking-[0.3em] text-dim">Bienvenido a Musicart</p>
-          <h1 className="font-serif mt-4 text-3xl leading-tight">
+        <div>
+          <MuroDePortadas portadas={portadas} />
+          <p className="rotulo mt-6">Bienvenido a Musicart</p>
+          <h1 className="font-serif mt-3 text-[2.5rem] font-semibold leading-[0.98]">
             {nombre ? `Hola, ${nombre.split(" ")[0]}.` : "Un disco al día,"}
             <br />
-            hecho para ti.
+            <span className="text-acento">hecho para ti.</span>
           </h1>
-          <p className="mt-4 max-w-sm text-sm leading-relaxed text-dim">
-            Antes de tu primer disco, cuéntame quién eres. Son 6 preguntas
-            cortas — así el disco de hoy ya será tuyo, no uno cualquiera.
+          <p className="mt-4 max-w-sm text-[15px] leading-relaxed text-tinta-suave">
+            Cada mañana, un disco entero con su historia: quién lo hizo, qué estaba
+            en juego y qué oír. Antes del primero, cuéntame quién eres — son seis
+            preguntas cortas.
           </p>
-        </Centro>
+        </div>
       ),
     },
     {
       key: "genres",
       render: () => (
-        <Pregunta titulo="¿Qué géneros te mueven?" ayuda="Elige los que quieras.">
-          <div className="flex flex-wrap justify-center gap-2">
-            {GENRES.map((g) => (
-              <Chip key={g} label={g} active={a.genres.includes(g)} onClick={() => toggle("genres", g)} />
-            ))}
-          </div>
+        <Pregunta n={1} titulo="¿Qué géneros te mueven?" ayuda="Elige los que quieras.">
+          <Casillas opciones={GENRES} activas={a.genres} alternar={(g) => toggle("genres", g)} />
         </Pregunta>
       ),
     },
@@ -100,6 +113,7 @@ export function Onboarding({
       key: "artists",
       render: () => (
         <Pregunta
+          n={2}
           titulo="¿Qué artistas amas?"
           ayuda="Escribe y elígelos de la lista. Cuantos más, mejor te conozco."
         >
@@ -110,8 +124,8 @@ export function Onboarding({
     {
       key: "marked",
       render: () => (
-        <Pregunta titulo="¿Un disco que te marcó?" ayuda="Ese que recuerdas con cariño (opcional).">
-          <div className="mx-auto flex w-full max-w-sm flex-col gap-3">
+        <Pregunta n={3} titulo="¿Un disco que te marcó?" ayuda="Ese que recuerdas con cariño (opcional).">
+          <div className="flex w-full flex-col gap-3">
             <Texto valor={a.markedAlbum} set={(v) => update({ markedAlbum: v })} placeholder="Nombre del disco" />
             <Texto valor={a.markedArtist} set={(v) => update({ markedArtist: v })} placeholder="¿De qué artista?" />
           </div>
@@ -121,8 +135,8 @@ export function Onboarding({
     {
       key: "song",
       render: () => (
-        <Pregunta titulo="¿Tu canción favorita?" ayuda="La que nunca te cansa (opcional).">
-          <div className="mx-auto flex w-full max-w-sm flex-col gap-3">
+        <Pregunta n={4} titulo="¿Tu canción favorita?" ayuda="La que nunca te cansa (opcional).">
+          <div className="flex w-full flex-col gap-3">
             <Texto valor={a.favoriteSong} set={(v) => update({ favoriteSong: v })} placeholder="Nombre de la canción" />
             <Texto valor={a.favoriteSongArtist} set={(v) => update({ favoriteSongArtist: v })} placeholder="¿De qué artista?" />
           </div>
@@ -132,24 +146,16 @@ export function Onboarding({
     {
       key: "languages",
       render: () => (
-        <Pregunta titulo="¿En qué idiomas disfrutas la música?" ayuda="Te recomendaré donde te sientas cómodo/a.">
-          <div className="flex flex-wrap justify-center gap-2">
-            {LANGUAGES.map((l) => (
-              <Chip key={l} label={l} active={a.languages.includes(l)} onClick={() => toggle("languages", l)} />
-            ))}
-          </div>
+        <Pregunta n={5} titulo="¿En qué idiomas disfrutas la música?" ayuda="Te recomendaré donde te sientas cómodo/a.">
+          <Casillas opciones={LANGUAGES} activas={a.languages} alternar={(l) => toggle("languages", l)} />
         </Pregunta>
       ),
     },
     {
       key: "seeks",
       render: () => (
-        <Pregunta titulo="¿Qué buscas en un disco?" ayuda="Lo que más te importa al escuchar.">
-          <div className="flex flex-wrap justify-center gap-2">
-            {SEEKS.map((s) => (
-              <Chip key={s} label={s} active={a.seeks.includes(s)} onClick={() => toggle("seeks", s)} />
-            ))}
-          </div>
+        <Pregunta n={6} titulo="¿Qué buscas en un disco?" ayuda="Lo que más te importa al escuchar.">
+          <Casillas opciones={SEEKS} activas={a.seeks} alternar={(s) => toggle("seeks", s)} />
         </Pregunta>
       ),
     },
@@ -179,20 +185,27 @@ export function Onboarding({
   }
 
   return (
-    <main className="flex min-h-[100dvh] flex-col px-6 pb-8 pt-10">
-      {/* Progreso */}
-      <div className="mx-auto flex w-full max-w-sm items-center gap-1.5">
-        {pasos.slice(1).map((p, i) => (
-          <span
-            key={p.key}
-            className={`h-1 flex-1 rounded-full transition-colors ${
-              i < step ? "bg-album" : "bg-white/12"
-            }`}
-          />
-        ))}
-      </div>
+    <main data-onboarding className="flex min-h-[calc(100dvh-8.5rem)] flex-col px-5 pt-5">
+      {/* Progreso: seis segmentos rectos y el folio del paso. */}
+      {!esBienvenida && (
+        <div className="flex items-center gap-3">
+          <div className="flex flex-1 gap-1" aria-hidden>
+            {pasos.slice(1).map((p, i) => (
+              <span
+                key={p.key}
+                className={`h-[3px] flex-1 transition-colors duration-300 ${
+                  i < step ? "bg-acento" : "bg-regla"
+                }`}
+              />
+            ))}
+          </div>
+          <span className="dato shrink-0 text-[11px] text-tinta-suave">
+            {String(step).padStart(2, "0")} / {String(total - 1).padStart(2, "0")}
+          </span>
+        </div>
+      )}
 
-      <div className="flex flex-1 items-center justify-center">
+      <div className={`flex flex-1 ${esBienvenida ? "items-start" : "items-center"} pb-6`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={pasos[step].key}
@@ -207,20 +220,21 @@ export function Onboarding({
         </AnimatePresence>
       </div>
 
-      {/* Navegación */}
-      <div className="mx-auto w-full max-w-sm">
+      {/* Navegación: pegada JUSTO encima de la barra de pestañas (≈65px +
+          zona segura), para que nunca quede tapada. */}
+      <div className="sticky bottom-[calc(65px+env(safe-area-inset-bottom))] z-10 -mx-5 border-t border-regla bg-papel px-5 py-3">
         {esUltimo && !tieneSeñal && (
-          <p className="mb-3 text-center text-xs text-dim">
+          <p className="mb-2 text-[13px] text-tinta-suave">
             Elige al menos un género o un artista para que tu primer disco sea tuyo.
           </p>
         )}
-        <div className="flex items-center gap-3">
+        <div className="flex items-stretch gap-3">
           {!esBienvenida && (
             <button
               type="button"
               onClick={() => setStep((s) => Math.max(0, s - 1))}
               disabled={saving}
-              className="rounded-full border border-white/15 px-5 py-3 text-sm text-dim transition-colors hover:text-foreground disabled:opacity-40"
+              className="sello-hueco px-4"
             >
               Atrás
             </button>
@@ -230,17 +244,19 @@ export function Onboarding({
               type="button"
               onClick={finalizar}
               disabled={saving || !tieneSeñal}
-              className="flex-1 rounded-full bg-album px-6 py-3.5 text-base font-semibold text-black transition-all active:scale-[0.98] disabled:opacity-40"
+              aria-busy={saving}
+              className="sello flex-1"
             >
-              {saving ? "Creando tu primer disco…" : "Crear mi primer disco ✦"}
+              {saving ? "Creando tu primer disco…" : "Crear mi primer disco"}
             </button>
           ) : (
             <button
               type="button"
               onClick={() => setStep((s) => Math.min(total - 1, s + 1))}
-              className="flex-1 rounded-full bg-album px-6 py-3.5 text-base font-semibold text-black transition-all active:scale-[0.98]"
+              className="sello sello-reparte flex-1"
             >
-              {esBienvenida ? "Empezar" : "Siguiente"}
+              <span>{esBienvenida ? "Empezar" : "Siguiente"}</span>
+              <span aria-hidden>›</span>
             </button>
           )}
         </div>
@@ -251,23 +267,71 @@ export function Onboarding({
 
 // ─── Piezas ──────────────────────────────────────────────────────────────────
 
-function Centro({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-col items-center text-center">{children}</div>;
+/**
+ * El muro: tres columnas de portadas reales que suben despacio y en bucle (la
+ * lista va dos veces para que el corte no se vea). Con "reducir movimiento",
+ * quieto. Sin portadas, no ocupa sitio.
+ */
+function MuroDePortadas({ portadas }: { portadas: PortadaMuro[] }) {
+  const reducir = useReducedMotion();
+  if (portadas.length < 3) return null;
+  // Con pocas portadas (un catálogo recién nacido) se repiten hasta llenar el
+  // muro; desfasadas por columna, la repetición casi no se nota.
+  // Cada vuelta va rotada una posición: si no, con tres portadas cada columna
+  // repetía la misma de arriba abajo.
+  const lista: PortadaMuro[] = [];
+  for (let vuelta = 0; lista.length < 12; vuelta++) {
+    const r = vuelta % portadas.length;
+    lista.push(...portadas.slice(r), ...portadas.slice(0, r));
+  }
+  const columnas: PortadaMuro[][] = [[], [], []];
+  lista.slice(0, 24).forEach((p, i) => columnas[i % 3].push(p));
+  return (
+    <div
+      aria-hidden
+      className="relative -mx-5 h-[38dvh] min-h-[220px] overflow-hidden border-y border-tinta"
+      style={{
+        maskImage: "linear-gradient(to bottom, transparent 0%, black 18%, black 78%, transparent 100%)",
+        WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 18%, black 78%, transparent 100%)",
+      }}
+    >
+      <div className="grid grid-cols-3 gap-[3px] px-[3px]">
+        {columnas.map((col, c) => (
+          <div
+            key={c}
+            className={reducir ? "" : "muro-sube"}
+            // Cada columna a su ritmo y desfasada: si suben igual, parece una
+            // imagen moviéndose; desfasadas, parece una rotativa.
+            style={{ animationDuration: `${52 + c * 14}s`, animationDelay: `${-c * 9}s` }}
+          >
+            {[...col, ...col].map((p, i) => (
+              <div key={i} className="trama relative mb-[3px] aspect-square w-full bg-papel-alto">
+                <Image src={p.url} alt="" fill sizes="140px" className="object-cover" />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Pregunta({
+  n,
   titulo,
   ayuda,
   children,
 }: {
+  n: number;
   titulo: string;
   ayuda?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center text-center">
-      <h2 className="font-serif text-2xl leading-snug">{titulo}</h2>
-      {ayuda && <p className="mt-2 max-w-xs text-sm text-dim">{ayuda}</p>}
+    <div>
+      <p className="dato text-[12px] text-acento">№ {String(n).padStart(2, "0")}</p>
+      <h2 className="font-serif mt-2 text-[2rem] font-semibold leading-[1.02]">{titulo}</h2>
+      {ayuda && <p className="mt-2 text-[15px] text-tinta-suave">{ayuda}</p>}
       <div className="mt-6 w-full">{children}</div>
     </div>
   );
@@ -287,36 +351,45 @@ function Texto({
       value={valor}
       onChange={(e) => set(e.target.value.slice(0, 80))}
       placeholder={placeholder}
-      className="w-full rounded-full border border-white/15 bg-surface px-4 py-3 text-center text-sm transition-colors placeholder:text-white/25 focus:border-album focus:outline-none focus:ring-2 focus:ring-album/25"
+      // 16px: por debajo, iOS hace zoom al enfocar (regla VIII.c).
+      className="min-h-[52px] w-full border border-tinta bg-papel-alto px-4 text-base transition-colors placeholder:text-tinta-suave/70 focus:border-acento focus:outline-none"
     />
   );
 }
 
-function Chip({
-  label,
-  active,
-  onClick,
+/** Casillas de opción: rectángulos de 48px que se entintan al marcarse. */
+function Casillas({
+  opciones,
+  activas,
+  alternar,
 }: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
+  opciones: string[];
+  activas: string[];
+  alternar: (v: string) => void;
 }) {
   return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      whileTap={{ scale: 0.92 }}
-      layout
-      transition={{ type: "spring", stiffness: 500, damping: 28 }}
-      className={`rounded-full border px-4 py-2.5 text-sm font-medium transition-[border-color,color,background-color] duration-200 ${
-        active
-          ? "border-album bg-album text-black shadow-[0_0_24px_rgba(200,162,74,0.45)]"
-          : "border-white/20 bg-surface text-foreground/75 hover:border-white/35 hover:text-foreground"
-      }`}
-    >
-      {active ? "✓ " : ""}
-      {label}
-    </motion.button>
+    <div className="flex flex-wrap gap-2">
+      {opciones.map((o) => {
+        const activa = activas.includes(o);
+        return (
+          <motion.button
+            key={o}
+            type="button"
+            onClick={() => alternar(o)}
+            whileTap={{ scale: 0.95 }}
+            aria-pressed={activa}
+            className={`min-h-[48px] border px-4 text-[15px] font-medium transition-colors duration-150 ${
+              activa
+                ? "border-tinta bg-acento text-papel-hondo shadow-[3px_3px_0_0_var(--tinta)]"
+                : "border-regla bg-papel-alto text-tinta active:bg-tinta/10"
+            }`}
+          >
+            {activa && <span className="dato mr-1.5">✓</span>}
+            {o}
+          </motion.button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -383,24 +456,29 @@ function ArtistPicker({
   );
 
   return (
-    <div className="mx-auto w-full max-w-sm">
+    <div className="w-full">
       {answers.artists.length > 0 && (
-        <div className="mb-3 flex flex-wrap justify-center gap-2">
+        <div className="mb-3 flex flex-wrap gap-2">
           {answers.artists.map((name) => (
             <motion.span
               key={name}
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="flex items-center gap-2 rounded-full border border-album bg-album py-1 pl-1 pr-3 text-sm font-medium text-black"
+              className="flex min-h-[44px] items-center gap-2 border border-tinta bg-acento py-1 pl-1 pr-1 text-[15px] font-medium text-papel-hondo"
             >
               {answers.artistImages[name] ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={answers.artistImages[name]} alt="" className="h-7 w-7 rounded-full object-cover ring-1 ring-black/20" />
+                <img src={answers.artistImages[name]} alt="" className="circulo h-8 w-8 object-cover" />
               ) : (
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/15 text-xs">♪</span>
+                <span className="circulo flex h-8 w-8 items-center justify-center bg-papel-hondo/20 text-xs">♪</span>
               )}
               {name}
-              <button type="button" onClick={() => remove(name)} aria-label={`Quitar ${name}`} className="text-black/60 hover:text-black">
+              <button
+                type="button"
+                onClick={() => remove(name)}
+                aria-label={`Quitar ${name}`}
+                className="flex h-9 w-9 items-center justify-center text-papel-hondo/70 active:bg-papel-hondo/20"
+              >
                 ✕
               </button>
             </motion.span>
@@ -422,7 +500,7 @@ function ArtistPicker({
             }
           }}
           placeholder={answers.artists.length ? "Añadir otro…" : "Ej.: Soda Stereo, Radiohead…"}
-          className="w-full rounded-full border border-white/15 bg-surface px-4 py-3 text-center text-sm transition-colors placeholder:text-white/25 focus:border-album focus:outline-none focus:ring-2 focus:ring-album/25"
+          className="min-h-[52px] w-full border border-tinta bg-papel-alto px-4 text-base transition-colors placeholder:text-tinta-suave/70 focus:border-acento focus:outline-none"
         />
         <AnimatePresence>
           {visibles.length > 0 && (
@@ -430,7 +508,7 @@ function ArtistPicker({
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
-              className="absolute z-10 mt-2 max-h-64 w-full overflow-auto rounded-2xl border border-white/10 bg-surface p-1.5 text-left shadow-2xl"
+              className="recuadro absolute z-20 mt-2 max-h-64 w-full overflow-auto text-left"
             >
               {visibles.map((s) => (
                 <li key={s.name}>
@@ -440,15 +518,15 @@ function ArtistPicker({
                       e.preventDefault();
                       add(s.name, s.image);
                     }}
-                    className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-sm transition-colors hover:bg-white/5"
+                    className="fila px-3"
                   >
                     {s.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={s.image} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-white/10" />
+                      <img src={s.image} alt="" className="circulo h-10 w-10 shrink-0 object-cover" />
                     ) : (
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-base">♪</span>
+                      <span className="circulo flex h-10 w-10 shrink-0 items-center justify-center bg-papel-hondo text-base">♪</span>
                     )}
-                    <span className="truncate font-medium">{s.name}</span>
+                    <span className="truncate text-[15px] font-medium">{s.name}</span>
                   </button>
                 </li>
               ))}

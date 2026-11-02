@@ -16,8 +16,10 @@ import { runDossierPipeline } from "@/lib/dossier/pipeline";
 import {
   llm,
   llmGeneration,
+  llmRedaccion,
   hayClaveIA,
   generationModel,
+  plumaModelName,
   runtimeModelName,
   usaDialectoDeRazonamiento,
 } from "@/lib/dossier/llm";
@@ -557,7 +559,13 @@ export async function probarCurador(): Promise<{
   const hayClave = hayClaveIA();
   const proveedor =
     process.env.LLM_PROVIDER?.toLowerCase() ||
-    (process.env.OPENAI_API_KEY ? "openai" : process.env.ANTHROPIC_API_KEY ? "anthropic" : "—");
+    (process.env.OPENAI_API_KEY
+      ? "openai"
+      : process.env.ANTHROPIC_API_KEY
+        ? "anthropic"
+        : process.env.DEEPSEEK_API_KEY
+          ? "deepseek"
+          : "—");
 
   if (!hayClave) {
     return {
@@ -570,8 +578,8 @@ export async function probarCurador(): Promise<{
           ok: false,
           ms: 0,
           detalle:
-            "No hay OPENAI_API_KEY ni ANTHROPIC_API_KEY. Sin clave no se fabrica " +
-            "ningún disco nuevo: todo sale del catálogo ya publicado.",
+            "No hay OPENAI_API_KEY, ANTHROPIC_API_KEY ni DEEPSEEK_API_KEY. Sin clave " +
+            "no se fabrica ningún disco nuevo: todo sale del catálogo ya publicado.",
         },
       ],
     };
@@ -605,6 +613,20 @@ export async function probarCurador(): Promise<{
           user: "ok",
           maxTokens: 5,
           timeoutMs: 20_000,
+        }),
+    },
+    {
+      // La pluma se prueba SIN respaldo: en producción, si falla, escribe el
+      // modelo de generación y nadie se entera. Aquí tiene que verse.
+      nombre: "Pluma (escribe las historias)",
+      modelo: plumaModelName(),
+      llamar: () =>
+        llmRedaccion({
+          system: "Responde solo: ok",
+          user: "ok",
+          maxTokens: 5,
+          timeoutMs: 20_000,
+          sinRespaldo: true,
         }),
     },
   ];

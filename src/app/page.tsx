@@ -41,6 +41,7 @@ import type { CuriosityAnswer } from "@/lib/curiosities";
 import { getListenerIdentity, findProfileRecord, reviewsWhere } from "@/lib/identity";
 import { prisma } from "@/lib/db";
 import { AmigoPick } from "@/components/AmigoPick";
+import { FragmentosProvider } from "@/components/Fragmentos";
 
 export const dynamic = "force-dynamic";
 
@@ -100,7 +101,28 @@ export default async function Home() {
   // Vamos directo al onboarding por pasos; al terminar, la home fabrica el primero.
   const tienePerfil = await hasProfile();
   if (!tienePerfil) {
-    return <Onboarding dateKey={dateKey} nombre={session?.user?.name ?? null} />;
+    // El muro de la bienvenida: portadas REALES del catálogo publicado. Si la
+    // consulta falla, la bienvenida sale igual (solo sin muro).
+    const portadas = await prisma.album
+      .findMany({
+        where: {
+          coverUrl: { not: null },
+          dossiers: { some: { locale: "es", status: "published" } },
+        },
+        select: { coverUrl: true, title: true },
+        orderBy: { id: "desc" },
+        take: 24,
+      })
+      .catch(() => []);
+    return (
+      <Onboarding
+        dateKey={dateKey}
+        nombre={session?.user?.name ?? null}
+        portadas={portadas.flatMap((p) =>
+          p.coverUrl ? [{ url: p.coverUrl, title: p.title }] : [],
+        )}
+      />
+    );
   }
 
   // ¿Ya tiene el disco de hoy guardado? Lo miramos ANTES del gate de idioma:
@@ -232,6 +254,7 @@ export default async function Home() {
           mood={personal?.mood ?? null}
           canChange={!personal?.regenerated}
         />
+        <FragmentosProvider albumId={pick.album.id}>
         <DailyReveal
           album={{
             albumId: pick.album.id,
@@ -258,6 +281,7 @@ export default async function Home() {
             canReroll: Boolean(personal) && !isAdminEmail(session?.user?.email),
           }}
         />
+        </FragmentosProvider>
         {initialCuriosityQuestion && (
           <CuriosityCard
             initialQuestion={initialCuriosityQuestion}

@@ -38,7 +38,17 @@ export type FactsPayload = {
   passages?: { source: string; text: string }[];
   tags?: string[];
   sources: string[]; // URLs consultadas
+  /**
+   * Con qué versión del redactor se escribió la historia de este disco. Vive
+   * aquí (y no en una columna) para no necesitar migración: Preview y
+   * Producción comparten base. Las historias sin marca son de la v1 (molde
+   * gpt-4o-mini) y son las candidatas a reescribirse. NO se le pasa al LLM.
+   */
+  redaccion?: { version: number; fecha: string; modelo?: string };
 };
+
+/** Versión actual del redactor (editor → redactor → estilo). */
+export const REDACCION_VERSION = 2;
 
 // Un salto de descubrimiento: de este disco puedes saltar a aquel otro.
 // La connection SOLO puede afirmar relaciones respaldadas por el facts payload.

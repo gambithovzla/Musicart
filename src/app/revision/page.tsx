@@ -21,7 +21,8 @@ import { LevantarSalon } from "@/components/LevantarSalon";
 import { EstadoCurador } from "./EstadoCurador";
 import { EstadoOrigen } from "./EstadoOrigen";
 import { getCanonCurado, estadoDelSalon } from "@/lib/canon/consulta";
-import { parseJson } from "@/lib/types";
+import { parseJson, REDACCION_VERSION, type FactsPayload } from "@/lib/types";
+import { ReescribirTanda } from "./ReescribirTanda";
 import type { SocialVerification } from "@/lib/social/types";
 import { SocialStudio, type SocialContentRow, type SocialDossierOption } from "./SocialStudio";
 
@@ -109,6 +110,12 @@ export default async function RevisionPage() {
     shelf: d.album.showcaseShelf?.trim() || null,
   }));
   const enVitrina = curables.filter((a) => a.showcase).length;
+  // Historias publicadas que aún son del redactor viejo (sin marca de versión).
+  const historiasViejas = albumesUnicos.filter(
+    (d) =>
+      (parseJson<Partial<FactsPayload>>(d.album.factsJson, {}).redaccion?.version ?? 1) <
+      REDACCION_VERSION,
+  ).length;
   const estantesExistentes = [
     ...new Set(
       curables
@@ -167,6 +174,21 @@ export default async function RevisionPage() {
           Convierte un dossier verificado en un guion vertical, revisa sus recibos y apruébalo antes de que el worker genere la voz y el MP4.
         </p>
         <SocialStudio dossiers={socialDossiers} contents={socialRows} />
+      </section>
+
+      <section className="mt-12">
+        <p className="rotulo text-album">El redactor nuevo</p>
+        <h2 className="font-serif mt-2 text-2xl">Reescribir las historias viejas</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-dim">
+          Las historias publicadas antes de noviembre se escribieron con el molde viejo
+          («Imagina un estudio…»). Esto las rehace con el editor + redactor nuevos, de la
+          más leída a la menos. Si una nueva no pasa la verificación, se queda la anterior.
+          Cada una cuesta unos centavos de IA y tarda 1-2 minutos.
+        </p>
+        <ReescribirTanda
+          pendientes={historiasViejas}
+          total={albumesUnicos.length}
+        />
       </section>
 
       <section className="mt-10">

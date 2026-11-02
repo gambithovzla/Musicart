@@ -10,6 +10,7 @@ import {
   VitrinaToggle,
 } from "@/app/revision/CuradorControls";
 import { BorrarDiscoAdmin } from "@/components/BorrarDiscoAdmin";
+import { ReescribirHistoria } from "@/components/ReescribirHistoria";
 
 export function CuradorAlbumPanel({
   albumId,
@@ -18,6 +19,7 @@ export function CuradorAlbumPanel({
   showcase,
   shelf,
   estantes,
+  historiaNueva,
 }: {
   albumId: string;
   title: string;
@@ -25,14 +27,18 @@ export function CuradorAlbumPanel({
   showcase: boolean;
   shelf: string | null;
   estantes: string[];
+  historiaNueva: boolean;
 }) {
   return (
-    <div className="mt-10 border-t border-white/10 pt-6">
-      <p className="text-center text-xs uppercase tracking-[0.3em] text-dim">
-        Curador
-      </p>
+    <div className="filete mt-10 pt-6">
+      <div className="cabecera-seccion">
+        <span className="rotulo">Curador</span>
+        <span className="dato text-[11px] text-tinta-suave">solo tú lo ves</span>
+      </div>
 
-      <div className="mx-auto mt-5 flex max-w-sm flex-col gap-4 rounded-2xl border border-white/10 bg-surface p-5">
+      <div className="recuadro mx-auto mt-5 flex max-w-sm flex-col gap-5 p-5">
+        <ReescribirHistoria albumId={albumId} yaNueva={historiaNueva} />
+
         <div>
           <p className="mb-2 text-xs uppercase tracking-wide text-dim">Tu puntaje</p>
           <EstrellasCurador albumId={albumId} rating={rating} />

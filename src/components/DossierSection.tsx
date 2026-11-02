@@ -1,11 +1,16 @@
 "use client";
 
 // Sección plegable del dossier: cada bloque se abre y cierra con un toque, para
-// que el disco entero quepa en un vistazo y no haya que hacer tanto scroll. El
-// número se enciende con el color del disco cuando la sección está abierta.
+// que el disco entero quepa en un vistazo y no haya que hacer tanto scroll.
+//
+// Compuesta en la imprenta (nov 2026). Antes era una tarjeta redondeada con
+// degradado y una pastilla numerada: la plantilla de siempre. Ahora es una
+// entrada de SUMARIO: folio en monoespaciada, titular en display y un filete
+// debajo; la fila entera es el objetivo táctil (60px, regla VIII) y el signo
+// + / − dice si está abierta. Al abrirse, el texto se IMPRIME de arriba abajo.
 
 import { useState, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 export function DossierSection({
   n,
@@ -21,63 +26,52 @@ export function DossierSection({
   accent?: boolean; // resalta la sección de "escuchar" (la acción del ritual)
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const reducir = useReducedMotion();
 
   return (
-    <section
-      className={`overflow-hidden rounded-2xl border shadow-[0_10px_30px_-22px_rgba(0,0,0,0.9)] transition-colors duration-300 ${
-        open ? "border-album/30" : "border-white/[0.08]"
-      } ${
-        accent
-          ? "bg-album/[0.06]"
-          : "bg-gradient-to-b from-surface to-surface/30"
-      }`}
-    >
+    <section className={accent ? "border-y-2 border-acento" : "border-b border-regla"}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center gap-3.5 px-5 py-4 text-left transition-colors active:bg-white/5"
+        className="fila !border-b-0 gap-4"
       >
         <span
-          className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11px] font-semibold tabular-nums transition-colors duration-300 ${
-            open ? "bg-album text-black" : "bg-album/10 text-album-light"
+          className={`dato w-7 shrink-0 text-[12px] transition-colors ${
+            open || accent ? "text-acento" : "text-tinta-suave"
           }`}
         >
-          {n}
+          № {n}
         </span>
-        <span className="font-serif flex-1 text-lg font-medium leading-tight">
-          {title}
-        </span>
-        <motion.span
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-          className="shrink-0 text-album-light/60"
+        <span className="font-serif flex-1 text-[1.2rem] font-medium leading-tight">{title}</span>
+        <span
+          aria-hidden
+          className={`dato w-6 shrink-0 text-center text-xl leading-none transition-transform duration-300 ${
+            open ? "rotate-180 text-acento" : "text-tinta-suave"
+          }`}
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-4 w-4"
-          >
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        </motion.span>
+          {open ? "−" : "+"}
+        </span>
       </button>
 
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
             key="contenido"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            initial={reducir ? { opacity: 0 } : { height: 0, opacity: 0 }}
+            animate={reducir ? { opacity: 1 } : { height: "auto", opacity: 1 }}
+            exit={reducir ? { opacity: 0 } : { height: 0, opacity: 0 }}
+            transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
             className="overflow-hidden"
           >
-            <div className="px-5 pb-6 pt-1">{children}</div>
+            <motion.div
+              initial={reducir ? false : { clipPath: "inset(0 0 100% 0)" }}
+              animate={{ clipPath: "inset(0 0 0% 0)" }}
+              transition={{ duration: 0.5, delay: 0.05, ease: [0.16, 1, 0.3, 1] }}
+              className="pb-7 pt-1"
+            >
+              {children}
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -19,12 +19,21 @@ function rateLimited<T>(fn: () => Promise<T>): Promise<T> {
 
 async function mb<T>(path: string): Promise<T> {
   return rateLimited(async () => {
-    const res = await fetch(`${BASE}${path}`, {
-      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) throw new Error(`MusicBrainz ${res.status}: ${path}`);
-    return (await res.json()) as T;
+    // MusicBrainz responde 503 cuando va saturado (o cuando nos pasamos del
+    // ritmo). Un reintento con pausa casi siempre entra; sin él, el disco caía
+    // al respaldo de iTunes, que no trae conexiones ni mbid.
+    for (let intento = 0; ; intento++) {
+      const res = await fetch(`${BASE}${path}`, {
+        headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if ((res.status === 503 || res.status === 429) && intento < 2) {
+        await new Promise((r) => setTimeout(r, 2000 * (intento + 1)));
+        continue;
+      }
+      if (!res.ok) throw new Error(`MusicBrainz ${res.status}: ${path}`);
+      return (await res.json()) as T;
+    }
   });
 }
 
@@ -49,12 +58,28 @@ export async function searchReleaseGroup(
       title: string;
       score: number;
       "first-release-date"?: string;
+      "secondary-types"?: string[];
       "artist-credit"?: { name: string; artist: { id: string; name: string } }[];
     }[];
-  }>(`/release-group/?query=${query}&fmt=json&limit=5`);
+  }>(`/release-group/?query=${query}&fmt=json&limit=10`);
 
-  const best = data["release-groups"]?.[0];
-  if (!best || best.score < 70) return null;
+  // No basta con el primero: con el mismo título y el mismo puntaje pueden
+  // salir el disco original, un recopilatorio y un directo, y a veces ganaba una
+  // reedición — «Paranoid» llegó a fabricarse como un disco de 2026. Entre los
+  // que empatan arriba, preferimos el de estudio (sin tipos secundarios) y,
+  // dentro de esos, el que salió PRIMERO.
+  const grupos = data["release-groups"] ?? [];
+  const tope = grupos[0]?.score ?? 0;
+  if (tope < 70) return null;
+  const candidatos = grupos.filter((g) => g.score >= tope - 5);
+  const fecha = (g: (typeof grupos)[number]) => g["first-release-date"] || "9999";
+  const best =
+    [...candidatos].sort((a, b) => {
+      const sa = (a["secondary-types"]?.length ?? 0) > 0 ? 1 : 0;
+      const sb = (b["secondary-types"]?.length ?? 0) > 0 ? 1 : 0;
+      return sa - sb || fecha(a).localeCompare(fecha(b));
+    })[0] ?? grupos[0];
+  if (!best) return null;
   return {
     id: best.id,
     title: best.title,

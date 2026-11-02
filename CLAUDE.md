@@ -114,7 +114,70 @@ el sistema.
 
 Next.js 15 (App Router, Turbopack) · React 19 · TypeScript · Tailwind 4 ·
 Framer Motion · Prisma 6 + **PostgreSQL (Railway)** · Zod ·
-LLM por fetch directo (OpenAI o Anthropic, sin SDKs).
+LLM por fetch directo (OpenAI, Anthropic o DeepSeek, sin SDKs).
+
+## La pluma y las historias (nov 2026)
+
+El dueño, mirando el dossier de «Paranoid»: *"las historias ahorita lo veo muy
+genérico"*. Tenía razón, y la causa no era el prompt sino la estructura: las
+nueve secciones se pedían de golpe, con extensión fija, a un modelo barato, y
+solo se contaba con el artículo de Wikipedia en español (un párrafo).
+
+Cómo funciona ahora (`src/lib/dossier/`):
+
+1. **La pluma** (`llm.ts` → `llmRedaccion`): las historias se escriben con
+   `DOSSIER_MODEL` (por defecto `deepseek-chat` si hay `DEEPSEEK_API_KEY`; si no,
+   `claude-sonnet-4-6` con `ANTHROPIC_API_KEY`).
+   El runtime, los caminos, el atlas y el Salón NO cambian de modelo. Si la pluma
+   falla se escribe con el de siempre y se avisa en consola; `/revision` la prueba
+   sin respaldo para que el fallo se vea.
+2. **Los hechos** (`facts.ts` + `sources/wikipedia.ts`): Wikipedia en español **y
+   en inglés** (el inglés trae Background, Recording, Composition, Artwork,
+   Legacy…), con User-Agent propio y reintento (sin él llegaban 429 y secciones
+   vacías), descartando artículos que no son del disco (canción homónima) ni del
+   artista (disco homónimo). MusicBrainz prefiere el disco de estudio más antiguo
+   (una reedición hacía que «Paranoid» figurara como de 2026).
+3. **El editor** (`generate.ts` → `planificarAngulo`): antes de escribir decide el
+   ÁNGULO, la escena de apertura, los detalles que solo son de ese disco y lo
+   obvio que no hay que repetir.
+4. **El redactor**: escribe siguiendo ese plan con libro de estilo (prueba de
+   sustitución, lista negra, comillas latinas, extensión según el material).
+5. **La barrera de estilo** (`estilo.ts`, sin IA): caza frases de molde
+   («Imagina un estudio…», «punto crucial de su carrera», «sigue resonando hoy»)
+   y manda reescribir SOLO esas frases. Si una muletilla nueva se repite, se añade
+   a `MULETILLAS` y solo ahí.
+6. **El verificador** (`verify.ts`) sigue siendo ley: cero invención. Ahora también
+   revisa `whyItMatters` (que desde la v2 puede citar datos).
+
+El paquete de hechos viaja como `contextoCompartido` (bloque cacheado) entre
+editor, redactor, pulidor y verificador: sin eso, escribir con un modelo bueno
+costaba cuatro veces lo mismo.
+
+**Historias viejas:** las publicadas antes llevan `factsJson.redaccion.version`
+ausente (= v1). Se rehacen con `reescribir.ts` — botón en el dossier (admin),
+tanda en `/revision` o `npm run reescribir`. Nunca empeora: si la nueva no pasa
+la verificación, se queda la anterior; y si las fuentes devuelven otro disco, usa
+los hechos guardados. **No se creó ninguna migración**: la marca vive dentro del
+JSON porque Preview y Producción comparten base.
+
+## Las historias deslizables y los fragmentos (nov 2026)
+
+*"Le falta vida, modernidad"* — sin salirse de la imprenta:
+
+- `src/lib/historia-escenas.ts` (PURO): convierte un dossier en escenas (portada,
+  gancho, historia en trozos, curiosidades, tres canciones, cierre). Sale del
+  texto que ya existe: funciona con las historias viejas sin regenerarlas.
+- `src/components/HistoriaDisco.tsx`: pantalla completa, tocar avanza/retrocede,
+  mantener pausa, deslizar abajo cierra, teclado ← → Esc. La portada de fondo se
+  acerca lentamente y lleva la trama de fotograbado.
+- `src/components/Fragmentos.tsx` + `/api/fragmentos/[albumId]`: avances de 30 s
+  de iTunes, emparejados con el tracklist publicado. Un solo `<audio>` por página.
+  Si iTunes no tiene el disco, no aparece ningún botón (nunca es un error).
+- `src/components/PortadaDossier.tsx`: la carátula a todo el ancho con trama,
+  baño de tinta al hacer scroll y las dos puertas (historia / 30 s).
+- Ojo con `.trama` en `globals.css`: **no lleva `position`**, porque esa hoja va
+  fuera de las capas de Tailwind y el `relative` le ganaba al `absolute` (dejó la
+  portada con altura 0). La posición la pone cada elemento.
 
 ## Mapa del código
 
@@ -343,7 +406,9 @@ npm run push                                     # envío Web Push del disco del
   (correos admin separados por coma; gatean `/revision` y el botón "Rehacer mi
   disco de hoy"). Opcional `DAILY_GENERATION_BUDGET` (tope de discos nuevos/día
   para oyentes, default 15; ver `src/lib/budget.ts`). LLM: `LLM_PROVIDER`,
-  `LLM_MODEL` (default `gpt-4o-mini`). Resto de variables: ver README.
+  `LLM_MODEL` (default `gpt-4o-mini`). **DeepSeek** (nov 2026):
+  `DEEPSEEK_API_KEY` y, si quieres que todo el runtime lo use, `LLM_PROVIDER=deepseek`
+  (`DEEPSEEK_BASE_URL` opcional). Resto de variables: ver README.
 - **Disco fresco del día (Fase 6.4):** la home no fabrica en SSR (tarda 1-3 min).
   Si no hay pick guardado y el oyente tiene perfil, muestra `CreandoDiscoHoy` que
   hace POST a `/api/pick-hoy` (`maxDuration=300`); al terminar refresca. Si la IA

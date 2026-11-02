@@ -352,6 +352,26 @@ label {
   opacity: 0.4;
 }
 
+/* ═══ VARIANTES DE SELLO ═══════════════════════════════════════════════════
+   Esta hoja va FUERA de las capas de Tailwind, así que sus reglas le ganan a
+   las utilidades (`normal-case`, `justify-between`…). Lo que necesite variar de
+   un sello a otro se declara aquí, no con clases de utilidad.
+
+   `sello-reparte`: el contenido a los extremos (una acción y su dato a la
+   derecha, como "Ver la historia … 14 láminas").
+   `sello-libre`: dentro del sello, un trozo sin mayúsculas forzadas ni
+   espaciado de rótulo (el nombre de una canción, un número). */
+.sello-reparte {
+  justify-content: space-between;
+  text-align: left;
+}
+.sello-libre {
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-family: var(--font-texto), sans-serif;
+  font-weight: 500;
+}
+
 /* ═══ FILA — la unidad táctil de las listas ════════════════════════════════
    Un índice, un escalafón o un sumario se tocan fila a fila. Cada una es un
    objetivo de 60px que se entinta entera al pulsarla y lleva su marca de avance
@@ -509,8 +529,104 @@ html {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   LA TIRADA CON VIDA (nov 2026)
+   ═══════════════════════════════════════════════════════════════════════════
+   El dueño, con la imprenta ya en el teléfono: "le falta vida, modernidad". La
+   identidad se queda (tinta, reglas, folios, cifras, cero esquinas); lo que se
+   añade es MOVIMIENTO Y SONIDO contados en el mismo idioma:
+     · el vinilo que gira cuando suena un fragmento (lo único redondo: es un disco)
+     · la trama de fotograbado sobre las portadas grandes (puntos de imprenta,
+       no un desenfoque ni un halo)
+     · las historias a pantalla completa, que se imprimen escena a escena
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* El vinilo: surcos concéntricos de tinta. */
+.vinilo-surco {
+  background:
+    repeating-radial-gradient(
+      circle at center,
+      var(--papel-hondo) 0 1.5px,
+      color-mix(in srgb, var(--tinta) 14%, var(--papel-hondo)) 1.5px 2.5px
+    );
+  position: relative;
+}
+.vinilo-gira {
+  animation: girar 1.8s linear infinite;
+}
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Trama de fotograbado: una retícula de puntos encima de la imagen. Da textura
+   impresa a la portada sin taparla, y se entinta con el color del disco. */
+/* OJO: sin `position` aquí. Esta hoja va fuera de las capas de Tailwind, así
+   que un `position: relative` en esta clase le ganaba a `absolute` y la portada
+   del dossier quedaba con altura 0. La posición la pone cada elemento. */
+.trama {
+  isolation: isolate;
+}
+.trama::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--papel-hondo) 55%, transparent) 0.9px,
+    transparent 1.2px
+  );
+  background-size: 4px 4px;
+  mix-blend-mode: multiply;
+  opacity: 0.36;
+}
+/* Baño de tinta del disco por debajo de la portada (duotono suave). */
+.trama-tinta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--album-dark) 92%, transparent) 0%,
+    transparent 55%
+  );
+}
+
+/* Las barras de avance de la historia: segmentos rectos, no pastillas. */
+.historia-barra {
+  height: 3px;
+  background: color-mix(in srgb, var(--tinta) 25%, transparent);
+  overflow: hidden;
+}
+.historia-barra > span {
+  display: block;
+  height: 100%;
+  background: var(--tinta);
+  transform-origin: left;
+}
+
+/* El muro de portadas de la bienvenida: sube despacio, como una rotativa. */
+.muro-sube {
+  animation: muro 60s linear infinite;
+}
+@keyframes muro {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-enter {
+    animation: none;
+  }
+  .vinilo-gira,
+  .muro-sube {
     animation: none;
   }
   .skeleton-shimmer::after {

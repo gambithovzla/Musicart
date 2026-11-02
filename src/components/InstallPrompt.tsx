@@ -43,8 +43,13 @@ export function InstallPrompt() {
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setDeferred(e as BeforeInstallPromptEvent);
-      // No interrumpimos el reveal: aparece cuando ya viste tu disco.
-      window.setTimeout(() => setVisible(true), 12_000);
+      // No interrumpimos el reveal: aparece cuando ya viste tu disco. Y NUNCA
+      // durante la bienvenida: ahí tapaba el botón "Empezar" de quien acababa
+      // de llegar (se pide otra vez en la siguiente visita).
+      window.setTimeout(() => {
+        if (document.querySelector("[data-onboarding]")) return;
+        setVisible(true);
+      }, 12_000);
     };
 
     window.addEventListener("beforeinstallprompt", onPrompt);
@@ -75,27 +80,20 @@ export function InstallPrompt() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 60 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          className="fixed inset-x-4 bottom-24 z-50 mx-auto max-w-md rounded-2xl border border-album/30 bg-[#161310]/95 p-4 shadow-2xl backdrop-blur-md"
+          className="recuadro fixed inset-x-4 bottom-[calc(80px+env(safe-area-inset-bottom))] z-50 mx-auto max-w-md p-4"
         >
-          <p className="font-serif text-base font-medium">
+          <p className="rotulo !text-acento">Edición de bolsillo</p>
+          <p className="font-serif mt-1 text-lg font-medium leading-tight">
             Lleva Musicart en el bolsillo
           </p>
-          <p className="mt-1 text-sm leading-relaxed text-dim">
+          <p className="mt-1 text-sm leading-relaxed text-tinta-suave">
             Instálala en tu pantalla de inicio: abre al instante, como una app.
           </p>
-          <div className="mt-3 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => void install()}
-              className="rounded-full bg-album px-5 py-2 text-sm font-semibold text-black"
-            >
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => void install()} className="sello">
               Instalar
             </button>
-            <button
-              type="button"
-              onClick={dismiss}
-              className="rounded-full px-3 py-2 text-sm text-dim"
-            >
+            <button type="button" onClick={dismiss} className="sello-hueco">
               Ahora no
             </button>
           </div>

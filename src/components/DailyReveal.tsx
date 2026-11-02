@@ -26,6 +26,7 @@ import { DificultadEscucha } from "./DificultadEscucha";
 import { ShareAlbum } from "./ShareAlbum";
 import { DameOtroDisco } from "./DameOtroDisco";
 import { GenreTags } from "./GenreTags";
+import { SelloFragmento } from "./Fragmentos";
 import type { MadrigueraAlbum } from "@/lib/madriguera";
 import type { AlbumLinks } from "@/lib/types";
 
@@ -83,16 +84,25 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
         transition={{ duration: 0.85, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
         className="mt-6"
       >
-        <div className="relative aspect-square w-full border border-tinta bg-papel-alto">
+        <div className="relative aspect-square w-full overflow-hidden border border-tinta bg-papel-alto">
           {album.coverUrl ? (
-            <Image
-              src={album.coverUrl}
-              alt={`Portada de ${album.title}`}
-              fill
-              sizes="(max-width: 512px) 100vw, 512px"
-              priority
-              className="object-cover"
-            />
+            // La lámina respira: un acercamiento lentísimo (como una cámara
+            // sobre una foto fija) y la trama de fotograbado encima.
+            <motion.div
+              className="trama absolute inset-0"
+              initial={{ scale: 1.0 }}
+              animate={{ scale: 1.06 }}
+              transition={{ duration: 22, ease: "linear", repeat: Infinity, repeatType: "reverse" }}
+            >
+              <Image
+                src={album.coverUrl}
+                alt={`Portada de ${album.title}`}
+                fill
+                sizes="(max-width: 512px) 100vw, 512px"
+                priority
+                className="object-cover"
+              />
+            </motion.div>
           ) : (
             <div className="flex h-full w-full items-center justify-center">
               <span className="font-serif text-6xl text-album">♪</span>
@@ -164,9 +174,20 @@ export function DailyReveal({ album }: { album: DailyAlbum }) {
         transition={{ duration: 0.5, delay: 1.15 }}
         className="mt-8"
       >
-        <Link href={`/album/${album.albumId}`} className="sello w-full">
-          Leer el dossier
+        {/* La puerta rápida (historias a pantalla completa) y la de leer con
+            calma. La primera es la que más se toca en un teléfono. */}
+        <Link href={`/album/${album.albumId}?historia=1`} className="sello sello-reparte w-full">
+          <span>Ver la historia</span>
+          <span aria-hidden className="dato sello-libre opacity-80">
+            en láminas ›
+          </span>
         </Link>
+        <div className="mt-3 grid grid-cols-1 gap-3">
+          <SelloFragmento preferida={album.title} />
+          <Link href={`/album/${album.albumId}`} className="sello-hueco w-full">
+            Leer el dossier completo
+          </Link>
+        </div>
 
         {tieneEnlaces && (
           <div className="mt-5 border-t border-regla pt-4">

@@ -101,6 +101,44 @@ export async function searchAlbum(
   };
 }
 
+export type ItunesPreview = { position: number; title: string; url: string };
+
+/** El collectionId sale del enlace de Apple Music: .../album/nombre/785227961 */
+export function collectionIdDeEnlace(appleMusicUrl?: string | null): number | null {
+  const m = appleMusicUrl?.match(/\/album\/(?:[^/?#]+\/)?(\d{5,})/);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Los avances de 30 s de cada canción (los da iTunes gratis y sin clave). Es lo
+ * que deja oír el disco DENTRO de la app antes de saltar a Spotify. Devuelve []
+ * si falla: los fragmentos son un plus, nunca una dependencia.
+ */
+export async function getItunesPreviews(collectionId: number): Promise<ItunesPreview[]> {
+  try {
+    const res = await fetch(
+      `https://itunes.apple.com/lookup?id=${collectionId}&entity=song&limit=60`,
+      { signal: AbortSignal.timeout(8_000), next: { revalidate: 86_400 } },
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      results: {
+        wrapperType: string;
+        trackNumber?: number;
+        discNumber?: number;
+        trackName?: string;
+        previewUrl?: string;
+      }[];
+    };
+    return data.results
+      .filter((r) => r.wrapperType === "track" && r.trackName && r.previewUrl && (r.discNumber ?? 1) === 1)
+      .map((r) => ({ position: r.trackNumber ?? 0, title: r.trackName!, url: r.previewUrl! }))
+      .sort((a, b) => a.position - b.position);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Obtiene el tracklist de un álbum de iTunes por su collectionId.
  * Devuelve [] si falla (no bloquea el pipeline).

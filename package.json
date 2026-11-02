@@ -11,6 +11,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "dossier": "tsx scripts/dossier.ts",
+    "reescribir": "tsx scripts/reescribir.ts",
     "worker": "tsx scripts/worker.ts",
     "social:worker": "tsx scripts/social-worker.ts",
     "social:render": "tsx scripts/social-worker.ts --once",

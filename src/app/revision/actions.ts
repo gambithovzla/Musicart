@@ -16,8 +16,10 @@ import { runDossierPipeline } from "@/lib/dossier/pipeline";
 import {
   llm,
   llmGeneration,
+  llmRedaccion,
   hayClaveIA,
   generationModel,
+  plumaModelName,
   runtimeModelName,
   usaDialectoDeRazonamiento,
 } from "@/lib/dossier/llm";
@@ -605,6 +607,20 @@ export async function probarCurador(): Promise<{
           user: "ok",
           maxTokens: 5,
           timeoutMs: 20_000,
+        }),
+    },
+    {
+      // La pluma se prueba SIN respaldo: en producción, si falla, escribe el
+      // modelo de generación y nadie se entera. Aquí tiene que verse.
+      nombre: "Pluma (escribe las historias)",
+      modelo: plumaModelName(),
+      llamar: () =>
+        llmRedaccion({
+          system: "Responde solo: ok",
+          user: "ok",
+          maxTokens: 5,
+          timeoutMs: 20_000,
+          sinRespaldo: true,
         }),
     },
   ];

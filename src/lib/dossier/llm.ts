@@ -15,6 +15,14 @@ type LlmOptions = {
   timeoutMs?: number; // default 120 s (pipeline); la recomendación en runtime usa uno corto
   /** Override explícito; si no, usa LLM_MODEL (runtime) o GENERATION_MODEL (dossier). */
   model?: string;
+  /**
+   * Contexto largo que se repite IGUAL en varias llamadas seguidas (el paquete
+   * de hechos de un disco: lo leen el editor, el redactor y el verificador). Va
+   * delante de todo para que el proveedor lo cachee: en Anthropic se marca con
+   * cache_control (la relectura cuesta ~10%); en OpenAI el prefijo idéntico se
+   * cachea solo. Sin esto, escribir con un modelo bueno costaba el triple.
+   */
+  contextoCompartido?: string;
 };
 
 function getProvider(): "openai" | "anthropic" {
@@ -101,7 +109,12 @@ function cuerpoOpenAI(
   model: string,
   comoRazonamiento: boolean,
 ): Record<string, unknown> {
+  // El contexto compartido va PRIMERO y en su propio mensaje: OpenAI cachea
+  // solo el prefijo idéntico, y las instrucciones cambian de una llamada a otra.
   const messages = [
+    ...(opts.contextoCompartido
+      ? [{ role: "system", content: opts.contextoCompartido }]
+      : []),
     { role: "system", content: opts.system },
     { role: "user", content: opts.user },
   ];
@@ -184,24 +197,51 @@ async function callOpenAI(opts: LlmOptions, model: string): Promise<string> {
 async function callAnthropic(opts: LlmOptions, model: string): Promise<string> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("Falta ANTHROPIC_API_KEY en .env");
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: opts.maxTokens ?? 4096,
-      temperature: opts.temperature ?? 0.7,
-      system: opts.system,
-      messages: [{ role: "user", content: opts.user }],
-    }),
-    signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000),
+  // Con contexto compartido, el system va en bloques: primero el contexto
+  // (marcado para caché; el prefijo cacheado es todo lo que va antes de la
+  // marca, así que tiene que ser lo primero) y después las instrucciones.
+  const system = opts.contextoCompartido
+    ? [
+        {
+          type: "text",
+          text: opts.contextoCompartido,
+          cache_control: { type: "ephemeral" },
+        },
+        { type: "text", text: opts.system },
+      ]
+    : opts.system;
+  const cuerpo = JSON.stringify({
+    model,
+    max_tokens: opts.maxTokens ?? 4096,
+    temperature: opts.temperature ?? 0.7,
+    system,
+    messages: [{ role: "user", content: opts.user }],
   });
-  if (!res.ok) {
-    throw new Error(`Anthropic ${res.status}: ${(await res.text()).slice(0, 300)}`);
+
+  let res: Response | null = null;
+  // Un reintento si Anthropic está saturado (429/529): pasa a menudo unos
+  // segundos y no merece caer al modelo de respaldo por eso.
+  for (let intento = 0; intento < 2; intento++) {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: cuerpo,
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000),
+    });
+    if ((res.status === 429 || res.status === 529) && intento === 0) {
+      await new Promise((r) => setTimeout(r, 2500));
+      continue;
+    }
+    break;
+  }
+  if (!res || !res.ok) {
+    throw new Error(
+      `Anthropic ${res?.status ?? "?"}: ${res ? (await res.text()).slice(0, 300) : "sin respuesta"}`,
+    );
   }
   const data = (await res.json()) as {
     content: { type: string; text?: string }[];
@@ -216,10 +256,96 @@ async function callAnthropic(opts: LlmOptions, model: string): Promise<string> {
   return contenido;
 }
 
-async function callLlm(opts: LlmOptions, model: string): Promise<string> {
-  return getProvider() === "openai"
+async function callLlm(
+  opts: LlmOptions,
+  model: string,
+  provider: "openai" | "anthropic" = getProvider(),
+): Promise<string> {
+  return provider === "openai"
     ? callOpenAI(opts, model)
     : callAnthropic(opts, model);
+}
+
+// ─── La pluma: el modelo que ESCRIBE las historias ──────────────────────────
+//
+// Las historias de los discos se escriben una sola vez y las leen todos los
+// oyentes para siempre, así que es el único sitio donde de verdad compensa
+// pagar por prosa. Con gpt-4o-mini salían todas cortadas por el mismo molde
+// ("Imagina un estudio en 1970, donde el aire está cargado de electricidad…").
+//
+// Por eso la pluma va APARTE del resto: el runtime (elegir, verificar pedidos,
+// chat) y la generación (proponer discos, caminos, atlas) siguen con su modelo,
+// y solo la redacción del dossier usa Claude Sonnet si hay ANTHROPIC_API_KEY.
+//
+// Variables (todas opcionales):
+//   DOSSIER_MODEL    modelo de la pluma. Por defecto claude-sonnet-4-6 si hay
+//                    ANTHROPIC_API_KEY; si no, el de generación de siempre.
+//   DOSSIER_PROVIDER openai | anthropic, por si el nombre no lo deja claro.
+
+const PLUMA_POR_DEFECTO = "claude-sonnet-4-6";
+
+function proveedorDeModelo(model: string): "openai" | "anthropic" | null {
+  const m = model.toLowerCase();
+  if (m.startsWith("claude")) return "anthropic";
+  if (m.startsWith("gpt") || /^o\d/.test(m) || m.startsWith("openai/")) return "openai";
+  return null;
+}
+
+function plumaElegida(): { model: string; provider: "openai" | "anthropic" } {
+  const explicito = process.env.DOSSIER_PROVIDER?.toLowerCase();
+  const model = process.env.DOSSIER_MODEL?.trim();
+  if (model) {
+    const provider =
+      explicito === "openai" || explicito === "anthropic"
+        ? explicito
+        : (proveedorDeModelo(model) ?? getProvider());
+    return { model, provider };
+  }
+  if (process.env.ANTHROPIC_API_KEY && explicito !== "openai") {
+    return { model: PLUMA_POR_DEFECTO, provider: "anthropic" };
+  }
+  return { model: generationModel(), provider: getProvider() };
+}
+
+/** Nombre del modelo que escribe las historias (para el panel del dueño). */
+export function plumaModelName(): string {
+  try {
+    return plumaElegida().model;
+  } catch {
+    return "—";
+  }
+}
+
+/**
+ * Redacción y verificación del dossier con la pluma.
+ *
+ * Si la pluma falla (Anthropic caído, clave mal puesta, saldo agotado) se
+ * reintenta UNA vez con el modelo de generación de siempre: una historia algo
+ * más plana es mejor que un oyente sin disco (regla 4 del CLAUDE.md). El panel
+ * de /revision sí prueba la pluma sin red (`sinRespaldo`) para que el fallo se
+ * vea en vez de quedar tapado.
+ */
+export async function llmRedaccion(
+  opts: LlmOptions & { sinRespaldo?: boolean },
+): Promise<string> {
+  const pluma = plumaElegida();
+  try {
+    return await callLlm(opts, opts.model ?? pluma.model, pluma.provider);
+  } catch (err) {
+    if (opts.sinRespaldo) throw err;
+    let respaldo: { model: string; provider: "openai" | "anthropic" };
+    try {
+      respaldo = { model: generationModel(), provider: getProvider() };
+    } catch {
+      throw err;
+    }
+    if (respaldo.model === pluma.model && respaldo.provider === pluma.provider) throw err;
+    console.warn(
+      `[llm] la pluma ${pluma.model} falló (${(err as Error).message.slice(0, 160)}); ` +
+        `escribo con ${respaldo.model}.`,
+    );
+    return callLlm(opts, respaldo.model, respaldo.provider);
+  }
 }
 
 /** Runtime: recomendaciones, chat, curiosidades del día (modelo barato). */

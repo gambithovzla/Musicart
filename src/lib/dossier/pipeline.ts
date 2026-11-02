@@ -5,6 +5,8 @@ import { prisma } from "../db";
 import { gatherAlbumFacts } from "./facts";
 import { generateDossier, type GeneratedDossier } from "./generate";
 import { verifyDossier, type VerificationReport } from "./verify";
+import { REDACCION_VERSION, type FactsPayload } from "../types";
+import { plumaModelName } from "./llm";
 import { extractPalette } from "../palette";
 import { enqueueAlbum } from "../curator";
 
@@ -15,6 +17,34 @@ export type PipelineResult = {
   report: VerificationReport;
   reused: boolean; // true si ya existía (cache, sin costo de IA); false si se fabricó
 };
+
+/**
+ * Escribe y verifica una historia: editor → redactor → estilo → verificador, con
+ * UN reintento si el verificador encuentra inventos (reusando el plan del
+ * editor, que ya está pagado). La usan el pipeline y la reescritura.
+ */
+export async function escribirYVerificar(
+  payload: FactsPayload,
+  log: (msg: string) => void = () => {},
+): Promise<{ dossier: GeneratedDossier; report: VerificationReport }> {
+  log("Escribiendo la historia (editor → redactor → estilo)…");
+  const primero = await generateDossier(payload, { log });
+  let dossier: GeneratedDossier = primero;
+  log("Verificando afirmaciones contra los hechos…");
+  let report = await verifyDossier(dossier, payload);
+
+  if (!report.ok) {
+    const feedback = [...report.hardErrors, ...report.unsupportedClaims].join("\n- ");
+    log(`Verificación encontró ${report.hardErrors.length + report.unsupportedClaims.length} problemas. Reescribiendo…`);
+    dossier = await generateDossier(payload, {
+      feedback: `- ${feedback}`,
+      plan: primero.plan,
+      log,
+    });
+    report = await verifyDossier(dossier, payload);
+  }
+  return { dossier, report };
+}
 
 export async function runDossierPipeline(
   albumQuery: string,
@@ -55,18 +85,13 @@ export async function runDossierPipeline(
     };
   }
 
-  // 2. Generar narrativa (con un reintento si la verificación encuentra inventos).
-  log("Generando dossier con IA…");
-  let dossier: GeneratedDossier = await generateDossier(payload);
-  log("Verificando afirmaciones contra los hechos…");
-  let report = await verifyDossier(dossier, payload);
-
-  if (!report.ok) {
-    const feedback = [...report.hardErrors, ...report.unsupportedClaims].join("\n- ");
-    log(`Verificación encontró ${report.hardErrors.length + report.unsupportedClaims.length} problemas. Regenerando…`);
-    dossier = await generateDossier(payload, `- ${feedback}`);
-    report = await verifyDossier(dossier, payload);
-  }
+  // 2. Generar narrativa (editor → redactor → estilo) y verificarla.
+  const { dossier, report } = await escribirYVerificar(payload, log);
+  payload.redaccion = {
+    version: REDACCION_VERSION,
+    fecha: new Date().toISOString(),
+    modelo: plumaModelName(),
+  };
 
   // 3. Paleta de la portada.
   const palette = gathered.coverUrl

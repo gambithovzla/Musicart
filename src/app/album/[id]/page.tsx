@@ -1,7 +1,9 @@
 // El dossier completo: antes → durante → escuchar → después.
 
-import Image from "next/image";
 import { notFound } from "next/navigation";
+import { armarEscenas } from "@/lib/historia-escenas";
+import { PortadaDossier } from "@/components/PortadaDossier";
+import { FragmentosProvider, BotonFragmento } from "@/components/Fragmentos";
 import { auth } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
 import { prisma } from "@/lib/db";
@@ -16,6 +18,7 @@ import { queueKey } from "@/lib/curator";
 import { deriveGenres } from "@/lib/genres";
 import {
   parseJson,
+  REDACCION_VERSION,
   type AlbumLinks,
   type DiscoveryJump,
   type DossierAudio,
@@ -195,74 +198,51 @@ export default async function AlbumPage({
     },
   ];
 
+  // La historia deslizable sale del texto que ya existe (también en los viejos).
+  const escenas = armarEscenas({
+    artist: album.artist.name,
+    title: album.title,
+    intro: dossier.intro,
+    artistStory: dossier.artistStory,
+    whyItMatters: dossier.whyItMatters,
+    wowFacts,
+    trackNotes: dossier.trackNotes,
+  });
+
   return (
     <main style={albumThemeStyle(palette)} className="relative">
-      {/* Fondo teñido con la paleta del disco */}
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-[60dvh]"
-        style={{
-          background:
-            "linear-gradient(to bottom, var(--album-dark) 0%, transparent 100%)",
-          opacity: 0.5,
+      <FragmentosProvider albumId={album.id}>
+      <PortadaDossier
+        meta={{
+          albumId: album.id,
+          title: album.title,
+          artist: album.artist.name,
+          year: album.year,
+          coverUrl: album.coverUrl,
+          durationMin: album.durationMin,
+          links,
         }}
-      />
-
-      <div className="relative px-6 pt-10">
-        {/* — Hero — */}
-        <header className="flex flex-col items-center text-center">
-          <div className="relative">
-            {/* Resplandor cálido con el color del disco */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -inset-8 -z-10 rounded-full opacity-50 blur-3xl"
-              style={{
-                background:
-                  "radial-gradient(circle, var(--album-vibrant), transparent 70%)",
-              }}
-            />
-            <div className="relative aspect-square w-48 overflow-hidden rounded-xl shadow-2xl ring-1 ring-white/10">
-              {album.coverUrl ? (
-                <Image
-                  src={album.coverUrl}
-                  alt={`Portada de ${album.title}`}
-                  fill
-                  sizes="192px"
-                  priority
-                  className="object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-album-dark">
-                  <span className="font-serif text-4xl text-album-light">♪</span>
-                </div>
-              )}
-            </div>
-          </div>
-          <h1 className="font-serif mt-6 text-3xl font-semibold leading-tight">
-            {album.title}
-          </h1>
-          <p className="mt-1 text-lg text-dim">
-            {album.artist.name} · {album.year}
-          </p>
-          {genres.length > 0 && (
-            <div className="mt-3">
-              <GenreTags genres={genres} />
-            </div>
-          )}
-          <div className="mt-4 flex flex-wrap items-start gap-x-5 gap-y-2 text-sm text-dim">
-            {album.durationMin && <span className="pt-px">{album.durationMin} min</span>}
+        escenas={escenas}
+        historiaDisponible={access.allowed}
+        generos={genres.length > 0 ? <GenreTags genres={genres} /> : undefined}
+        ficha={
+          <>
+            {album.durationMin && <span className="dato text-[11px]">{album.durationMin} min</span>}
             <DificultadEscucha value={album.difficulty} />
             <ImpactoCultural value={album.impact} note={dossier.impactNote} />
-          </div>
-        </header>
-
-        <section className="mt-4">
+          </>
+        }
+        compartir={
           <ShareAlbum
             albumId={album.id}
             title={album.title}
             artist={album.artist.name}
             variant="link"
           />
-        </section>
+        }
+      />
+
+      <div className="relative px-5">
 
         {!access.allowed ? (
           <>
@@ -292,14 +272,18 @@ export default async function AlbumPage({
               />
             </section>
 
-            <p className="mt-10 text-center text-xs uppercase tracking-[0.3em] text-dim">
-              Toca para abrir cada parte
-            </p>
-            <div className="mt-4 flex flex-col gap-3">
+            {/* El sumario: entradas con folio, cosidas por filetes. */}
+            <div className="cabecera-seccion mt-10">
+              <span className="rotulo">Sumario</span>
+              <span className="dato text-[11px] text-tinta-suave">toca cada parte</span>
+            </div>
+            <div>
               <DossierSection n="01" title="La historia detrás del disco" defaultOpen>
                 <div className="prose-dossier">
                   {dossier.intro.split("\n\n").map((p, i) => (
-                    <p key={i}>{p}</p>
+                    <p key={i} className={i === 0 ? "capitular" : undefined}>
+                      {p}
+                    </p>
                   ))}
                 </div>
               </DossierSection>
@@ -321,7 +305,7 @@ export default async function AlbumPage({
               initialQuota={chatQuota}
             />
 
-            <div className="mb-4 mt-3 flex flex-col gap-3">
+            <div className="mb-4 mt-6 border-t border-regla">
               <DossierSection n="02" title={`Quién era ${album.artist.name}`}>
                 <div className="prose-dossier">
                   {dossier.artistStory.split("\n\n").map((p, i) => (
@@ -331,31 +315,27 @@ export default async function AlbumPage({
               </DossierSection>
 
               <DossierSection n="03" title="Canción por canción">
-                <p className="text-sm text-dim">
-                  Dale play y vuelve aquí mientras escuchas — cada pista con su
-                  contexto.
+                <p className="text-[13px] leading-snug text-tinta-suave">
+                  Toca el vinilo de una canción para oír 30 segundos; dale play al
+                  disco entero y vuelve aquí mientras suena.
                 </p>
-                <ol className="mt-4 flex flex-col gap-1.5">
+                <ol className="mt-3 border-t border-regla">
                   {dossier.trackNotes.map((t) => (
-                    <li
-                      key={t.id}
-                      className="rounded-xl border-l-2 border-album/60 bg-black/20 px-4 py-3"
-                    >
-                      <div className="flex items-baseline gap-3">
-                        <span className="w-5 shrink-0 text-right text-sm tabular-nums text-dim">
-                          {t.position}
-                        </span>
-                        <span className="font-medium">{t.title}</span>
+                    <li key={t.id} className="flex items-start gap-3 border-b border-regla py-3">
+                      <span className="dato w-6 shrink-0 pt-1 text-[12px] text-tinta-suave">
+                        {String(t.position).padStart(2, "0")}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-serif text-[1.05rem] font-medium leading-snug">{t.title}</p>
+                        {t.note ? (
+                          <p className="mt-1 text-[14px] leading-relaxed text-tinta-suave">{t.note}</p>
+                        ) : (
+                          <p className="mt-1 text-[12px] italic text-tinta-suave">
+                            (Nota pendiente de reescribir este dossier)
+                          </p>
+                        )}
                       </div>
-                      {t.note ? (
-                        <p className="font-serif mt-1.5 pl-8 text-[15px] italic leading-relaxed text-foreground/85">
-                          {t.note}
-                        </p>
-                      ) : (
-                        <p className="mt-1.5 pl-8 text-xs text-dim italic">
-                          (Nota pendiente de regenerar este dossier)
-                        </p>
-                      )}
+                      <BotonFragmento position={t.position} title={t.title} />
                     </li>
                   ))}
                 </ol>
@@ -366,8 +346,8 @@ export default async function AlbumPage({
               <DossierSection n="05" title="Escúchalo completo" accent defaultOpen>
                 <p className="text-sm text-dim">
                   {album.durationMin
-                    ? `Reserva ${album.durationMin} minutos. Vale la pena de principio a fin.`
-                    : "Vale la pena de principio a fin."}
+                    ? `Reserva ${album.durationMin} minutos y escúchalo en orden, sin saltar.`
+                    : "Escúchalo en orden, sin saltar."}
                 </p>
                 <div className="mt-4">
                   <ListenLinks links={links} />
@@ -422,17 +402,19 @@ export default async function AlbumPage({
             showcase={album.showcase}
             shelf={album.showcaseShelf?.trim() || null}
             estantes={estantesExistentes}
+            historiaNueva={(facts?.redaccion?.version ?? 1) >= REDACCION_VERSION}
           />
         )}
       </div>
+      </FragmentosProvider>
     </main>
   );
 }
 
 function SectionTitle({ n, title }: { n: string; title: string }) {
   return (
-    <h2 className="flex items-baseline gap-3 border-b border-white/10 pb-3">
-      <span className="text-xs tabular-nums tracking-widest text-album">{n}</span>
+    <h2 className="cabecera-seccion items-baseline !justify-start gap-3">
+      <span className="dato text-[12px] text-acento">№ {n}</span>
       <span className="font-serif text-xl font-medium">{title}</span>
     </h2>
   );

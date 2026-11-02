@@ -14,7 +14,11 @@ import {
   type MbConnection,
 } from "../sources/musicbrainz";
 import { getCoverUrl } from "../sources/coverart";
-import { getAlbumDeepContext, getArtistDeepContext, firstFactSentence } from "../sources/wikipedia";
+import {
+  getAlbumContextoBilingue,
+  getArtistContextoBilingue,
+  firstFactSentence,
+} from "../sources/wikipedia";
 import { getAlbumInfo } from "../sources/lastfm";
 import {
   searchAlbum as searchItunes,
@@ -22,6 +26,9 @@ import {
 } from "../sources/itunes";
 import { resolveLinks, searchLinks } from "../sources/odesli";
 import type { AlbumLinks, FactsPayload } from "../types";
+
+/** Tope de texto de Wikipedia que entra al payload (~12k tokens). */
+const MAX_PASAJES_CHARS = 48_000;
 
 export type GatheredAlbum = {
   payload: FactsPayload;
@@ -205,48 +212,55 @@ export async function gatherAlbumFacts(
     }
   }
 
-  // ── 3. Wikipedia (intro + secciones profundas, Fase 6.9) ─────────────────
-  log("Buscando contexto en Wikipedia (intro + secciones profundas)…");
+  // ── 3. Wikipedia en español E inglés (intro + secciones profundas) ───────
+  //    Antes se quedaba con la primera que encontraba (casi siempre la española,
+  //    que suele ser un párrafo). Las historias salían genéricas porque no había
+  //    escenas de donde tirar: ahora van las dos, y solo si el artículo encaja
+  //    con el disco/artista de verdad (ver wikipedia.ts).
+  log("Buscando contexto en Wikipedia (español + inglés)…");
   const [albumWiki, artistWiki] = await Promise.all([
-    getAlbumDeepContext(title!, artist!).catch(() => ({ intro: null, sections: [] })),
-    getArtistDeepContext(artist!).catch(() => ({ intro: null, sections: [] })),
+    getAlbumContextoBilingue(title!, artist!).catch(() => ({ intros: [], sections: [] })),
+    getArtistContextoBilingue(artist!).catch(() => ({ intros: [], sections: [] })),
   ]);
 
-  if (albumWiki.intro) {
-    payload.passages!.push({
-      source: `wikipedia:${albumWiki.intro.lang}:álbum:intro`,
-      text: albumWiki.intro.text,
-    });
-    payload.sources.push(albumWiki.intro.url);
+  // Tope de contexto: lo suficiente para escenas concretas sin disparar el
+  // costo de cada historia. Primero el disco, después el artista.
+  let presupuesto = MAX_PASAJES_CHARS;
+  const añadirPasaje = (source: string, text: string, url?: string) => {
+    if (presupuesto <= 400) return false;
+    const recorte = text.slice(0, presupuesto);
+    presupuesto -= recorte.length;
+    payload.passages!.push({ source, text: recorte });
+    if (url && !payload.sources.includes(url)) payload.sources.push(url);
+    return true;
+  };
+
+  for (const intro of albumWiki.intros) {
+    añadirPasaje(`wikipedia:${intro.lang}:álbum:intro`, intro.text, intro.url);
   }
   for (const sec of albumWiki.sections) {
-    payload.passages!.push({ source: sec.source, text: sec.text });
+    if (!añadirPasaje(sec.source, sec.text, sec.url)) break;
     const nugget = firstFactSentence(sec.text);
-    if (nugget) {
-      payload.facts.push({ fact: nugget, source: sec.source });
-    }
+    if (nugget) payload.facts.push({ fact: nugget, source: sec.source });
   }
-
-  if (artistWiki.intro) {
-    payload.passages!.push({
-      source: `wikipedia:${artistWiki.intro.lang}:artista:intro`,
-      text: artistWiki.intro.text,
-    });
-    payload.sources.push(artistWiki.intro.url);
+  for (const intro of artistWiki.intros) {
+    añadirPasaje(`wikipedia:${intro.lang}:artista:intro`, intro.text, intro.url);
   }
   for (const sec of artistWiki.sections) {
-    payload.passages!.push({ source: sec.source, text: sec.text });
+    if (!añadirPasaje(sec.source, sec.text, sec.url)) break;
     const nugget = firstFactSentence(sec.text);
-    if (nugget) {
-      payload.facts.push({ fact: nugget, source: sec.source });
-    }
+    if (nugget) payload.facts.push({ fact: nugget, source: sec.source });
   }
 
-  if (!albumWiki.intro && !artistWiki.intro && albumWiki.sections.length === 0) {
+  const totalWiki =
+    albumWiki.intros.length + albumWiki.sections.length +
+    artistWiki.intros.length + artistWiki.sections.length;
+  if (totalWiki === 0) {
     log("⚠ Sin artículos de Wikipedia — el dossier tendrá menos contexto.");
-  } else if (albumWiki.sections.length + artistWiki.sections.length > 0) {
+  } else {
     log(
-      `Wikipedia: ${albumWiki.sections.length + artistWiki.sections.length} secciones profundas añadidas.`,
+      `Wikipedia: ${albumWiki.intros.length + artistWiki.intros.length} entradas y ` +
+        `${albumWiki.sections.length + artistWiki.sections.length} secciones (es + en).`,
     );
   }
 

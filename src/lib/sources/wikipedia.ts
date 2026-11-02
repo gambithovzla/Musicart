@@ -11,17 +11,43 @@ export type WikiSectionPassage = {
 };
 
 const DEEP_SECTION =
-  /recep|cr[ií]tic|legado|legacy|influenc|controvers|pol[eé]mic|en vivo|live|tour|grab|record|product|historia|history|premio|award|chart|lista|ranking|impact|legacy|aftermath|background|concert|performance|rival|feud|colabor|collabor/i;
+  /recep|cr[ií]tic|legado|legacy|influenc|controvers|pol[eé]mic|en vivo|live|tour|grab|record|product|historia|history|premio|award|chart|lista|ranking|impact|legacy|aftermath|background|concert|performance|rival|feud|colabor|collabor|compos|lyric|letra|music|m[uú]sica|songs|artwork|portada|cover|release|lanzamiento|writing|escritura|concept|theme|antecedente|contexto|origin/i;
+
+// Secciones que el filtro de arriba dejaría pasar pero que no cuentan nada:
+// listas de canciones, créditos, referencias. Gastan contexto y no dan historia.
+const SECCION_INUTIL =
+  /track ?list|lista de (canciones|temas)|listado|personnel|^personal$|^m[uú]sicos$|cr[eé]ditos|credits|references|referencias|^notes|^notas|external links|enlaces externos|bibliograf|see also|v[eé]ase/i;
 
 const MAX_SECTION_CHARS = 4_000;
 const INTRO_CHARS = 6_000;
+
+// Wikimedia exige que cada cliente se identifique con un User-Agent propio. Sin
+// él, en cuanto pedíamos disco y artista a la vez (diez o doce peticiones
+// seguidas), empezaba a devolver 429 y las secciones llegaban vacías EN
+// SILENCIO: el dossier se escribía con medio contexto y nadie se enteraba.
+const WIKI_HEADERS = {
+  "User-Agent": "Musicart/1.0 (https://musicart-three.vercel.app; curaduria musical)",
+  "Api-User-Agent": "Musicart/1.0 (https://musicart-three.vercel.app)",
+};
+
+/** fetch para Wikipedia: se identifica y reintenta una vez si nos frenan. */
+async function fetchWiki(url: string, init: { signal?: AbortSignal } = {}): Promise<Response> {
+  for (let intento = 0; ; intento++) {
+    const res = await fetch(url, { ...init, headers: WIKI_HEADERS });
+    if ((res.status === 429 || res.status === 503) && intento < 2) {
+      await new Promise((r) => setTimeout(r, 800 * (intento + 1)));
+      continue;
+    }
+    return res;
+  }
+}
 
 async function wikiSearch(
   lang: "es" | "en",
   query: string,
 ): Promise<string | null> {
   const api = `https://${lang}.wikipedia.org/w/api.php`;
-  const searchRes = await fetch(
+  const searchRes = await fetchWiki(
     `${api}?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=3&format=json&origin=*`,
     { signal: AbortSignal.timeout(10_000) },
   );
@@ -37,23 +63,37 @@ function wikiUrl(lang: string, title: string): string {
 }
 
 function stripHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
+  return (
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      // Fuera la tramoya de Wikipedia, que el redactor leía como texto: el
+      // título de la sección, los enlaces "[editar]", los avisos de "faltan
+      // citas" y las tablas (puntuaciones de reseñas sin contexto, listas).
+      .replace(/<h[1-6][\s\S]*?<\/h[1-6]>/gi, " ")
+      .replace(/<span[^>]*mw-editsection[\s\S]*?<\/span>\s*<\/span>/gi, " ")
+      .replace(/<table[\s\S]*?<\/table>/gi, " ")
+      .replace(/<sup[^>]*class="[^"]*reference[\s\S]*?<\/sup>/gi, "")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      // Lo que se haya colado: marcas de nota [1], [a], [cita requerida]…
+      .replace(/\[\s*(\d+|[a-z]|edit(ar)?(\s*\|\s*edit(ar)? (source|código))?|cita requerida|citation needed|nota \d+)\s*\]/gi, "")
+      .replace(/This section needs (additional|more) citations[^.]*\.[^.]*\./gi, "")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 async function getIntroExtract(lang: "es" | "en", title: string): Promise<string | null> {
   const api = `https://${lang}.wikipedia.org/w/api.php`;
-  const extractRes = await fetch(
+  const extractRes = await fetchWiki(
     `${api}?action=query&prop=extracts&explaintext=1&exsectionformat=plain&titles=${encodeURIComponent(title)}&format=json&origin=*&exchars=${INTRO_CHARS}`,
     { signal: AbortSignal.timeout(12_000) },
   );
@@ -70,7 +110,7 @@ async function getWikiSections(
   title: string,
 ): Promise<{ index: string; line: string; anchor: string }[]> {
   const api = `https://${lang}.wikipedia.org/w/api.php`;
-  const res = await fetch(
+  const res = await fetchWiki(
     `${api}?action=parse&page=${encodeURIComponent(title)}&prop=sections&format=json&origin=*`,
     { signal: AbortSignal.timeout(12_000) },
   );
@@ -87,7 +127,7 @@ async function getSectionText(
   sectionIndex: string,
 ): Promise<string | null> {
   const api = `https://${lang}.wikipedia.org/w/api.php`;
-  const res = await fetch(
+  const res = await fetchWiki(
     `${api}?action=parse&page=${encodeURIComponent(title)}&section=${sectionIndex}&prop=text&format=json&origin=*`,
     { signal: AbortSignal.timeout(12_000) },
   );
@@ -113,6 +153,7 @@ export function firstFactSentence(text: string, maxLen = 280): string | null {
 async function gatherDeepPassages(
   lang: "es" | "en",
   title: string,
+  max = 5,
 ): Promise<WikiSectionPassage[]> {
   const sections = await getWikiSections(lang, title);
   const out: WikiSectionPassage[] = [];
@@ -121,8 +162,8 @@ async function gatherDeepPassages(
   for (const sec of sections) {
     if (sec.index === "0") continue;
     const heading = sec.line.replace(/<[^>]+>/g, "").trim();
-    if (!heading || !DEEP_SECTION.test(heading)) continue;
-    if (out.length >= 5) break;
+    if (!heading || !DEEP_SECTION.test(heading) || SECCION_INUTIL.test(heading)) continue;
+    if (out.length >= max) break;
 
     const text = await getSectionText(lang, title, sec.index);
     if (!text) continue;
@@ -230,6 +271,133 @@ export async function getArtistIntro(artist: string): Promise<WikiExtract | null
 export async function getArtistContext(artist: string): Promise<WikiExtract | null> {
   const { intro } = await buildWikiContext([artist, `${artist} musician`]);
   return intro;
+}
+
+// ─── Contexto BILINGÜE (para escribir historias con detalle) ────────────────
+//
+// buildWikiContext se queda con la PRIMERA Wikipedia que encuentra, y busca
+// primero en español. Para la gran mayoría de los discos el artículo en inglés
+// es varias veces más rico: tiene "Background", "Recording", "Composition",
+// "Release", "Reception", "Legacy"… y el español apenas un párrafo. Con eso el
+// redactor no tenía de dónde sacar escenas y rellenaba con frases de molde.
+//
+// Aquí se piden las dos a la vez y se usan las dos (el redactor escribe en
+// español igual: la fuente en inglés solo aporta hechos). Y se comprueba que el
+// artículo sea el del disco o el del artista — la búsqueda de "Paranoid" puede
+// devolver la canción, y un hecho de la canción contado como del disco es justo
+// el tipo de error que el verificador no ve.
+
+function normalizar(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\(.*?\)/g, " ")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** ¿El título del artículo se refiere a lo que buscamos? */
+function articuloEncaja(tituloArticulo: string, buscado: string, tipo: "album" | "artista"): boolean {
+  const t = normalizar(tituloArticulo);
+  const b = normalizar(buscado);
+  if (!t || !b) return false;
+  if (!(t.includes(b) || b.includes(t))) return false;
+  // Si es el artículo de una canción o de una película homónima, no nos sirve.
+  const desambiguacion = tituloArticulo.match(/\(([^)]+)\)/)?.[1]?.toLowerCase() ?? "";
+  if (tipo === "album" && /song|canci[oó]n|single|sencillo|film|pel[ií]cula|novel|novela/.test(desambiguacion)) {
+    return false;
+  }
+  // Una banda con disco homónimo («Black Sabbath») devolvía el artículo DEL
+  // DISCO como si fuera el del artista.
+  if (tipo === "artista" && /album|álbum|song|canci[oó]n|single|sencillo|film|pel[ií]cula|tv|serie|novel/.test(desambiguacion)) {
+    return false;
+  }
+  return true;
+}
+
+async function resolverEncajado(
+  lang: "es" | "en",
+  queries: string[],
+  buscado: string,
+  tipo: "album" | "artista",
+): Promise<string | null> {
+  for (const q of queries) {
+    const api = `https://${lang}.wikipedia.org/w/api.php`;
+    const res = await fetchWiki(
+      `${api}?action=query&list=search&srsearch=${encodeURIComponent(q)}&srlimit=5&format=json&origin=*`,
+      { signal: AbortSignal.timeout(10_000) },
+    ).catch(() => null);
+    if (!res?.ok) continue;
+    const data = (await res.json().catch(() => null)) as {
+      query?: { search?: { title: string }[] };
+    } | null;
+    const titulos = (data?.query?.search ?? []).map((s) => s.title);
+    // Preferimos el que lleva "(álbum)"/"(album)" en el título si existe.
+    const preferido =
+      titulos.find((t) => articuloEncaja(t, buscado, tipo) && /\((?:[^)]*\s)?(?:álbum|album)\)/i.test(t)) ??
+      titulos.find((t) => articuloEncaja(t, buscado, tipo));
+    if (preferido) return preferido;
+  }
+  return null;
+}
+
+async function contextoDeIdioma(
+  lang: "es" | "en",
+  queries: string[],
+  buscado: string,
+  tipo: "album" | "artista",
+  maxSecciones: number,
+  debeMencionar?: string,
+): Promise<{ intro: WikiExtract | null; sections: WikiSectionPassage[] }> {
+  const title = await resolverEncajado(lang, queries, buscado, tipo).catch(() => null);
+  if (!title) return { intro: null, sections: [] };
+  const [introText, sections] = await Promise.all([
+    getIntroExtract(lang, title).catch(() => null),
+    gatherDeepPassages(lang, title, maxSecciones).catch(() => []),
+  ]);
+  // El artículo de un disco nombra a su artista en la entrada. Si no lo hace,
+  // es otro "Bad" u otro "Thriller": mejor sin contexto que con el ajeno.
+  if (debeMencionar && introText && !normalizar(introText).includes(normalizar(debeMencionar))) {
+    return { intro: null, sections: [] };
+  }
+  return {
+    intro: introText ? { title, text: introText, url: wikiUrl(lang, title), lang } : null,
+    sections,
+  };
+}
+
+export type ContextoBilingue = {
+  intros: WikiExtract[];
+  sections: WikiSectionPassage[];
+};
+
+/** Álbum: intro + secciones en español E inglés, solo si el artículo encaja. */
+export async function getAlbumContextoBilingue(
+  album: string,
+  artist: string,
+): Promise<ContextoBilingue> {
+  const [es, en] = await Promise.all([
+    contextoDeIdioma("es", [`${album} álbum ${artist}`, `${album} ${artist}`], album, "album", 3, artist),
+    contextoDeIdioma("en", [`${album} album ${artist}`, `${album} ${artist}`], album, "album", 7, artist),
+  ]);
+  return {
+    intros: [es.intro, en.intro].filter((x): x is WikiExtract => Boolean(x)),
+    sections: [...en.sections, ...es.sections],
+  };
+}
+
+/** Artista: intro + secciones en español E inglés, solo si el artículo encaja. */
+export async function getArtistContextoBilingue(artist: string): Promise<ContextoBilingue> {
+  const [es, en] = await Promise.all([
+    contextoDeIdioma("es", [artist, `${artist} músico`, `${artist} banda`], artist, "artista", 2),
+    contextoDeIdioma("en", [artist, `${artist} band`, `${artist} musician`], artist, "artista", 4),
+  ]);
+  return {
+    intros: [es.intro, en.intro].filter((x): x is WikiExtract => Boolean(x)),
+    sections: [...en.sections, ...es.sections],
+  };
 }
 
 /** Intro + secciones del artista (rivalidades, carrera, premios…). */

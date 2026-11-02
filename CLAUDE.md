@@ -114,7 +114,7 @@ el sistema.
 
 Next.js 15 (App Router, Turbopack) · React 19 · TypeScript · Tailwind 4 ·
 Framer Motion · Prisma 6 + **PostgreSQL (Railway)** · Zod ·
-LLM por fetch directo (OpenAI o Anthropic, sin SDKs).
+LLM por fetch directo (OpenAI, Anthropic o DeepSeek, sin SDKs).
 
 ## La pluma y las historias (nov 2026)
 
@@ -126,7 +126,8 @@ solo se contaba con el artículo de Wikipedia en español (un párrafo).
 Cómo funciona ahora (`src/lib/dossier/`):
 
 1. **La pluma** (`llm.ts` → `llmRedaccion`): las historias se escriben con
-   `DOSSIER_MODEL` (por defecto `claude-sonnet-4-6` si hay `ANTHROPIC_API_KEY`).
+   `DOSSIER_MODEL` (por defecto `deepseek-chat` si hay `DEEPSEEK_API_KEY`; si no,
+   `claude-sonnet-4-6` con `ANTHROPIC_API_KEY`).
    El runtime, los caminos, el atlas y el Salón NO cambian de modelo. Si la pluma
    falla se escribe con el de siempre y se avisa en consola; `/revision` la prueba
    sin respaldo para que el fallo se vea.
@@ -405,7 +406,9 @@ npm run push                                     # envío Web Push del disco del
   (correos admin separados por coma; gatean `/revision` y el botón "Rehacer mi
   disco de hoy"). Opcional `DAILY_GENERATION_BUDGET` (tope de discos nuevos/día
   para oyentes, default 15; ver `src/lib/budget.ts`). LLM: `LLM_PROVIDER`,
-  `LLM_MODEL` (default `gpt-4o-mini`). Resto de variables: ver README.
+  `LLM_MODEL` (default `gpt-4o-mini`). **DeepSeek** (nov 2026):
+  `DEEPSEEK_API_KEY` y, si quieres que todo el runtime lo use, `LLM_PROVIDER=deepseek`
+  (`DEEPSEEK_BASE_URL` opcional). Resto de variables: ver README.
 - **Disco fresco del día (Fase 6.4):** la home no fabrica en SSR (tarda 1-3 min).
   Si no hay pick guardado y el oyente tiene perfil, muestra `CreandoDiscoHoy` que
   hace POST a `/api/pick-hoy` (`maxDuration=300`); al terminar refresca. Si la IA

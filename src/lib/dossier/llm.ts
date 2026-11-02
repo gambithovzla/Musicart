@@ -1,11 +1,21 @@
-// Adapter de LLM intercambiable: OpenAI o Anthropic vía variables de entorno.
-// LLM_PROVIDER=openai|anthropic · LLM_MODEL (runtime barato) ·
-// GENERATION_MODEL (solo dossier: generate + verify, Fase 6.8)
+// Adapter de LLM intercambiable: OpenAI, Anthropic o DeepSeek por variables de
+// entorno.
+//   LLM_PROVIDER=openai|anthropic|deepseek   (runtime barato)
+//   LLM_MODEL                                (runtime)
+//   GENERATION_MODEL                         (propuestas: caminos, atlas, social)
+//   DOSSIER_MODEL / DOSSIER_PROVIDER         (la pluma: quien escribe las historias)
+//
+// DeepSeek habla el dialecto de OpenAI (mismo cuerpo, misma respuesta): cambia
+// solo la URL y la clave. Su `deepseek-chat` escribe en español muy por encima de
+// gpt-4o-mini y cuesta una fracción de lo que cuesta Claude, así que es la opción
+// natural para un producto que escribe cientos de historias.
 //
 // OJO con OpenAI: hay DOS dialectos. Los modelos clásicos (gpt-4o, gpt-4o-mini)
 // usan `max_tokens` + `temperature`; los de razonamiento (o1, o3, o4, gpt-5)
 // PROHÍBEN los dos y usan `max_completion_tokens`. Aquí se elige el dialecto por
 // el nombre del modelo y, si la API se queja igual, se reintenta con el otro.
+
+export type Proveedor = "openai" | "anthropic" | "deepseek";
 
 type LlmOptions = {
   system: string;
@@ -25,22 +35,29 @@ type LlmOptions = {
   contextoCompartido?: string;
 };
 
-function getProvider(): "openai" | "anthropic" {
+function getProvider(): Proveedor {
   const explicit = process.env.LLM_PROVIDER?.toLowerCase();
-  if (explicit === "openai" || explicit === "anthropic") {
+  if (explicit === "openai" || explicit === "anthropic" || explicit === "deepseek") {
     return explicit;
   }
   if (process.env.OPENAI_API_KEY) return "openai";
   if (process.env.ANTHROPIC_API_KEY) return "anthropic";
+  if (process.env.DEEPSEEK_API_KEY) return "deepseek";
   throw new Error(
-    "No hay clave de IA configurada. Define OPENAI_API_KEY o ANTHROPIC_API_KEY en .env",
+    "No hay clave de IA configurada. Define OPENAI_API_KEY, ANTHROPIC_API_KEY o DEEPSEEK_API_KEY en .env",
   );
+}
+
+function modeloPorDefecto(provider: Proveedor): string {
+  if (provider === "openai") return "gpt-4o-mini";
+  if (provider === "anthropic") return "claude-sonnet-4-6";
+  return "deepseek-chat";
 }
 
 function runtimeModel(): string {
   const provider = getProvider();
   if (process.env.LLM_MODEL) return process.env.LLM_MODEL;
-  return provider === "openai" ? "gpt-4o-mini" : "claude-sonnet-4-6";
+  return modeloPorDefecto(provider);
 }
 
 /** Modelo para escribir/verificar dossiers (premium si está configurado). */
@@ -58,6 +75,9 @@ export function runtimeModelName(): string {
  *  saber CÓMO se le está hablando al modelo es la mitad del diagnóstico. */
 export function usaDialectoDeRazonamiento(model: string): boolean {
   try {
+    // DeepSeek tiene su propio razonador (deepseek-reasoner): razona antes de
+    // escribir y no acepta `temperature`, igual que los o1/o3 de OpenAI.
+    if (model.toLowerCase().includes("reasoner")) return true;
     return getProvider() === "openai" && esDeRazonamiento(model);
   } catch {
     // Sin clave no hay proveedor que valga: el panel ya lo dice por su lado.
@@ -67,7 +87,11 @@ export function usaDialectoDeRazonamiento(model: string): boolean {
 
 /** ¿Hay una clave de IA configurada? Para decidir si podemos fabricar discos en vivo. */
 export function hayClaveIA(): boolean {
-  return Boolean(process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY);
+  return Boolean(
+    process.env.OPENAI_API_KEY ||
+      process.env.ANTHROPIC_API_KEY ||
+      process.env.DEEPSEEK_API_KEY,
+  );
 }
 
 /**
@@ -256,14 +280,69 @@ async function callAnthropic(opts: LlmOptions, model: string): Promise<string> {
   return contenido;
 }
 
+/**
+ * DeepSeek: mismo dialecto que OpenAI (mismo cuerpo, misma forma de respuesta),
+ * otra URL y otra clave. `deepseek-reasoner` razona antes de contestar y, como
+ * los modelos de razonamiento de OpenAI, no acepta `temperature`: se omite para
+ * ese modelo en vez de comerse un 400.
+ */
+async function callDeepSeek(opts: LlmOptions, model: string): Promise<string> {
+  const key = process.env.DEEPSEEK_API_KEY;
+  if (!key) throw new Error("Falta DEEPSEEK_API_KEY en .env");
+  const base = (process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com").replace(/\/+$/, "");
+  const esRazonador = model.toLowerCase().includes("reasoner");
+  const messages = [
+    ...(opts.contextoCompartido
+      ? [{ role: "system", content: opts.contextoCompartido }]
+      : []),
+    { role: "system", content: opts.system },
+    { role: "user", content: opts.user },
+  ];
+
+  // Reintento ante saturación (503/429): DeepSeek también rate-limita.
+  for (let intento = 0; ; intento++) {
+    const res = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        // Con el razonador el tope cuenta también el razonamiento: colchón.
+        max_tokens: (opts.maxTokens ?? 4096) + (esRazonador ? 2000 : 0),
+        ...(esRazonador ? {} : { temperature: opts.temperature ?? 0.7 }),
+        messages,
+      }),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 120_000),
+    });
+    if ((res.status === 429 || res.status === 503) && intento < 2) {
+      await new Promise((r) => setTimeout(r, 2000 * (intento + 1)));
+      continue;
+    }
+    if (!res.ok) {
+      throw new Error(`DeepSeek ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    }
+    const data = (await res.json()) as {
+      choices: { message: { content: string | null }; finish_reason?: string }[];
+    };
+    const contenido = data.choices?.[0]?.message?.content ?? "";
+    if (!contenido.trim()) {
+      const razon = data.choices?.[0]?.finish_reason ?? "desconocida";
+      throw new Error(
+        `DeepSeek ${model} devolvió una respuesta vacía (finish_reason: ${razon})` +
+          `${razon === "length" ? " — se quedó sin tope de tokens" : ""}`,
+      );
+    }
+    return contenido;
+  }
+}
+
 async function callLlm(
   opts: LlmOptions,
   model: string,
-  provider: "openai" | "anthropic" = getProvider(),
+  provider: Proveedor = getProvider(),
 ): Promise<string> {
-  return provider === "openai"
-    ? callOpenAI(opts, model)
-    : callAnthropic(opts, model);
+  if (provider === "openai") return callOpenAI(opts, model);
+  if (provider === "deepseek") return callDeepSeek(opts, model);
+  return callAnthropic(opts, model);
 }
 
 // ─── La pluma: el modelo que ESCRIBE las historias ──────────────────────────
@@ -275,35 +354,40 @@ async function callLlm(
 //
 // Por eso la pluma va APARTE del resto: el runtime (elegir, verificar pedidos,
 // chat) y la generación (proponer discos, caminos, atlas) siguen con su modelo,
-// y solo la redacción del dossier usa Claude Sonnet si hay ANTHROPIC_API_KEY.
+// y solo la redacción del dossier usa un modelo mejor.
 //
 // Variables (todas opcionales):
-//   DOSSIER_MODEL    modelo de la pluma. Por defecto claude-sonnet-4-6 si hay
-//                    ANTHROPIC_API_KEY; si no, el de generación de siempre.
-//   DOSSIER_PROVIDER openai | anthropic, por si el nombre no lo deja claro.
+//   DOSSIER_MODEL    modelo de la pluma (p. ej. deepseek-chat, claude-sonnet-4-6).
+//   DOSSIER_PROVIDER openai | anthropic | deepseek, por si el nombre no lo deja claro.
+//
+// Orden si no dices nada: DeepSeek (si hay DEEPSEEK_API_KEY) → Claude (si hay
+// ANTHROPIC_API_KEY) → el modelo de generación de siempre. DeepSeek va primero
+// porque es el que está pagando el dueño y cuesta una fracción de Claude.
 
-const PLUMA_POR_DEFECTO = "claude-sonnet-4-6";
-
-function proveedorDeModelo(model: string): "openai" | "anthropic" | null {
+function proveedorDeModelo(model: string): Proveedor | null {
   const m = model.toLowerCase();
   if (m.startsWith("claude")) return "anthropic";
+  if (m.startsWith("deepseek")) return "deepseek";
   if (m.startsWith("gpt") || /^o\d/.test(m) || m.startsWith("openai/")) return "openai";
   return null;
 }
 
-function plumaElegida(): { model: string; provider: "openai" | "anthropic" } {
+function plumaElegida(): { model: string; provider: Proveedor } {
   const explicito = process.env.DOSSIER_PROVIDER?.toLowerCase();
+  const providerExplicito =
+    explicito === "openai" || explicito === "anthropic" || explicito === "deepseek"
+      ? (explicito as Proveedor)
+      : undefined;
+
   const model = process.env.DOSSIER_MODEL?.trim();
   if (model) {
-    const provider =
-      explicito === "openai" || explicito === "anthropic"
-        ? explicito
-        : (proveedorDeModelo(model) ?? getProvider());
-    return { model, provider };
+    return { model, provider: providerExplicito ?? proveedorDeModelo(model) ?? getProvider() };
   }
-  if (process.env.ANTHROPIC_API_KEY && explicito !== "openai") {
-    return { model: PLUMA_POR_DEFECTO, provider: "anthropic" };
+  if (providerExplicito) {
+    return { model: modeloPorDefecto(providerExplicito), provider: providerExplicito };
   }
+  if (process.env.DEEPSEEK_API_KEY) return { model: "deepseek-chat", provider: "deepseek" };
+  if (process.env.ANTHROPIC_API_KEY) return { model: "claude-sonnet-4-6", provider: "anthropic" };
   return { model: generationModel(), provider: getProvider() };
 }
 
@@ -333,7 +417,7 @@ export async function llmRedaccion(
     return await callLlm(opts, opts.model ?? pluma.model, pluma.provider);
   } catch (err) {
     if (opts.sinRespaldo) throw err;
-    let respaldo: { model: string; provider: "openai" | "anthropic" };
+    let respaldo: { model: string; provider: Proveedor };
     try {
       respaldo = { model: generationModel(), provider: getProvider() };
     } catch {

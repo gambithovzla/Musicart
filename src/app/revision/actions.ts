@@ -559,7 +559,13 @@ export async function probarCurador(): Promise<{
   const hayClave = hayClaveIA();
   const proveedor =
     process.env.LLM_PROVIDER?.toLowerCase() ||
-    (process.env.OPENAI_API_KEY ? "openai" : process.env.ANTHROPIC_API_KEY ? "anthropic" : "—");
+    (process.env.OPENAI_API_KEY
+      ? "openai"
+      : process.env.ANTHROPIC_API_KEY
+        ? "anthropic"
+        : process.env.DEEPSEEK_API_KEY
+          ? "deepseek"
+          : "—");
 
   if (!hayClave) {
     return {
@@ -572,8 +578,8 @@ export async function probarCurador(): Promise<{
           ok: false,
           ms: 0,
           detalle:
-            "No hay OPENAI_API_KEY ni ANTHROPIC_API_KEY. Sin clave no se fabrica " +
-            "ningún disco nuevo: todo sale del catálogo ya publicado.",
+            "No hay OPENAI_API_KEY, ANTHROPIC_API_KEY ni DEEPSEEK_API_KEY. Sin clave " +
+            "no se fabrica ningún disco nuevo: todo sale del catálogo ya publicado.",
         },
       ],
     };

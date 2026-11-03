@@ -1108,6 +1108,13 @@ export async function generarPickDelDia(
       try {
         result = await runDossierPipeline(propuesta.title, propuesta.artist, {
           publish: true,
+          // Lo que queda del reloj, menos el colchón para caer al catálogo y
+          // guardar algo: así el pipeline reparte SU tiempo en vez de comerse la
+          // ruta entera y dejar la home esperando.
+          presupuestoMs:
+            opts?.presupuestoMs === undefined
+              ? undefined
+              : Math.max(70_000, restanteMs() - RESERVA_CATALOGO_MS),
         });
       } catch (err) {
         costePipelineMs = Math.max(costePipelineMs, Date.now() - t0);

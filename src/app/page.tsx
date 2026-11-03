@@ -19,6 +19,8 @@ import {
   LANG_COOKIE,
   PEDIDO_COOKIE,
   BITACORA_COOKIE,
+  INTENTO_COOKIE,
+  yaIntentoHoy,
   parseTodayLang,
   parseTodayPedido,
   parseBitacora,
@@ -145,7 +147,17 @@ export default async function Home() {
     // Si el oyente tiene señales de gusto, fabricamos hoy un disco fresco a su
     // medida (tarda 1-3 min) con pantalla de carga; cuando termina, se refresca
     // y aparece. Sin señales (o sin IA), va la rotación global, sin esperas.
-    if ((deviceId || userId) && (await puedeGenerarPickFresco(deviceId, userId))) {
+    //
+    // Y una sola vez al día: si ya se intentó y no hay disco guardado, es que
+    // aquel intento no terminó. Volver a montar la pantalla de carga dejaría la
+    // app en un bucle («creando tu disco» eterno, una fabricación por vuelta) en
+    // vez de servir algo del catálogo.
+    const intentoPrevio = yaIntentoHoy(jar.get(INTENTO_COOKIE)?.value, dateKey);
+    if (
+      !intentoPrevio &&
+      (deviceId || userId) &&
+      (await puedeGenerarPickFresco(deviceId, userId))
+    ) {
       return <CreandoDiscoHoy />;
     }
   }

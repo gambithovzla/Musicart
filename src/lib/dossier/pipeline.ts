@@ -26,32 +26,69 @@ export type PipelineResult = {
 export async function escribirYVerificar(
   payload: FactsPayload,
   log: (msg: string) => void = () => {},
+  opciones: { deadline?: number } = {},
 ): Promise<{ dossier: GeneratedDossier; report: VerificationReport }> {
-  log("Escribiendo la historia (editor → redactor → estilo)…");
-  const primero = await generateDossier(payload, { log });
+  // Cada paso lleva su tiempo en el registro: cuando la fabricación se pasa del
+  // presupuesto de la ruta, ESTE es el dato que dice cuál se lo comió.
+  const t0 = Date.now();
+  const marca = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
+  const queda = () =>
+    opciones.deadline === undefined ? Number.POSITIVE_INFINITY : opciones.deadline - Date.now();
+
+  // Con poco tiempo, el editor se salta: una llamada menos y el redactor elige
+  // su propio ángulo. Una historia algo menos afilada es mejor que ninguna.
+  const sinTiempoParaEditor = queda() < 150_000;
+  log(
+    "Escribiendo la historia (editor → redactor → estilo)…" +
+      (sinTiempoParaEditor ? " [sin editor: poco tiempo]" : ""),
+  );
+  const primero = await generateDossier(payload, {
+    log,
+    plan: sinTiempoParaEditor ? null : undefined,
+    presupuestoMs: opciones.deadline === undefined ? undefined : Math.max(20_000, queda()),
+  });
   let dossier: GeneratedDossier = primero;
-  log("Verificando afirmaciones contra los hechos…");
+
+  log(`Redactada (${marca()}). Verificando contra los hechos…`);
   let report = await verifyDossier(dossier, payload);
 
-  if (!report.ok) {
+  if (!report.ok && queda() > 90_000) {
     const feedback = [...report.hardErrors, ...report.unsupportedClaims].join("\n- ");
-    log(`Verificación encontró ${report.hardErrors.length + report.unsupportedClaims.length} problemas. Reescribiendo…`);
+    log(`Verificación encontró ${report.hardErrors.length + report.unsupportedClaims.length} problemas. Reescribiendo (${marca()})…`);
     dossier = await generateDossier(payload, {
       feedback: `- ${feedback}`,
       plan: primero.plan,
       log,
+      presupuestoMs: Math.max(20_000, queda() - 30_000),
     });
     report = await verifyDossier(dossier, payload);
+  } else if (!report.ok) {
+    log(
+      `Verificación con ${report.hardErrors.length + report.unsupportedClaims.length} ` +
+        `observaciones y sin tiempo para reintentar (${marca()}): se publica como borrador.`,
+    );
   }
+  log(`Historia lista (${marca()}).`);
   return { dossier, report };
 }
 
 export async function runDossierPipeline(
   albumQuery: string,
   artistQuery: string,
-  options: { publish?: boolean; log?: (msg: string) => void } = {},
+  options: {
+    publish?: boolean;
+    log?: (msg: string) => void;
+    /**
+     * Cuánto tiempo hay para toda la fabricación (la ruta de Vercel corta a los
+     * 300 s). El motor lo reparte entre escribir y verificar; sin él, con la
+     * pluma nueva un disco podía comerse el presupuesto y la home se quedaba en
+     * «creando tu disco» para siempre.
+     */
+    presupuestoMs?: number;
+  } = {},
 ): Promise<PipelineResult> {
   const log = options.log ?? (() => {});
+  const arranque = Date.now();
 
   // 1. Hechos verificados de las fuentes.
   const gathered = await gatherAlbumFacts(albumQuery, artistQuery, log);
@@ -86,7 +123,9 @@ export async function runDossierPipeline(
   }
 
   // 2. Generar narrativa (editor → redactor → estilo) y verificarla.
-  const { dossier, report } = await escribirYVerificar(payload, log);
+  const { dossier, report } = await escribirYVerificar(payload, log, {
+    deadline: options.presupuestoMs === undefined ? undefined : arranque + options.presupuestoMs,
+  });
   payload.redaccion = {
     version: REDACCION_VERSION,
     fecha: new Date().toISOString(),

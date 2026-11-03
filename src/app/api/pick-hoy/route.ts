@@ -23,6 +23,7 @@ import {
   PEDIDO_COOKIE,
   SEEN_TODAY_COOKIE,
   BITACORA_COOKIE,
+  INTENTO_COOKIE,
   parseTodayLang,
   parseTodayPedido,
   parseSeenToday,
@@ -130,6 +131,13 @@ export async function POST(req: Request) {
       maxAge: 86_400,
       sameSite: "lax",
     });
+    // La marca de "hoy ya se intentó": la home la lee para no volver a montar la
+    // pantalla de carga si al final no quedó un disco guardado (ver device.ts).
+    res.cookies.set(INTENTO_COOKIE, `${date}|1`, {
+      path: "/",
+      maxAge: 86_400,
+      sameSite: "lax",
+    });
     // La bitácora, guardada para el dueño. La fabricación normal la dispara la
     // pantalla de carga, que tira esta respuesta: sin la cookie, el día que el
     // disco sale repetido "solo" no queda rastro de por qué. Aquí sobrevive
@@ -145,8 +153,22 @@ export async function POST(req: Request) {
     return res;
   } catch (err) {
     console.error("[api/pick-hoy] error fabricando el disco del día:", err);
-    // No reventamos: la home cae a la rotación global al refrescar.
-    return NextResponse.json({ ok: false, reason: "error" });
+    // No reventamos: la home cae a la rotación global al refrescar. Y marcamos
+    // el intento para que no vuelva a montar la pantalla de carga en bucle.
+    const res = NextResponse.json({ ok: false, reason: "error" });
+    try {
+      const jar = await cookies();
+      const tzRaw = jar.get(TZ_COOKIE)?.value;
+      const date = todayKey(tzRaw ? decodeURIComponent(tzRaw) : null);
+      res.cookies.set(INTENTO_COOKIE, `${date}|1`, {
+        path: "/",
+        maxAge: 86_400,
+        sameSite: "lax",
+      });
+    } catch {
+      // sin cookies no hay marca, pero el disco del catálogo se sirve igual
+    }
+    return res;
   }
 }
 

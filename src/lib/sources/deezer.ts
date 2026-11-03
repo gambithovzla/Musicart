@@ -63,6 +63,75 @@ export async function searchAlbums(
   }
 }
 
+/**
+ * LOS FRAGMENTOS DE 30 s, sacados de Deezer.
+ *
+ * Segunda fuente para «oír el disco dentro de la app»: iTunes no siempre tiene
+ * el disco (o, peor, devuelve OTRO del mismo artista: buscar "Nothing But
+ * Thieves Broken Machine" devolvía su primer álbum, así que las canciones no
+ * emparejaban y el oyente se quedaba sin un solo botón). Deezer acierta más y
+ * sus avances son MP3 de 30 s que suenan en cualquier navegador.
+ *
+ * Se busca el álbum por artista + título, se comprueba que el nombre sea de
+ * verdad ese disco (ignorando «Deluxe», «Remastered» y compañía) y se piden sus
+ * pistas. Si algo falla, [] — los fragmentos son un plus, nunca una dependencia.
+ */
+export async function getDeezerPreviews(
+  album: string,
+  artist: string,
+): Promise<{ position: number; title: string; url: string }[]> {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\((?:[^)]*(deluxe|remaster|edici[oó]n|version|bonus)[^)]*)\)/gi, " ")
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const buscado = norm(album);
+  try {
+    const busq = await fetch(
+      `https://api.deezer.com/search/album?q=${encodeURIComponent(`${artist} ${album}`)}&limit=10`,
+      { signal: AbortSignal.timeout(8_000), next: { revalidate: 86_400 } },
+    );
+    if (!busq.ok) return [];
+    const data = (await busq.json()) as {
+      data?: { id?: number; title?: string; artist?: { name?: string } }[];
+    };
+    const candidatos = (data.data ?? []).filter((a) => a.id && a.title);
+    // Primero el título exacto (normalizado), luego el que lo contenga; y que el
+    // artista coincida, o nos arriesgamos a los avances de otro disco.
+    const delArtista = candidatos.filter(
+      (a) => norm(a.artist?.name ?? "").includes(norm(artist).split(" ")[0] ?? "") || norm(artist).includes(norm(a.artist?.name ?? "?")),
+    );
+    const elegido =
+      delArtista.find((a) => norm(a.title!) === buscado) ??
+      delArtista.find((a) => norm(a.title!).startsWith(buscado) || buscado.startsWith(norm(a.title!))) ??
+      (delArtista.length === 1 ? delArtista[0] : undefined);
+    if (!elegido?.id) return [];
+
+    const pistas = await fetch(
+      `https://api.deezer.com/album/${elegido.id}/tracks?limit=60`,
+      { signal: AbortSignal.timeout(8_000), next: { revalidate: 86_400 } },
+    );
+    if (!pistas.ok) return [];
+    const tracks = (await pistas.json()) as {
+      data?: { title?: string; track_position?: number; preview?: string }[];
+    };
+    return (tracks.data ?? [])
+      .filter((t) => t.preview && t.title)
+      .map((t, i) => ({
+        position: t.track_position ?? i + 1,
+        title: t.title!,
+        url: t.preview!,
+      }))
+      .sort((a, b) => a.position - b.position);
+  } catch {
+    return [];
+  }
+}
+
 export async function searchArtists(
   query: string,
   limit = 6,

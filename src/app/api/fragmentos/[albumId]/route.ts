@@ -15,6 +15,7 @@ import {
   searchAlbum,
   type ItunesPreview,
 } from "@/lib/sources/itunes";
+import { getDeezerPreviews } from "@/lib/sources/deezer";
 
 export const revalidate = 86400;
 
@@ -47,6 +48,14 @@ export async function GET(
   if (!album) return NextResponse.json({ fragmentos: [] }, { status: 404 });
 
   const links = parseJson<AlbumLinks>(album.linksJson, {});
+  const pistas = album.dossiers[0]?.trackNotes ?? [];
+
+  // Dos fuentes, en este orden: iTunes (el enlace de Apple Music ya dice cuál es
+  // el disco exacto) y, si no hay o no trae avances, Deezer. Antes solo estaba
+  // iTunes y bastaba con que devolviera OTRO disco del mismo artista para que el
+  // oyente se quedara sin un solo botón de escuchar.
+  const fuentes: { position: number; title: string; url: string }[][] = [];
+
   let collectionId = collectionIdDeEnlace(links.appleMusic);
   if (!collectionId) {
     const encontrado = await searchAlbum(album.title, album.artist.name).catch(() => null);
@@ -54,30 +63,50 @@ export async function GET(
   }
   const avances: ItunesPreview[] = collectionId ? await getItunesPreviews(collectionId) : [];
 
-  const pistas = album.dossiers[0]?.trackNotes ?? [];
-  const porTitulo = new Map(avances.map((a) => [norm(a.title), a]));
-  const usados = new Set<string>();
-  const fragmentos = pistas
-    .map((p) => {
-      const n = norm(p.title);
-      const porNombre =
-        porTitulo.get(n) ??
-        avances.find((a) => {
-          const m = norm(a.title);
-          return n.length > 3 && m.length > 3 && (m.includes(n) || n.includes(m));
-        });
-      // Por posición solo si el número de pistas coincide: si no, el "3" de
-      // iTunes puede ser otra canción y sonaría lo que no es.
-      const porPosicion =
-        !porNombre && avances.length === pistas.length
-          ? avances.find((a) => a.position === p.position)
-          : undefined;
-      const a = porNombre ?? porPosicion;
-      if (!a || usados.has(a.url)) return null;
-      usados.add(a.url);
-      return { position: p.position, title: p.title, url: a.url };
-    })
-    .filter((x): x is { position: number; title: string; url: string } => Boolean(x));
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\(.*?\)|\[.*?\]|-\s*(remaster|live|en vivo|version|mono|stereo).*$/gi, "")
+      .replace(/[^a-z0-9]/g, "");
+
+  /** Empareja las pistas de una fuente con el tracklist publicado. */
+  const emparejar = (lista: { position: number; title: string; url: string }[]) => {
+    const porTitulo = new Map(lista.map((a) => [norm(a.title), a]));
+    const usados = new Set<string>();
+    return pistas
+      .map((p) => {
+        const n = norm(p.title);
+        const porNombre =
+          porTitulo.get(n) ??
+          lista.find((a) => {
+            const m = norm(a.title);
+            return n.length > 3 && m.length > 3 && (m.includes(n) || n.includes(m));
+          });
+        // Por posición solo si el número de pistas coincide: si no, el "3" de la
+        // fuente puede ser otra canción y sonaría lo que no es.
+        const porPosicion =
+          !porNombre && lista.length === pistas.length
+            ? lista.find((a) => a.position === p.position)
+            : undefined;
+        const a = porNombre ?? porPosicion;
+        if (!a || usados.has(a.url)) return null;
+        usados.add(a.url);
+        return { position: p.position, title: p.title, url: a.url };
+      })
+      .filter((x): x is { position: number; title: string; url: string } => Boolean(x));
+  };
+
+  fuentes.push(emparejar(avances));
+
+  // Deezer si iTunes no dio con las canciones.
+  if (!fuentes.some((f) => f.length > 0)) {
+    const deezer = await getDeezerPreviews(album.title, album.artist.name).catch(() => []);
+    if (deezer.length > 0) fuentes.push(emparejar(deezer));
+  }
+
+  const fragmentos = fuentes.find((f) => f.length > 0) ?? [];
 
   return NextResponse.json(
     { fragmentos },

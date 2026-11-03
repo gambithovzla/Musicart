@@ -33,6 +33,7 @@ export function PortadaDossier({
 }) {
   const reducir = useReducedMotion();
   const [abierta, setAbierta] = useState(false);
+  const [portadaRota, setPortadaRota] = useState(false);
   const lamina = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: lamina, offset: ["start start", "end start"] });
   const y = useTransform(scrollYProgress, [0, 1], reducir ? ["0%", "0%"] : ["0%", "18%"]);
@@ -55,7 +56,7 @@ export function PortadaDossier({
       <header>
         {/* ── La lámina ── */}
         <div ref={lamina} className="relative aspect-square w-full overflow-hidden border-b border-tinta bg-papel-alto">
-          {meta.coverUrl ? (
+          {meta.coverUrl && !portadaRota ? (
             <motion.div style={{ y, scale: escala }} className="trama trama-tinta absolute inset-0">
               <Image
                 src={meta.coverUrl}
@@ -64,6 +65,9 @@ export function PortadaDossier({
                 sizes="(max-width: 512px) 100vw, 512px"
                 priority
                 className="object-cover"
+                // Si la dirección guardada no existe (pasa con algunas del Cover
+                // Art Archive), se enseña el plato de tinta en vez de un hueco.
+                onError={() => setPortadaRota(true)}
               />
             </motion.div>
           ) : (

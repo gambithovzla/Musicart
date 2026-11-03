@@ -63,10 +63,30 @@ export async function searchAlbum(
   // Descartamos sencillos y EPs: Musicart recomienda ÁLBUMES completos. iTunes
   // los nombra "… - Single" / "… - EP" y traen pocas pistas.
   const albumes = (data.results ?? []).filter((r) => !esSingleOEp(r.collectionName, r.trackCount));
+
+  // OJO: antes, si ningún nombre contenía el título, se cogía el PRIMER álbum
+  // que devolviera iTunes (`?? albumes[0]`). Eso no es «el disco», es otro disco
+  // del mismo artista: buscar "Nothing But Thieves Broken Machine" devuelve su
+  // primer álbum, y con él llegaban una portada y unos avances que no eran los
+  // del dossier. Ahora, si el título no coincide, se devuelve vacío y el que
+  // llama decide (los fragmentos prueban Deezer; los hechos, otra fuente).
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\((?:[^)]*(deluxe|remaster|edici[oó]n|version|bonus|expanded)[^)]*)\)/gi, " ")
+      .replace(/-\s*(deluxe|remaster(ed)?|single|ep)\b.*$/i, " ")
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const buscado = norm(album);
   const match =
-    albumes.find((r) =>
-      r.collectionName?.toLowerCase().includes(album.toLowerCase()),
-    ) ?? albumes[0];
+    albumes.find((r) => r.collectionName && norm(r.collectionName) === buscado) ??
+    albumes.find((r) => {
+      const n = norm(r.collectionName ?? "");
+      return n.length > 2 && buscado.length > 2 && (n.startsWith(buscado) || buscado.startsWith(n));
+    });
   if (!match)
     return {
       coverUrl: null,

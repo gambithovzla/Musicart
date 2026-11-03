@@ -26,6 +26,19 @@ export const SEEN_TODAY_COOKIE = "musicart_seen_today";
 // forma de saber qué pasó sin abrir los logs de Vercel desde el teléfono.
 export const BITACORA_COOKIE = "musicart_bitacora"; // valor: "YYYY-MM-DD|línea¦línea"
 
+// "Hoy ya se intentó fabricar el disco" (valor: "YYYY-MM-DD|1"). Existe para no
+// dejar la home en bucle: si la fabricación no acaba guardando nada (la ruta se
+// cortó, la IA no contestó), la home volvía a ver "no hay disco" y volvía a
+// montar la pantalla de «creando tu disco», que disparaba otra fabricación… una
+// y otra, sin fin y sin gastar menos. Con esta marca, el día se intenta UNA vez
+// y, si no salió, se sirve la rotación del catálogo.
+export const INTENTO_COOKIE = "musicart_intento";
+
+export function yaIntentoHoy(raw: string | undefined, dateKey: string): boolean {
+  if (!raw) return false;
+  return raw.split("|")[0] === dateKey;
+}
+
 export function getDeviceId(): string {
   if (typeof window === "undefined") return "";
   let id = window.localStorage.getItem(KEY);

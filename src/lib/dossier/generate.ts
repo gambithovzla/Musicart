@@ -84,7 +84,10 @@ function normalizarPlan(p: Partial<PlanEditorial> | null | undefined): PlanEdito
   };
 }
 
-export async function planificarAngulo(payload: FactsPayload): Promise<PlanEditorial | null> {
+export async function planificarAngulo(
+  payload: FactsPayload,
+  presupuestoMs = 120_000,
+): Promise<PlanEditorial | null> {
   try {
     const raw = await llmRedaccion({
       contextoCompartido: contextoDeHechos(payload),
@@ -92,6 +95,9 @@ export async function planificarAngulo(payload: FactsPayload): Promise<PlanEdito
       user: `Disco: «${payload.album.title}» de ${payload.album.artist} (${payload.album.year}). Decide el ángulo.`,
       temperature: 0.4,
       maxTokens: 1800,
+      // El plazo se recorta al tiempo que queda: un editor que tarda 90 s con la
+      // ruta a punto de caducar es peor que no tener editor.
+      timeoutMs: Math.min(120_000, Math.max(15_000, presupuestoMs)),
     });
     return normalizarPlan(extractJson<Partial<PlanEditorial>>(raw));
   } catch (err) {
@@ -249,6 +255,7 @@ async function redactar(
   payload: FactsPayload,
   plan: PlanEditorial | null,
   feedback?: string,
+  presupuestoMs = 120_000,
 ): Promise<GeneratedDossier> {
   const user = [
     `Disco: «${payload.album.title}» de ${payload.album.artist} (${payload.album.year}).`,
@@ -265,6 +272,7 @@ async function redactar(
     user,
     temperature: 0.75,
     maxTokens: 8192,
+    timeoutMs: Math.min(150_000, Math.max(25_000, presupuestoMs)),
   });
   return normalizarDossier(extractJson<GeneratedDossier>(raw), payload);
 }
@@ -313,9 +321,19 @@ export async function pulirEstilo(
   d: GeneratedDossier,
   payload: FactsPayload,
   log: (msg: string) => void = () => {},
+  presupuestoMs = 120_000,
 ): Promise<{ dossier: GeneratedDossier; muletillasRestantes: Hallazgo[] }> {
   const hallazgos = detectarMuletillas(textosDeProsa(d));
   if (hallazgos.length === 0) return { dossier: d, muletillasRestantes: [] };
+  // Sin tiempo, no se pule: la barrera es una mejora, no un requisito. Se
+  // informa de lo que queda para que se vea en la bitácora.
+  if (presupuestoMs < 30_000) {
+    log(
+      `Estilo: ${hallazgos.length} muletilla(s) sin tiempo de pulir: ` +
+        `${hallazgos.map((h) => h.porque).join(", ")}.`,
+    );
+    return { dossier: d, muletillasRestantes: hallazgos };
+  }
   log(`Estilo: ${hallazgos.length} frase(s) de molde. Puliendo…`);
   try {
     const raw = await llmRedaccion({
@@ -326,6 +344,7 @@ export async function pulirEstilo(
         .join("\n"),
       temperature: 0.6,
       maxTokens: 2500,
+      timeoutMs: Math.min(90_000, Math.max(20_000, presupuestoMs)),
     });
     const { reemplazos } = extractJson<{ reemplazos?: { original?: string; nueva?: string }[] }>(raw);
     for (const h of hallazgos) {
@@ -351,6 +370,12 @@ export type GeneracionOpciones = {
   /** Si ya hay plan (reintento tras la verificación), no se vuelve a pagar. */
   plan?: PlanEditorial | null;
   log?: (msg: string) => void;
+  /**
+   * Tiempo que queda para esta fabricación. Se reparte entre los pasos y recorta
+   * el plazo de cada llamada: si no, un solo paso podía comerse el presupuesto
+   * entero de la ruta y la home se quedaba esperando un disco que nunca llegaba.
+   */
+  presupuestoMs?: number;
 };
 
 export type GeneracionResultado = GeneratedDossier & { plan: PlanEditorial | null };
@@ -362,11 +387,21 @@ export async function generateDossier(
   // Compatibilidad: antes el segundo argumento era el feedback a secas.
   const op: GeneracionOpciones = typeof opciones === "string" ? { feedback: opciones } : opciones;
   const log = op.log ?? (() => {});
+  const arranque = Date.now();
+  const queda = () =>
+    op.presupuestoMs === undefined
+      ? Number.POSITIVE_INFINITY
+      : op.presupuestoMs - (Date.now() - arranque);
 
-  const plan = op.plan !== undefined ? op.plan : await planificarAngulo(payload);
+  // Reparto: el editor no puede comerse más de un tercio, y el pulido solo entra
+  // si al terminar de redactar sigue habiendo margen.
+  const plan =
+    op.plan !== undefined
+      ? op.plan
+      : await planificarAngulo(payload, Math.min(120_000, Math.max(20_000, queda() * 0.35)));
   if (plan && op.plan === undefined) log(`Ángulo: ${plan.angulo}`);
 
-  const borrador = await redactar(payload, plan, op.feedback);
-  const { dossier } = await pulirEstilo(borrador, payload, log);
+  const borrador = await redactar(payload, plan, op.feedback, queda() - 15_000);
+  const { dossier } = await pulirEstilo(borrador, payload, log, queda() - 10_000);
   return Object.assign(dossier, { plan });
 }

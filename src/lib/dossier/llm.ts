@@ -439,29 +439,87 @@ export async function llmRedaccion(
     return await callLlm(opts, opts.model ?? pluma.model, pluma.provider);
   } catch (err) {
     if (opts.sinRespaldo) throw err;
-    let respaldo: { model: string; provider: Proveedor };
+    // Respaldo 1: el modelo de generación del mismo proveedor (más barato).
+    const proveedorBase = getProvider();
+    const modeloBase = modeloCompat(opts.model, proveedorBase) ?? generationModel();
     try {
-      respaldo = { model: generationModel(), provider: getProvider() };
+      console.warn(
+        `[llm] la pluma ${pluma.model} falló (${(err as Error).message.slice(0, 160)}); ` +
+          `escribo con ${modeloBase}.`,
+      );
+      return await callLlm(opts, modeloBase, proveedorBase);
     } catch {
-      throw err;
+      // Respaldo 2: otro proveedor con clave (una clave sin saldo no puede
+      // dejar un disco sin historia).
+      return llamarConRespaldo(opts, modeloBase, proveedorBase);
     }
-    if (respaldo.model === pluma.model && respaldo.provider === pluma.provider) throw err;
-    console.warn(
-      `[llm] la pluma ${pluma.model} falló (${(err as Error).message.slice(0, 160)}); ` +
-        `escribo con ${respaldo.model}.`,
-    );
-    return callLlm(opts, respaldo.model, respaldo.provider);
+  }
+}
+
+/**
+ * Todos los proveedores con clave configurada, en orden de preferencia. Sirve
+ * para el respaldo: una clave sin saldo (o vencida) no puede dejar la app sin
+ * discos cuando hay otra disponible.
+ */
+export function proveedoresDisponibles(): Proveedor[] {
+  const out: Proveedor[] = [];
+  const explicit = process.env.LLM_PROVIDER?.toLowerCase();
+  if (explicit === "openai" || explicit === "anthropic" || explicit === "deepseek") {
+    out.push(explicit);
+  }
+  // DeepSeek antes que Claude: es el que el dueño paga y el más barato.
+  if (process.env.DEEPSEEK_API_KEY) out.push("deepseek");
+  if (process.env.ANTHROPIC_API_KEY) out.push("anthropic");
+  if (process.env.OPENAI_API_KEY) out.push("openai");
+  return [...new Set(out)];
+}
+
+/**
+ * Una llamada con red de seguridad: si el proveedor configurado falla (clave sin
+ * saldo, 401, 429, caído), se prueba UNA vez con cada otro proveedor que tenga
+ * clave. Es lo que evita que una clave muerta deje la app en «creando tu disco»
+ * para siempre — que es exactamente lo que pasó cuando se acabó el saldo de
+ * Claude y el runtime seguía apuntando allí.
+ */
+async function llamarConRespaldo(
+  opts: LlmOptions,
+  model: string,
+  principal: Proveedor,
+): Promise<string> {
+  try {
+    return await callLlm(opts, model, principal);
+  } catch (err) {
+    const otros = proveedoresDisponibles().filter((p) => p !== principal);
+    for (const p of otros) {
+      try {
+        const modelo = modeloCompat(opts.model, p) ?? modeloPorDefecto(p);
+        console.warn(
+          `[llm] ${principal} falló (${(err as Error).message.slice(0, 120)}); ` +
+            `reintento con ${p} (${modelo}).`,
+        );
+        return await callLlm(opts, modelo, p);
+      } catch {
+        // probamos con el siguiente
+      }
+    }
+    throw err;
   }
 }
 
 /** Runtime: recomendaciones, chat, curiosidades del día (modelo barato). */
 export async function llm(opts: LlmOptions): Promise<string> {
-  return callLlm(opts, opts.model ?? runtimeModel());
+  const provider = getProvider();
+  return llamarConRespaldo(opts, modeloCompat(opts.model, provider) ?? runtimeModel(), provider);
 }
 
-/** Pipeline de dossier: redacción y verificación (GENERATION_MODEL si existe). */
+/** Pipeline de dossier: propuestas, caminos, atlas, social. */
 export async function llmGeneration(opts: LlmOptions): Promise<string> {
-  return callLlm(opts, opts.model ?? generationModel());
+  const provider = getProvider();
+  return llamarConRespaldo(
+    opts,
+    modeloCompat(opts.model, provider) ?? generationModel(),
+    provider,
+  );
 }
 
 // Extrae el primer objeto JSON de una respuesta (tolera ```json ... ``` y texto extra).

@@ -24,7 +24,8 @@
 import { prisma } from "@/lib/db";
 import { todayKey } from "@/lib/daily";
 import { hayPresupuestoHoy, registrarGeneracion } from "@/lib/budget";
-import { proponerDiscoDescubrimiento } from "@/lib/discover";
+import { discoCumplePedido, proponerDiscoDescubrimiento } from "@/lib/discover";
+import { artistaEsDeAlgunPais, detectarPaisesPedido, nombresDePaises } from "@/lib/origin-guard";
 import { runDossierPipeline } from "@/lib/dossier/pipeline";
 import { synthesizeSpeech } from "@/lib/tts";
 import { parseJson } from "@/lib/types";
@@ -55,6 +56,21 @@ Buscamos un disco cuya historia se pueda contar en 30 segundos y enganche en los
 Varía mucho de un día a otro: género, década, país (incluida Latinoamérica y España), idioma. Clásicos conocidos o discos de culto, pero SIEMPRE álbumes de estudio reales y bien documentados.
 Si el disco tiene un cruce real con el deporte (un himno de estadio, un artista que fue deportista, un disco ligado a un Mundial), mejor; pero no lo fuerces.`;
 
+/**
+ * Lo que pide el dueño (o Hefesto de su parte) para la pieza: un texto libre
+ * («Wolf Alice», «rock venezolano de los 90», «un disco para un día de lluvia»),
+ * igual que el pedido del disco del día en la app, o un disco exacto.
+ */
+export type PedidoPieza = { texto?: string | null; disco?: string | null; artista?: string | null };
+
+function pedidoVacio(p?: PedidoPieza | null): boolean {
+  return !p || (!p.texto?.trim() && !(p.disco?.trim() && p.artista?.trim()));
+}
+
+function describirPedido(p: PedidoPieza): string {
+  return p.disco?.trim() && p.artista?.trim() ? `«${p.disco.trim()}» de ${p.artista.trim()}` : `«${p.texto?.trim()}»`;
+}
+
 export type EstadoPieza =
   | "sin-pieza" // hoy aún no se empezó
   | "en-preparacion" // ya tiene disco; falta el guion o la voz: vuelve a llamar
@@ -64,7 +80,8 @@ export type EstadoPieza =
   | "video-listo"
   | "bloqueada" // no pasó la verificación: hoy no sale video
   | "fallo-imprenta"
-  | "retirada";
+  | "retirada"
+  | "pedido-sin-disco"; // pidieron algo concreto y no se pudo fabricar: no se sustituye por otro
 
 export type PiezaDelDia = {
   estado: EstadoPieza;
@@ -130,6 +147,119 @@ async function yaSalioEnRedes(albumId: string): Promise<boolean> {
   return n > 0;
 }
 
+/** Fabrica un disco y devuelve su dossier si quedó publicado (sin mirar si ya salió en redes). */
+async function fabricar(
+  fecha: string,
+  disco: string,
+  artista: string,
+  restanteMs: () => number,
+): Promise<{ dossierId: string; albumId: string; reused: boolean } | { error: string }> {
+  try {
+    const result = await runDossierPipeline(disco, artista, {
+      publish: true,
+      presupuestoMs: Math.max(70_000, restanteMs() - 25_000),
+    });
+    if (!result.reused) await registrarGeneracion(fecha);
+    if (result.status !== "published") return { error: "no pasó la verificación de hechos (quedó en borrador)" };
+    return { dossierId: result.dossierId, albumId: result.albumId, reused: result.reused };
+  } catch (err) {
+    return { error: `no lo pude investigar (${(err as Error).message})` };
+  }
+}
+
+/**
+ * Lo que el dueño PIDIÓ. Tres diferencias con el día normal: el pedido manda
+ * (como en el disco del día de la app), se comprueba que el disco lo cumpla y
+ * que el artista sea del país si nombra uno (7.9/7.11), y si no se puede NO se
+ * sustituye por un disco de catálogo: sería hacer el video de otra cosa.
+ */
+async function elegirDiscoPedido(
+  fecha: string,
+  restanteMs: () => number,
+  log: (m: string) => void,
+  pedido: PedidoPieza,
+): Promise<string | null> {
+  log(`Pedido: ${describirPedido(pedido)}.`);
+  if (!(await hayPresupuestoHoy(fecha, "extra"))) {
+    log("El tope de gasto de hoy no deja fabricar un disco nuevo: el pedido queda para mañana.");
+    return null;
+  }
+
+  // Disco exacto: directo al pipeline. Puede repetir uno que ya salió en redes
+  // si lo piden con nombre y apellido: es una decisión del dueño, no del curador.
+  if (pedido.disco?.trim() && pedido.artista?.trim()) {
+    const r = await fabricar(fecha, pedido.disco.trim(), pedido.artista.trim(), restanteMs);
+    if ("error" in r) {
+      log(`«${pedido.disco.trim()}» de ${pedido.artista.trim()}: ${r.error}.`);
+      return null;
+    }
+    if (await yaSalioEnRedes(r.albumId)) log("Ojo: ese disco ya salió en redes otro día; lo hago porque lo pidieron.");
+    log(r.reused ? "Ya estaba en el catálogo: no costó nada." : "Disco fabricado y verificado.");
+    return r.dossierId;
+  }
+
+  const texto = pedido.texto!.trim().slice(0, 300);
+  const paises = detectarPaisesPedido(texto);
+  const paisesTexto = nombresDePaises(paises);
+  const { obras, artistas } = await memoriaSocial();
+  const rechazados: string[] = [];
+  for (let i = 0; i < 3 && restanteMs() > MIN_FABRICAR_MS; i++) {
+    let propuesta;
+    try {
+      propuesta = await proponerDiscoDescubrimiento({
+        perfilTexto: AUDIENCIA,
+        diarioTexto: "(no aplica: es una cuenta de redes, no un oyente)",
+        recientesTexto: obras.slice(0, 40).map((o) => `- ${o}`).join("\n") || "(ninguno)",
+        yaConoce: [...obras, ...rechazados],
+        mood: null,
+        lang: null,
+        esRegreso: false,
+        diasAusente: null,
+        // Si pide un artista, puede repetir artista: lo pidió.
+        artistasRecientes: artistas,
+        peticion: texto,
+        paisesPedidos: paisesTexto || null,
+      });
+    } catch (err) {
+      log(`El curador no respondió (${(err as Error).message}).`);
+      return null;
+    }
+    const obra = `${propuesta.title} — ${propuesta.artist}`;
+    log(`El curador propone «${propuesta.title}» de ${propuesta.artist}.`);
+
+    // Las mismas barreras que el pedido del disco del día: el origen es dato duro.
+    const [origen, cumple] = await Promise.all([
+      paises.length > 0 ? artistaEsDeAlgunPais(propuesta.artist, paises) : Promise.resolve(null),
+      discoCumplePedido({ peticion: texto, title: propuesta.title, artist: propuesta.artist, lang: null }),
+    ]);
+    if (origen?.veredicto === "no") {
+      log(`${propuesta.artist} es de ${origen.origen}, y el pedido es de ${paisesTexto}: pido otro.`);
+      rechazados.push(obra);
+      continue;
+    }
+    if (!cumple.cumple) {
+      log(`No cumple el pedido (${cumple.motivo}): pido otro.`);
+      rechazados.push(obra);
+      continue;
+    }
+
+    const r = await fabricar(fecha, propuesta.title, propuesta.artist, restanteMs);
+    if ("error" in r) {
+      log(`${r.error}: pido otro.`);
+      rechazados.push(obra);
+      continue;
+    }
+    if (await yaSalioEnRedes(r.albumId)) {
+      log("Ese disco ya salió en redes otro día: pido otro que cumpla el pedido.");
+      rechazados.push(obra);
+      continue;
+    }
+    log(r.reused ? "Ya estaba en el catálogo: no costó nada." : "Disco fabricado y verificado.");
+    return r.dossierId;
+  }
+  return null;
+}
+
 /**
  * Elige y fabrica el disco de hoy. Si la IA o el tope de gasto no dejan, tira
  * de un disco ya publicado que nunca salió en redes (la app nunca se cae por la
@@ -139,7 +269,9 @@ async function elegirDisco(
   fecha: string,
   restanteMs: () => number,
   log: (m: string) => void,
+  pedido?: PedidoPieza | null,
 ): Promise<string | null> {
+  if (!pedidoVacio(pedido)) return elegirDiscoPedido(fecha, restanteMs, log, pedido!);
   if (!(await hayPresupuestoHoy(fecha, "extra"))) {
     log("El tope de gasto de hoy no deja fabricar un disco nuevo: uso uno del catálogo.");
   } else {
@@ -232,6 +364,7 @@ const SIGUIENTE: Record<EstadoPieza, string> = {
   bloqueada: "La pieza no pasó la verificación de hechos: HOY NO SE PUBLICA. Avisa al dueño (puede rehacerla).",
   "fallo-imprenta": "Falló la impresión del MP4. Reintenta `npm run social:local`; si vuelve a fallar, avisa al dueño.",
   retirada: "La pieza fue retirada. Llama con rehacer: true para empezar otra.",
+  "pedido-sin-disco": "No pude fabricar un disco que cumpla el pedido (mira la bitácora). No se sustituye por otro: avisa al dueño y que lo reformule.",
 };
 
 /** Convierte una URL relativa de la app en absoluta (la laptop no está en Vercel). */
@@ -320,6 +453,13 @@ export async function avanzarPiezaDelDia(opciones: {
   presupuestoMs?: number;
   aprobar?: boolean;
   rehacer?: boolean;
+  /**
+   * Un artista, un disco o un pedido libre. Empieza una pieza NUEVA con eso: la
+   * de hoy, si aún no estaba impresa, se retira; si ya estaba impresa se queda
+   * y esta es una pieza más. Mándalo solo en la PRIMERA llamada; las siguientes
+   * (para terminar guion y voz) van sin pedido.
+   */
+  pedido?: PedidoPieza | null;
   origen?: string;
 } = {}): Promise<PiezaDelDia> {
   const arranque = Date.now();
@@ -333,23 +473,31 @@ export async function avanzarPiezaDelDia(opciones: {
     console.log(`[pieza-del-dia] ${m}`);
   };
 
-  if (opciones.rehacer) {
+  const conPedido = !pedidoVacio(opciones.pedido);
+  if (opciones.rehacer || conPedido) {
     const actual = await piezaDeHoy(fecha);
-    if (actual && actual.status !== "rendering") {
+    // Con pedido, una pieza ya impresa (quizá publicada) no se retira: el pedido es una pieza más.
+    const intocable = actual && (actual.status === "rendering" || (conPedido && actual.status === "ready"));
+    if (actual && !intocable) {
       await prisma.socialContent.update({ where: { id: actual.id }, data: { status: "archived" } });
       log("Retiré la pieza de hoy para hacer otra.");
     }
   }
+  let falta = conPedido; // con pedido, la primera vuelta fabrica sí o sí
 
   // Cada vuelta da UN paso y relee el estado: así un fallo a medias nunca deja
   // la pieza en un estado que esta función no sepa continuar.
   for (let vuelta = 0; vuelta < 6; vuelta++) {
     const p = await piezaDeHoy(fecha);
 
-    if (!p) {
+    if (!p || falta) {
       if (restanteMs() < MIN_FABRICAR_MS) break;
-      const dossierId = await elegirDisco(fecha, restanteMs, log);
+      const dossierId = await elegirDisco(fecha, restanteMs, log, conPedido ? opciones.pedido : null);
+      falta = false;
       if (!dossierId) {
+        if (conPedido) {
+          return { estado: "pedido-sin-disco", siguiente: SIGUIENTE["pedido-sin-disco"], fecha, pieza: null, bitacora };
+        }
         log("Hoy no encontré disco para la pieza.");
         break;
       }

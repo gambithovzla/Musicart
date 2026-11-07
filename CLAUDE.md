@@ -193,7 +193,12 @@ su laptop). La cuenta es Hexa Oracle (deporte y música).
   con `Authorization: Bearer $SOCIAL_API_KEY`.
 - `npm run social:local` (en la laptop): pide la pieza, imprime el MP4 con Remotion
   (`src/lib/social/mp4.ts`, sin DB) y avisa. Lee `.env.social`. Última línea = JSON.
-- En `/revision`: botón «Fabricar el video de hoy».
+- En `/revision`: botón «Fabricar el video de hoy» y un campo de pedido.
+- **Pedidos** (`pedido` libre o `disco`+`artista`, solo en la primera llamada;
+  `npm run social:local -- --pedido "Wolf Alice"`): pieza NUEVA con eso. Pasa por
+  las mismas barreras que el pedido del disco del día (`discoCumplePedido` y el
+  origen del 7.11). Si no se puede, estado `pedido-sin-disco`: **nunca** se
+  sustituye por un disco de catálogo. Una pieza ya impresa no se retira.
 - La aprobación humana vive en Telegram (Panteón), no en `/revision`.
 
 ## Mapa del código

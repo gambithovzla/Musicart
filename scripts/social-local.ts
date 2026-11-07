@@ -3,6 +3,8 @@
 //   npm run social:local                 → pieza de hoy: la pide, la imprime y avisa
 //   npm run social:local -- --salida C:\ruta\carpeta
 //   npm run social:local -- --rehacer    → retira la de hoy y fabrica otra
+//   npm run social:local -- --pedido "Wolf Alice"            → pieza nueva sobre lo que pidas
+//   npm run social:local -- --disco "My Love Is Cool" --artista "Wolf Alice"  → un disco exacto
 //   npm run social:local -- --estado     → solo dice en qué punto está (no gasta)
 //
 // Necesita, en un archivo `.env.social` en la raíz de Musicart (o en el entorno):
@@ -65,14 +67,25 @@ async function main() {
 
   // 1. Que Musicart avance la pieza hasta dejarla lista (varias llamadas: cada
   //    una cabe en los 300 s de Vercel).
-  let p = await llamar("POST", { accion: "avanzar", rehacer: flag("--rehacer") });
+  // El pedido va SOLO en la primera llamada: las siguientes terminan esa misma pieza.
+  const pedido = valor("--pedido");
+  const disco = valor("--disco");
+  const artista = valor("--artista");
+  if ((disco && !artista) || (!disco && artista)) {
+    terminar({ ok: false, error: "--disco y --artista van juntos." }, 1);
+  }
+  let p = await llamar("POST", { accion: "avanzar", rehacer: flag("--rehacer"), pedido, disco, artista });
+  if (p.estado === "pedido-sin-disco") {
+    for (const linea of p.bitacora) console.error(`· ${linea}`);
+    terminar({ ok: false, estado: p.estado, siguiente: p.siguiente, bitacora: p.bitacora }, 2);
+  }
   for (const linea of p.bitacora) console.error(`· ${linea}`);
   for (let i = 0; i < 5 && (p.estado === "en-preparacion" || p.estado === "sin-pieza"); i++) {
     p = await llamar("POST", { accion: "avanzar" });
     for (const linea of p.bitacora) console.error(`· ${linea}`);
   }
 
-  if (p.estado === "video-listo" && !flag("--reimprimir")) {
+  if (p.estado === "video-listo" && !flag("--reimprimir") && !pedido && !disco) {
     terminar({ ok: true, estado: p.estado, aviso: "El video de hoy ya estaba impreso.", videoUrl: p.pieza?.videoUrl, caption: p.pieza?.caption, siguiente: p.siguiente });
   }
   if (!["lista-para-imprimir", "fallo-imprenta", "video-listo"].includes(p.estado) || !p.pieza?.render) {

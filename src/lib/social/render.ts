@@ -1,11 +1,10 @@
 import { unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { bundle } from "@remotion/bundler";
-import { renderMedia, selectComposition } from "@remotion/renderer";
 import { prisma } from "@/lib/db";
 import { synthesizeSpeech } from "@/lib/tts";
 import { parseJson } from "@/lib/types";
+import { renderizarMp4 } from "./mp4";
 import { saveSocialAudio, saveSocialVideo } from "./storage";
 import { socialPlanSchema, type SocialRenderProps } from "./types";
 
@@ -48,32 +47,11 @@ export async function processNextSocialRender(contentId?: string) {
       artistName: content.dossier.album.artist.name,
       year: content.dossier.album.year,
       audioUrl,
+      coverUrl: content.dossier.album.coverUrl,
       folio: content.id.slice(-6).toUpperCase(),
     };
 
-    const serveUrl = await bundle({
-      entryPoint: path.join(process.cwd(), "src", "video", "social", "index.tsx"),
-      rootDir: process.cwd(),
-      publicDir: path.join(process.cwd(), "public"),
-      enableCaching: true,
-    });
-    const composition = await selectComposition({
-      serveUrl,
-      id: "SocialVertical",
-      inputProps: props,
-    });
-    await renderMedia({
-      composition,
-      serveUrl,
-      codec: "h264",
-      outputLocation: output,
-      inputProps: props,
-      pixelFormat: "yuv420p",
-      crf: 18,
-      x264Preset: "veryfast",
-      concurrency: 1,
-      overwrite: true,
-    });
+    await renderizarMp4(props, output);
     const videoUrl = await saveSocialVideo(content.id, output);
     return await prisma.socialContent.update({
       where: { id: content.id },

@@ -3,6 +3,7 @@
 // Acciones del panel de revisión (Fase 2.3). Solo admins (ADMIN_EMAILS).
 
 import { revalidatePath } from "next/cache";
+import { avanzarPiezaDelDia } from "@/lib/social/del-dia";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
@@ -85,6 +86,26 @@ export async function approveSocialDraft(contentId: string): Promise<{ ok: boole
   });
   revalidatePath("/revision");
   return { ok: true, message: "Pieza aprobada. El worker ya puede generar la voz y el MP4." };
+}
+
+/**
+ * La pieza del día para Panteón (12.7), a mano desde el panel: da los pasos que
+ * quepan (disco → guion → aprobación → voz). Si queda a medias, tocar otra vez.
+ */
+export async function avanzarPiezaDelDiaAdmin(
+  rehacer = false,
+): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  try {
+    const r = await avanzarPiezaDelDia({ presupuestoMs: 270_000, rehacer });
+    revalidatePath("/revision");
+    const disco = r.pieza ? `«${r.pieza.disco}» de ${r.pieza.artista}. ` : "";
+    const pasos = r.bitacora.length > 0 ? ` (${r.bitacora.join(" ")})` : "";
+    const ok = !["bloqueada", "sin-pieza", "fallo-imprenta"].includes(r.estado);
+    return { ok, message: `${disco}${r.siguiente}${pasos}` };
+  } catch (error) {
+    return { ok: false, message: (error as Error).message };
+  }
 }
 
 export async function archiveSocialDraft(contentId: string): Promise<{ ok: boolean; message: string }> {

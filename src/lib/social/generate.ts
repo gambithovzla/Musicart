@@ -174,7 +174,13 @@ async function repairPlan(
   return socialPlanSchema.parse(extractJson(raw));
 }
 
-export async function generateSocialContent(dossierId: string) {
+export async function generateSocialContent(
+  dossierId: string,
+  opciones: {
+    /** Rellena una pieza ya reservada (la pieza del día) en vez de crear otra. */
+    contentId?: string;
+  } = {},
+) {
   const d = await loadDossier(dossierId);
   if (!d || d.status !== "published") throw new Error("El dossier debe estar publicado antes de convertirlo en video.");
 
@@ -229,17 +235,19 @@ export async function generateSocialContent(dossierId: string) {
     }
   }
 
-  return prisma.socialContent.create({
-    data: {
-      dossierId: d.id,
-      status: verification.ok ? "draft" : "blocked",
-      hook: plan.hook,
-      script: plan.script,
-      caption: plan.caption,
-      scenesJson: JSON.stringify({ durationSec: plan.durationSec, scenes: plan.scenes }),
-      factsSnapshotJson: JSON.stringify(facts),
-      verificationJson: JSON.stringify(verification),
-      rightsStatus: "clear",
-    },
-  });
+  const data = {
+    dossierId: d.id,
+    status: verification.ok ? "draft" : "blocked",
+    hook: plan.hook,
+    script: plan.script,
+    caption: plan.caption,
+    scenesJson: JSON.stringify({ durationSec: plan.durationSec, scenes: plan.scenes }),
+    factsSnapshotJson: JSON.stringify(facts),
+    verificationJson: JSON.stringify(verification),
+    rightsStatus: "clear",
+  };
+  if (opciones.contentId) {
+    return prisma.socialContent.update({ where: { id: opciones.contentId }, data });
+  }
+  return prisma.socialContent.create({ data });
 }

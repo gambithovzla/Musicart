@@ -62,8 +62,25 @@ async function loadDossier(dossierId: string) {
   });
 }
 
+// Recorta a `max` palabras SIN dejar una frase a medias: se queda con las
+// oraciones completas que caben. Antes cortaba en seco y la pieza de Buena Vista
+// salió con «…un club de baile de La Habana que cerró hace.» en pantalla.
 function words(text: string, max: number): string {
-  return text.trim().split(/\s+/).slice(0, max).join(" ").replace(/[,;:]?$/, ".");
+  const limpio = text.trim().replace(/\s+/g, " ");
+  const oraciones = limpio.match(/[^.!?…]+[.!?…]+["»”)]*(?=\s|$)|[^.!?…]+$/g) ?? [limpio];
+  let salida = "";
+  for (const o of oraciones) {
+    const candidata = `${salida} ${o.trim()}`.trim();
+    if (candidata.split(" ").length > max) break;
+    salida = candidata;
+  }
+  if (salida) return salida;
+  // La primera oración ya es más larga que el tope: se corta en su última coma
+  // (una cláusula entera) y, si no hay, con puntos suspensivos, nunca con punto.
+  const trozo = oraciones[0].trim().split(" ").slice(0, max).join(" ");
+  const coma = trozo.lastIndexOf(",");
+  if (coma > trozo.length * 0.5) return `${trozo.slice(0, coma)}.`;
+  return `${trozo.replace(/[,;:.]?$/, "")}…`;
 }
 
 // Aperturas de molde: valen para cualquier disco, y en TikTok el que pasa el
@@ -87,11 +104,15 @@ function fallbackPlan(d: LoadedDossier): SocialPlan {
   const narrative = words(`${d.intro} ${d.whyItMatters}`, 78);
   const durationSec = 30;
   // Sin IA, el mejor gancho es una curiosidad ya verificada del dossier.
-  const curiosidad = parseJson<string[]>(d.wowFactsJson, []).find((w) => w.trim().length >= 8);
-  const limpia = curiosidad?.replace(/^¿?\s*sab[ií]as que\s*/i, "").replace(/[?¿]/g, "").trim();
-  const ganchoDeRespaldo = limpia
-    ? words(limpia.charAt(0).toUpperCase() + limpia.slice(1), 18).slice(0, 138)
-    : `«${title}», de ${artist}: la historia detrás del disco.`;
+  // Solo vale una curiosidad cuya primera oración quepa ENTERA en pantalla.
+  const curiosidad = parseJson<string[]>(d.wowFactsJson, [])
+    .map((w) => w.replace(/^¿?\s*sab[ií]as que\s*/i, "").replace(/[?¿]/g, "").trim())
+    .map((w) => (w.match(/^[^.!…]+[.!…]?/)?.[0] ?? w).trim())
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .find((w) => w.length >= 8 && w.length <= 138 && w.split(/\s+/).length <= 20);
+  const ganchoDeRespaldo = curiosidad
+    ? /[.!…]$/.test(curiosidad) ? curiosidad : `${curiosidad}.`
+    : `«${title}», de ${artist}: la historia detrás del disco.`.slice(0, 138);
   return socialPlanSchema.parse({
     hook: ganchoDeRespaldo,
     script: `${title}, de ${artist}. ${narrative} Musicart propone escucharlo completo, en orden, y descubrir qué cambia cuando el álbum se entiende como una obra entera.`,

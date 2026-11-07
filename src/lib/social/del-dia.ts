@@ -293,7 +293,7 @@ export function describirPieza(
       guion: p.script,
       caption: p.caption,
       portada: absoluta(p.dossier.album.coverUrl, origen),
-      fuentes: facts?.sources ?? [],
+      fuentes: [...new Set(facts?.sources ?? [])],
       videoUrl: absoluta(p.videoUrl, origen),
       notasVerificacion: [...(verif?.hardErrors ?? []), ...(verif?.unsupportedClaims ?? [])],
       error: p.error,

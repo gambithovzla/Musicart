@@ -11,7 +11,15 @@ const SYSTEM = `Eres el editor de video vertical de Musicart, una publicación m
 
 Escribe UN guion en español latinoamericano para un video de 25 a 40 segundos. El FACTS PAYLOAD y el DOSSIER VERIFICADO son tus únicas fuentes. No inventes fechas, nombres, grabaciones, premios, cifras, relaciones ni anécdotas. Puedes condensar y parafrasear, pero nunca añadir hechos.
 
-La voz debe sonar como un melómano que acaba de descubrir algo extraordinario: precisa, cálida y sin frases genéricas de influencer. El hook despierta curiosidad sin clickbait falso. No uses emojis. No incluyas audio comercial ni instrucciones de descargar música.
+La voz debe sonar como un melómano que acaba de descubrir algo extraordinario: precisa, cálida y sin frases genéricas de influencer. No uses emojis. No incluyas audio comercial ni instrucciones de descargar música.
+
+EL GANCHO DECIDE TODO (los primeros 3 segundos en TikTok):
+- Abre con UN dato concreto y raro de ESTE disco, sacado de las fuentes: un nombre, un lugar, una cifra, una fecha, un conflicto, una decisión. Empieza a mitad de la escena.
+- Prueba de sustitución: si el gancho serviría para otro disco cambiando el título, está mal. Reescríbelo.
+- PROHIBIDO abrir con: «¿Sabías que…?», «En este video…», «Imagina…», «Hay discos que…», «¿Alguna vez…?», «Este álbum cambió…», ni con preguntas retóricas o generalidades («un álbum puede cambiar una carrera», «la música tiene el poder de…»).
+- El gancho se lee en pantalla en la escena 0: máximo 12 palabras, sin dos comas.
+- Cierra con el dato que reordena lo anterior, en una línea seca. Sin moraleja, sin «¿y tú qué opinas?». Un solo llamado a la acción, como mucho.
+- Las CURIOSIDADES VERIFICADAS del dossier suelen ser el mejor material para el gancho.
 
 Devuelve SOLO JSON con esta forma:
 {
@@ -58,18 +66,39 @@ function words(text: string, max: number): string {
   return text.trim().split(/\s+/).slice(0, max).join(" ").replace(/[,;:]?$/, ".");
 }
 
+// Aperturas de molde: valen para cualquier disco, y en TikTok el que pasa el
+// dedo ya las vio mil veces. Si una nueva se repite, se añade aquí y solo aquí.
+const GANCHOS_DE_MOLDE: { re: RegExp; porque: string }[] = [
+  { re: /^\s*¿?\s*sab[ií]as que/i, porque: "abre con «¿Sabías que…?»" },
+  { re: /^\s*(en este video|hoy te cuento|te cuento)/i, porque: "anuncia el video en vez de contarlo" },
+  { re: /^\s*imagina/i, porque: "abre con «Imagina…»" },
+  { re: /^\s*hay discos que/i, porque: "abre con «Hay discos que…»" },
+  { re: /^\s*¿?\s*alguna vez/i, porque: "pregunta retórica" },
+  { re: /(puede|pueden) cambiar (la|una) carrera|el poder de la música|cambi[óo] (la historia|todo)/i, porque: "generalidad que vale para cualquier disco" },
+];
+
+export function ganchoDeMolde(hook: string): string | null {
+  return GANCHOS_DE_MOLDE.find((m) => m.re.test(hook))?.porque ?? null;
+}
+
 function fallbackPlan(d: LoadedDossier): SocialPlan {
   const title = d.album.title;
   const artist = d.album.artist.name;
   const narrative = words(`${d.intro} ${d.whyItMatters}`, 78);
   const durationSec = 30;
+  // Sin IA, el mejor gancho es una curiosidad ya verificada del dossier.
+  const curiosidad = parseJson<string[]>(d.wowFactsJson, []).find((w) => w.trim().length >= 8);
+  const limpia = curiosidad?.replace(/^¿?\s*sab[ií]as que\s*/i, "").replace(/[?¿]/g, "").trim();
+  const ganchoDeRespaldo = limpia
+    ? words(limpia.charAt(0).toUpperCase() + limpia.slice(1), 18).slice(0, 138)
+    : `«${title}», de ${artist}: la historia detrás del disco.`;
   return socialPlanSchema.parse({
-    hook: `Hay discos que se oyen. «${title}» pide que entres en su mundo.`,
+    hook: ganchoDeRespaldo,
     script: `${title}, de ${artist}. ${narrative} Musicart propone escucharlo completo, en orden, y descubrir qué cambia cuando el álbum se entiende como una obra entera.`,
     caption: `Hoy en Musicart: «${title}», de ${artist}. Un disco para escuchar completo y con contexto. ¿Qué álbum te hizo sentir algo parecido? #Musicart #Discos #DescubrimientoMusical`,
     durationSec,
     scenes: [
-      { startSec: 0, endSec: 4, kind: "hook", headline: `Hay discos que se oyen.`, body: "Otros piden que entres en su mundo.", sourceRefs: ["intro"] },
+      { startSec: 0, endSec: 4, kind: "hook", headline: ganchoDeRespaldo, body: "", sourceRefs: [curiosidad ? "wowFacts" : "album"] },
       { startSec: 4, endSec: 10, kind: "album", headline: title, body: `${artist} · ${d.album.year}`, sourceRefs: ["album"] },
       { startSec: 10, endSec: 20, kind: "context", headline: words(d.intro, 12), body: "", sourceRefs: ["intro"] },
       { startSec: 20, endSec: 26, kind: "payoff", headline: words(d.whyItMatters, 12), body: "", sourceRefs: ["whyItMatters"] },
@@ -191,6 +220,7 @@ export async function generateSocialContent(
     `ARTISTA: ${d.artistStory}`,
     `IMPORTANCIA: ${d.whyItMatters}`,
     ...d.trackNotes.map((t, i) => `TRACK ${i}: ${t.title}. ${t.note ?? ""}`),
+    ...parseJson<string[]>(d.wowFactsJson, []).map((w, i) => `CURIOSIDAD VERIFICADA ${i}: ${w}`),
   ].join("\n");
 
   let plan: SocialPlan;
@@ -204,6 +234,23 @@ export async function generateSocialContent(
         maxTokens: 1800,
       });
       plan = socialPlanSchema.parse(extractJson(raw));
+      // Barrera del gancho (sin IA): si abre con molde, se pide UNA reescritura
+      // diciéndole exactamente qué falló. Si la segunda falla, queda la primera.
+      const molde = ganchoDeMolde(plan.hook);
+      if (molde) {
+        try {
+          const otra = await llmGeneration({
+            system: SYSTEM,
+            user: `FACTS PAYLOAD:\n${JSON.stringify(facts, null, 2)}\n\nDOSSIER VERIFICADO:\n${dossierText}\n\nTU GANCHO ANTERIOR FUE RECHAZADO: «${plan.hook}» (${molde}). Escribe la pieza otra vez abriendo con un dato concreto y exclusivo de este disco.`,
+            temperature: 0.6,
+            maxTokens: 1800,
+          });
+          const reescrita = socialPlanSchema.parse(extractJson(otra));
+          if (!ganchoDeMolde(reescrita.hook)) plan = reescrita;
+        } catch (error) {
+          console.warn(`[social] No pude reescribir el gancho: ${(error as Error).message}`);
+        }
+      }
     } catch (error) {
       console.warn(`[social] El editor IA falló; uso composición segura: ${(error as Error).message}`);
       plan = fallbackPlan(d);

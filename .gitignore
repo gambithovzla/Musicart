@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Imprenta social de la laptop (12.7): la llave y los MP4 no se versionan
+.env.social
+salida-social/

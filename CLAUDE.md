@@ -179,6 +179,23 @@ JSON porque Preview y Producción comparten base.
   fuera de las capas de Tailwind y el `relative` le ganaba al `absolute` (dejó la
   portada con altura 0). La posición la pone cada elemento.
 
+## La pieza del día para Panteón (nov 2026)
+
+Musicart hace de **redacción** para la cuenta de TikTok que lleva **Efesto**, un
+agente de Panteón (la app de agentes del dueño, repo `jarvis-app`, que corre en
+su laptop). La cuenta es Hexa Oracle (deporte y música).
+
+- `src/lib/social/del-dia.ts`: `avanzarPiezaDelDia()` da los pasos que caben en
+  el reloj (elegir y fabricar disco → guion verificado → aprobar si está limpio →
+  voz). La pieza del día es un `SocialContent` con `format: "pieza_del_dia"`, y
+  `status: "preparing"` = tiene disco pero no guion. **Sin migración.**
+- `/api/social/del-dia` (GET estado · POST avanzar / imprimiendo / impreso / fallo),
+  con `Authorization: Bearer $SOCIAL_API_KEY`.
+- `npm run social:local` (en la laptop): pide la pieza, imprime el MP4 con Remotion
+  (`src/lib/social/mp4.ts`, sin DB) y avisa. Lee `.env.social`. Última línea = JSON.
+- En `/revision`: botón «Fabricar el video de hoy».
+- La aprobación humana vive en Telegram (Panteón), no en `/revision`.
+
 ## Mapa del código
 
 ```

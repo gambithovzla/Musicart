@@ -32,6 +32,9 @@ export type SocialRenderProps = SocialPlan & {
   artistName: string;
   year: number;
   audioUrl?: string | null;
+  /** La carátula del disco (URL absoluta). Opcional: sin ella el video sigue
+   *  siendo puramente tipográfico, como la primera tirada. */
+  coverUrl?: string | null;
   folio: string;
 };
 

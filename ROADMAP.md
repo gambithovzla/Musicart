@@ -1188,6 +1188,14 @@ comerciales quedan fuera del MVP.
 - [ ] **12.5 Distribución oficial** — Instagram y YouTube primero; TikTok a draft
   con finalización humana mientras su API no admita este caso de uso autónomo.
 - [ ] **12.6 Aprendizaje** — snapshots de métricas y briefing editorial semanal.
+- [x] **12.7 La pieza del día para Panteón** — Musicart como redacción de la cuenta
+  de TikTok que lleva Efesto (Hexa Oracle, deporte y música). `src/lib/social/del-dia.ts`
+  avanza por pasos (el curador elige un disco con historia → pipeline → guion
+  verificado → aprobación automática si los hechos están limpios → voz) y
+  `/api/social/del-dia` (llave `SOCIAL_API_KEY`) se lo entrega al agente. El MP4 se
+  imprime en la laptop con `npm run social:local` (sin base de datos: solo la llave).
+  La aprobación humana es la de Telegram, sobre el video ya hecho. Si el guion no
+  pasa la verificación, ese día NO hay video. El video ahora lleva la carátula.
 
 ### Criterios de aceptación
 

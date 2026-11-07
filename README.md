@@ -192,7 +192,7 @@ npm run dev              # http://localhost:3000 (ábrelo en vista móvil)
   **DeepSeek** (`DEEPSEEK_API_KEY`, opcional `DEEPSEEK_BASE_URL`): habla el mismo
   dialecto que OpenAI, así que sirve para todo — `LLM_PROVIDER=deepseek` lo pone
   también en el runtime, y `deepseek-chat`/`deepseek-reasoner` como modelo.
-  Blob TTS: `BLOB_READ_WRITE_TOKEN`. Web Push (Fase 5.1):
+  Blob TTS: `BLOB_READ_WRITE_TOKEN`. Pieza del día para Panteón (12.7): `SOCIAL_API_KEY` (llave larga al azar; la misma va en `.env.social` de la laptop junto a `MUSICART_URL`). Web Push (Fase 5.1):
   `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
   (genera las claves con `npx web-push generate-vapid-keys`); el envío diario
   es `npm run push` (cron en Railway con las mismas variables + `DATABASE_URL`).

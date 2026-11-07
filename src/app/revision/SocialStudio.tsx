@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { approveSocialDraft, archiveSocialDraft, createSocialDraft } from "./actions";
+import { approveSocialDraft, archiveSocialDraft, avanzarPiezaDelDiaAdmin, createSocialDraft } from "./actions";
 
 export type SocialDossierOption = {
   id: string;
@@ -25,10 +25,13 @@ export type SocialContentRow = {
   verificationOk: boolean;
   verificationNotes: string[];
   createdAt: string;
+  /** Pieza del día para Panteón (12.7) y no una tirada a mano. */
+  delDia: boolean;
 };
 
 function label(status: string) {
   return ({
+    preparing: "En preparación",
     draft: "En mesa",
     blocked: "Bloqueado",
     approved: "Aprobado",
@@ -63,7 +66,38 @@ export function SocialStudio({ dossiers, contents }: { dossiers: SocialDossierOp
 
   return (
     <div className="mt-6">
-      <div className="recuadro p-5">
+      <div className="regla pb-6">
+        <p className="rotulo text-dim">La pieza del día · Panteón</p>
+        <p className="mt-3 text-sm leading-relaxed text-dim">
+          Lo mismo que hace Efesto cada día: el curador elige un disco con buena historia, se fabrica
+          y verifica, se escribe el guion, se aprueba si los hechos están limpios y se graba la voz.
+          El MP4 se imprime en la laptop. Si queda a medias, vuelve a tocar.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => run(() => avanzarPiezaDelDiaAdmin(false))}
+            className="sello disabled:opacity-50"
+          >
+            {pending ? "Trabajando… (1-3 min)" : "Fabricar el video de hoy"}
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              if (window.confirm("¿Retirar la pieza de hoy y fabricar otra con un disco distinto?")) {
+                void run(() => avanzarPiezaDelDiaAdmin(true));
+              }
+            }}
+            className="sello-hueco disabled:opacity-50"
+          >
+            Rehacer la de hoy
+          </button>
+        </div>
+      </div>
+
+      <div className="recuadro mt-6 p-5">
         <p className="rotulo text-dim">Nueva tirada</p>
         <label className="mt-4 block text-sm" htmlFor="social-dossier">Disco de partida</label>
         <select
@@ -101,7 +135,7 @@ export function SocialStudio({ dossiers, contents }: { dossiers: SocialDossierOp
           <article key={content.id} className="regla pb-8">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="dato text-xs text-dim">№ {String(index + 1).padStart(2, "0")} · {content.createdAt}</p>
+                <p className="dato text-xs text-dim">№ {String(index + 1).padStart(2, "0")} · {content.createdAt}{content.delDia ? " · Pieza del día" : ""}</p>
                 <h3 className="font-serif mt-2 text-xl">{content.title}</h3>
                 <p className="text-sm text-dim">{content.artist}</p>
               </div>
@@ -110,7 +144,11 @@ export function SocialStudio({ dossiers, contents }: { dossiers: SocialDossierOp
               </span>
             </div>
 
-            <p className="font-serif mt-5 text-lg italic leading-relaxed">“{content.hook}”</p>
+            {content.hook ? (
+              <p className="font-serif mt-5 text-lg italic leading-relaxed">«{content.hook}»</p>
+            ) : (
+              <p className="mt-5 text-sm text-dim">Disco elegido; falta escribir el guion.</p>
+            )}
             <details className="mt-4">
               <summary className="pulsable min-h-12 cursor-pointer py-3 text-sm">Leer guion y caption</summary>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground/85">{content.script}</p>

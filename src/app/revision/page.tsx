@@ -24,6 +24,7 @@ import { getCanonCurado, estadoDelSalon } from "@/lib/canon/consulta";
 import { parseJson, REDACCION_VERSION, type FactsPayload } from "@/lib/types";
 import { ReescribirTanda } from "./ReescribirTanda";
 import type { SocialVerification } from "@/lib/social/types";
+import { FORMATO_DIA } from "@/lib/social/del-dia";
 import { SocialStudio, type SocialContentRow, type SocialDossierOption } from "./SocialStudio";
 
 export const dynamic = "force-dynamic";
@@ -154,6 +155,7 @@ export default async function RevisionPage() {
       verificationOk: Boolean(verification?.ok),
       verificationNotes: [...(verification?.hardErrors ?? []), ...(verification?.unsupportedClaims ?? [])],
       createdAt: content.createdAt.toLocaleDateString("es-PE"),
+      delDia: content.format === FORMATO_DIA,
     };
   });
 

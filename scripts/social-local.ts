@@ -8,7 +8,6 @@
 // Necesita, en un archivo `.env.social` en la raíz de Musicart (o en el entorno):
 //   MUSICART_URL=https://<tu-dominio-de-musicart>
 //   SOCIAL_API_KEY=<la misma llave que en Vercel>
-//   BLOB_READ_WRITE_TOKEN=<opcional: sube el MP4 para verlo desde /revision>
 //
 // NO necesita la base de datos ni claves de IA: todo eso lo hace Musicart en
 // Vercel. Aquí solo se imprime el video (Remotion), que en Vercel no cabe.
@@ -20,7 +19,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { renderizarMp4 } from "../src/lib/social/mp4";
-import { saveSocialVideo } from "../src/lib/social/storage";
 import type { PiezaDelDia } from "../src/lib/social/del-dia";
 
 const args = process.argv.slice(2);
@@ -88,8 +86,22 @@ async function main() {
   await mkdir(carpeta, { recursive: true });
   const mp4 = path.join(carpeta, "video.mp4");
   try {
+    // La voz vive en un almacén privado: se baja con la llave y se deja en
+    // public/ para que la imprenta la lea como archivo propio.
+    const render = { ...pieza.render! };
+    if (render.audioUrl) {
+      const res = await fetch(`${BASE}/api/social/del-dia/voz?id=${encodeURIComponent(pieza.id)}`, {
+        headers: { Authorization: `Bearer ${LLAVE}` },
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!res.ok) throw new Error(`No pude bajar la voz (Musicart respondió ${res.status}).`);
+      const dirVoz = path.join(process.cwd(), "public", "social", pieza.id);
+      await mkdir(dirVoz, { recursive: true });
+      await writeFile(path.join(dirVoz, "voice.mp3"), Buffer.from(await res.arrayBuffer()));
+      render.audioUrl = `/social/${pieza.id}/voice.mp3`;
+    }
     console.error(`· Imprimiendo «${pieza.disco}» de ${pieza.artista}…`);
-    await renderizarMp4(pieza.render!, mp4);
+    await renderizarMp4(render, mp4);
   } catch (err) {
     const error = (err as Error).message;
     await llamar("POST", { accion: "fallo", id: pieza.id, error }).catch(() => {});
@@ -100,15 +112,9 @@ async function main() {
   await writeFile(path.join(carpeta, "caption.txt"), pieza.caption, "utf8");
   await writeFile(path.join(carpeta, "pieza.json"), JSON.stringify(pieza, null, 2), "utf8");
 
-  // 4. Opcional: subirlo para verlo desde /revision en el teléfono.
-  let videoUrl: string | null = null;
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    try {
-      videoUrl = await saveSocialVideo(pieza.id, mp4);
-    } catch (err) {
-      console.error(`· No pude subir el MP4 (${(err as Error).message}); queda solo en la laptop.`);
-    }
-  }
+  // El MP4 se queda en la laptop: el almacén de Blob es privado, así que subirlo
+  // no serviría para verlo en /revision. La revisión es por Telegram.
+  const videoUrl: string | null = null;
   await llamar("POST", { accion: "impreso", id: pieza.id, videoUrl });
 
   terminar({

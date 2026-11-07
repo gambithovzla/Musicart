@@ -44,6 +44,7 @@ function label(status: string) {
 export function SocialStudio({ dossiers, contents }: { dossiers: SocialDossierOption[]; contents: SocialContentRow[] }) {
   const router = useRouter();
   const [dossierId, setDossierId] = useState(dossiers[0]?.id ?? "");
+  const [pedido, setPedido] = useState("");
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +96,29 @@ export function SocialStudio({ dossiers, contents }: { dossiers: SocialDossierOp
             Rehacer la de hoy
           </button>
         </div>
+
+        <label className="mt-6 block text-sm" htmlFor="pedido-pieza">
+          ¿Quieres un artista o un disco concreto?
+        </label>
+        <input
+          id="pedido-pieza"
+          value={pedido}
+          onChange={(event) => setPedido(event.target.value)}
+          placeholder="Wolf Alice · rock venezolano de los 90 · un disco de Soda Stereo…"
+          maxLength={300}
+          className="mt-2 min-h-12 w-full border border-white/20 bg-transparent px-3 text-base"
+        />
+        <button
+          type="button"
+          disabled={pending || !pedido.trim()}
+          onClick={() => run(() => avanzarPiezaDelDiaAdmin(false, pedido))}
+          className="sello mt-3 disabled:opacity-50"
+        >
+          {pending ? "Trabajando… (1-3 min)" : "Fabricar con este pedido"}
+        </button>
+        <p className="mt-2 text-xs text-dim">
+          Es una pieza nueva. Si queda a medias, termina con «Fabricar el video de hoy» (sin volver a pedir).
+        </p>
       </div>
 
       <div className="recuadro mt-6 p-5">

@@ -1196,6 +1196,8 @@ comerciales quedan fuera del MVP.
   imprime en la laptop con `npm run social:local` (sin base de datos: solo la llave).
   La aprobación humana es la de Telegram, sobre el video ya hecho. Si el guion no
   pasa la verificación, ese día NO hay video. El video ahora lleva la carátula.
+  Admite **pedidos** («Wolf Alice», «rock venezolano», o un disco exacto) desde
+  Panteón (`--pedido`) y desde `/revision`, con las barreras del pedido del día.
 
 ### Criterios de aceptación
 

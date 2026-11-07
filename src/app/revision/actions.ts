@@ -94,14 +94,16 @@ export async function approveSocialDraft(contentId: string): Promise<{ ok: boole
  */
 export async function avanzarPiezaDelDiaAdmin(
   rehacer = false,
+  pedido?: string,
 ): Promise<{ ok: boolean; message: string }> {
   await requireAdmin();
   try {
-    const r = await avanzarPiezaDelDia({ presupuestoMs: 270_000, rehacer });
+    const texto = pedido?.trim().slice(0, 300);
+    const r = await avanzarPiezaDelDia({ presupuestoMs: 270_000, rehacer, pedido: texto ? { texto } : null });
     revalidatePath("/revision");
     const disco = r.pieza ? `«${r.pieza.disco}» de ${r.pieza.artista}. ` : "";
     const pasos = r.bitacora.length > 0 ? ` (${r.bitacora.join(" ")})` : "";
-    const ok = !["bloqueada", "sin-pieza", "fallo-imprenta"].includes(r.estado);
+    const ok = !["bloqueada", "sin-pieza", "fallo-imprenta", "pedido-sin-disco"].includes(r.estado);
     // `siguiente` está escrito para el agente; aquí se le habla al dueño.
     const paraTi: Partial<Record<typeof r.estado, string>> = {
       "sin-pieza": "Hoy no se pudo empezar la pieza. Vuelve a tocar «Fabricar el video de hoy».",
@@ -109,6 +111,7 @@ export async function avanzarPiezaDelDiaAdmin(
       "lista-para-imprimir": "Lista: guion verificado y voz grabada. La laptop ya puede imprimir el video.",
       "video-listo": "El video de hoy ya está impreso.",
       bloqueada: "El guion no pasó la verificación de hechos: hoy no sale video. Puedes tocar «Rehacer la de hoy».",
+      "pedido-sin-disco": "No encontré un disco que cumpla ese pedido. Prueba a escribirlo de otra forma.",
     };
     return { ok, message: `${disco}${paraTi[r.estado] ?? r.siguiente}${pasos}` };
   } catch (error) {

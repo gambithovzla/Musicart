@@ -1,7 +1,7 @@
 // La pieza del día para Panteón (Fase 12.7). Ver src/lib/social/del-dia.ts.
 //
 //   GET  → en qué punto está la pieza de hoy (no gasta nada).
-//   POST { accion: "avanzar", aprobar?, rehacer? } → da los pasos que quepan en
+//   POST { accion: "avanzar", aprobar?, rehacer?, pedido? | disco?+artista? } → da los pasos que quepan en
 //        el reloj de la ruta. Se llama hasta que el estado sea
 //        "lista-para-imprimir" (o "bloqueada": ese día no hay video).
 //   POST { accion: "imprimiendo" | "impreso" | "fallo", id, videoUrl?, error? }
@@ -27,6 +27,11 @@ const cuerpo = z.discriminatedUnion("accion", [
     accion: z.literal("avanzar"),
     aprobar: z.boolean().optional(),
     rehacer: z.boolean().optional(),
+    // Un artista o un pedido libre («Wolf Alice», «rock venezolano»), o un disco exacto.
+    // Solo en la PRIMERA llamada: empieza una pieza nueva con eso.
+    pedido: z.string().trim().max(300).optional(),
+    disco: z.string().trim().max(200).optional(),
+    artista: z.string().trim().max(200).optional(),
   }),
   z.object({
     accion: z.enum(["imprimiendo", "impreso", "fallo"]),
@@ -62,7 +67,13 @@ export async function POST(req: Request) {
     if (b.accion === "avanzar") {
       return NextResponse.json(
         // 300 s de ruta menos un colchón para responder.
-        await avanzarPiezaDelDia({ presupuestoMs: 270_000, aprobar: b.aprobar, rehacer: b.rehacer, origen }),
+        await avanzarPiezaDelDia({
+          presupuestoMs: 270_000,
+          aprobar: b.aprobar,
+          rehacer: b.rehacer,
+          pedido: b.pedido || (b.disco && b.artista) ? { texto: b.pedido, disco: b.disco, artista: b.artista } : null,
+          origen,
+        }),
       );
     }
     return NextResponse.json(

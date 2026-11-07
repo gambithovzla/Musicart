@@ -102,7 +102,15 @@ export async function avanzarPiezaDelDiaAdmin(
     const disco = r.pieza ? `«${r.pieza.disco}» de ${r.pieza.artista}. ` : "";
     const pasos = r.bitacora.length > 0 ? ` (${r.bitacora.join(" ")})` : "";
     const ok = !["bloqueada", "sin-pieza", "fallo-imprenta"].includes(r.estado);
-    return { ok, message: `${disco}${r.siguiente}${pasos}` };
+    // `siguiente` está escrito para el agente; aquí se le habla al dueño.
+    const paraTi: Partial<Record<typeof r.estado, string>> = {
+      "sin-pieza": "Hoy no se pudo empezar la pieza. Vuelve a tocar «Fabricar el video de hoy».",
+      "en-preparacion": "Falta un paso. Vuelve a tocar «Fabricar el video de hoy».",
+      "lista-para-imprimir": "Lista: guion verificado y voz grabada. La laptop ya puede imprimir el video.",
+      "video-listo": "El video de hoy ya está impreso.",
+      bloqueada: "El guion no pasó la verificación de hechos: hoy no sale video. Puedes tocar «Rehacer la de hoy».",
+    };
+    return { ok, message: `${disco}${paraTi[r.estado] ?? r.siguiente}${pasos}` };
   } catch (error) {
     return { ok: false, message: (error as Error).message };
   }
